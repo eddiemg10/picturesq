@@ -1,0 +1,58 @@
+[project]
+name = "picturesq"
+version = "0.0.1"
+description = "Turn a folder of RAW photos into consistently edited exports, with a YAML-driven look pipeline."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Eddie MG" }]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+]
+# Runtime deps are added milestone by milestone (see docs/project-plan.md §12).
+dependencies = [
+    "typer>=0.12",
+]
+
+[project.scripts]
+picturesq = "picturesq.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "pyright>=1.1.380",
+    "pre-commit>=3.8",
+]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/picturesq"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "NPY", "RUF"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: needs real RAW samples (scripts/fetch_samples.py)",
+    "slow: full-resolution or performance tests",
+]
+addopts = "-m 'not integration and not slow'"

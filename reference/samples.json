@@ -1,0 +1,4 @@
+{
+  "_comment": "CC0 RAW samples from https://raw.pixls.us. Populated in M0 issue 'Select CC0 sample RAWs'. Each entry: {\"name\", \"url\", \"sha256\", \"camera\"}.",
+  "samples": []
+}

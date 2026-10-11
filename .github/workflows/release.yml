@@ -1,0 +1,20 @@
+# Publishes to PyPI on version tags. Enabled at M5: configure PyPI trusted publishing
+# for this repo + the `pypi` environment before pushing the first tag.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build
+      - run: uv publish --trusted-publishing always

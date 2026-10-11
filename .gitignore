@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.benchmarks/
+.coverage
+htmlcov/
+
+# picturesq run artefacts (never commit outputs or caches)
+.picturesq/
+exports/
+
+# RAW and large image files: reference RAWs stay local
+reference/raw/
+reference/samples/
+*.DNG
+*.dng
+*.CR2
+*.CR3
+*.NEF
+*.ARW
+*.RAF
+*.RW2
+*.ORF
+*.tif
+*.tiff
+# Golden test images are small PNGs and ARE committed (tests/golden/)
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local agent settings
+.claude/settings.local.json
