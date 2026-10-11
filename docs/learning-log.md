@@ -24,3 +24,7 @@ A sunny scene can span 15+ stops; a screen shows about 6–8. A **display transf
 ## 2026-10-11 · The memory maths of a 33 MP photo
 7680 × 4320 ≈ 33 M pixels. As float32 RGB that's 33M × 3 × 4 bytes ≈ **400 MB per array**. A numpy expression like `a * b + c` allocates temporaries, so a naive chain can peak at 1–2 GB per image. On an 8 GB laptop, memory, not CPU, limits how many photos run in parallel. Per-pixel ops on a 1000 px proxy (~0.5 MP) are ~60× cheaper, which is why interactive previews always use proxies.
 **Why it mattered:** proxy-first design, in-place ops, memory-capped worker pool, and memory budget tests (project plan §5).
+
+## 2026-10-11 · Proxies
+A **proxy** is a small (2048 px long edge), cached, **scene-linear** float16 copy of a photo; the term comes from video editing. It has ~14× fewer pixels than a 33 MP original, so operations take milliseconds. It's scene-linear rather than a JPEG thumbnail, so normalise and grade behave exactly as they will on the original: what you preview is what you export. Float16 halves storage versus float32 while still holding values above 1.0 (bright skies), which 8-bit can't. The cache key hashes the original, the decode config and the version, so a proxy is never stale. A **preview** is the display-ready render *of* a proxy.
+**Why it mattered:** every interactive feature (contact sheets, the UI, normalise stats) uses proxies; only export touches originals. This is what makes an 8 GB, CPU-only laptop enough.
