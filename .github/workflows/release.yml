@@ -1,5 +1,5 @@
-# Publishes to PyPI on version tags. Enabled at M5: configure PyPI trusted publishing
-# for this repo + the `pypi` environment before pushing the first tag.
+# Publishes to PyPI on version tags (trusted publishing; no API token).
+# The `pypi` environment only accepts `v*` tags. Bump `version` in pyproject.toml to match the tag.
 name: Release
 
 on:
