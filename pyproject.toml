@@ -1,7 +1,7 @@
 [project]
 name = "picturesq"
 version = "0.0.1"
-description = "Turn a folder of RAW photos into consistently edited exports, with a YAML-driven look pipeline."
+description = "Turn a folder of RAW photos into consistently graded exports, driven by looks and YAML."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

@@ -15,10 +15,20 @@ def test_version() -> None:
 def test_help_lists_all_verbs() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for verb in ["run", "develop", "normalise", "looks", "ui", "export", "schema", "doctor"]:
+    for verb in [
+        "run",
+        "decode",
+        "normalise",
+        "preview",
+        "looks",
+        "ui",
+        "export",
+        "schema",
+        "doctor",
+    ]:
         assert verb in result.output
 
 
 def test_unimplemented_command_fails_cleanly() -> None:
-    result = runner.invoke(app, ["develop", "."])
+    result = runner.invoke(app, ["decode", "."])
     assert result.exit_code == 1

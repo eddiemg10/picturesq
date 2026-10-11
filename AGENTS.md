@@ -1,25 +1,27 @@
 # AGENTS.md — picturesq
 
 Instructions for coding agents (Claude Code, Codex, …) working on this repo.
-**Read this first, then `docs/project-plan.md`. Don't re-explore the whole repo each session.**
+**Read this first, then `docs/project-plan.md` and `docs/glossary.md`. Don't re-explore the whole repo each session.**
 
 ## What we're building
-`picturesq`: a CLI that turns a folder of RAW photos into consistently edited exports.
-Pipeline: **develop** (rawpy → scene-linear) → **normalise** (adaptive, per image) → **look** (recipe/LUT + AgX display transform) → **export** (sRGB JPEG).
-A local web UI (`picturesq ui`) is the only way humans edit config. Agents edit the YAML or use the CLI.
+`picturesq`: a CLI that turns a folder of RAW photos into consistently graded exports.
+Pipeline stages: **decode** (rawpy → scene-linear) → **normalise** (adaptive, per photo) → **grade** (look + adjustments + AgX display transform) → **export** (outputs, sRGB JPEG).
+The local web UI (`picturesq ui`) is the only way humans edit config. Agents edit the YAML or use the CLI.
 
 - Scope, decisions, milestones: `docs/project-plan.md`
 - Decision rationale: `docs/decisions/` (ADRs; add one when you make a significant decision)
+- Vocabulary (binding): `docs/glossary.md`
 - Concepts: `docs/learning-log.md`
 - Current milestone and tasks: GitHub Project board / issues
 
 ## Hard rules
-- **Never modify input files.** Outputs go to `<dir>/.picturesq/`, `<dir>/exports/`, or `--out`.
+- **Vocabulary:** use only glossary terms in code, CLI, config, docs, issues and UI text. British spelling everywhere (`colour`, `normalise`, `grey`), identifiers included. New term? Add it to the glossary in the same PR.
+- **Never modify originals.** Outputs go to `<dir>/.picturesq/`, `<dir>/exports/`, or `--out`.
 - **Precision:** float32 scene-linear internally (linear Rec.2020 primaries); 16-bit for intermediates on disk; 8-bit only at final export. Exposure/WB maths in linear only.
 - **Config over constants:** tunable values live in config models (`picturesq.config`), not inline in code.
-- **Pure image ops:** `f(img: float32 HxWx3, params) -> img`, with no IO inside `color/`, `normalise/`, `looks/`.
+- **Pure image operations:** `f(image: float32 HxWx3, params) -> image`, with no IO inside `colour/`, `normalise/`, `grade/`.
 - **Memory:** never hold more than the needed full-res arrays; prefer in-place numpy (`out=`); interactive paths use proxies only.
-- **Reproducible:** same input + config + version = same output. Seed anything random (grain).
+- **Reproducible:** same originals + config + version = same output. Seed anything random (grain).
 - **Dependencies:** ask before adding a runtime dependency (the list is in project plan §12).
 - **Tests:** maths is not merged without tests. Every PR states how it was tested.
 - **Small steps:** one issue per PR; propose a plan before large changes.
@@ -46,14 +48,15 @@ uv run picturesq --help
 ## Repo map
 ```
 src/picturesq/
-  cli/ config/ io/ color/ normalise/ looks/ pipeline/ preview/ web/
+  cli/ config/ colour/ decode/ normalise/ grade/ export/ pipeline/ preview/ ui/
 tests/unit  tests/integration  tests/golden
-reference/   # shot list + local RAWs (RAWs are git-ignored)
+reference/   # reference set shot list + CC0 samples manifest (RAWs are git-ignored)
 scripts/     # dev utilities (fetch samples, compare, update goldens)
 skills/      # Claude skill shipped for end users' agents
 ```
 
 ## Git / PR conventions
-- Branch from `main`: `feat/…`, `fix/…`, `docs/…`, `chore/…`. Squash-merge via PR; CI must be green.
+- Branch from `main`: `feat/…`, `fix/…`, `docs/…`, `chore/…`. Squash-merge via PR; `main` is protected and CI must be green.
 - PR title in conventional-commit style; body: summary, linked issue, test plan, learning note (if any).
-- Update `AGENTS.md` / the project plan / ADRs when decisions change.
+- Update `AGENTS.md` / the project plan / glossary / ADRs when decisions change.
+- The repo is **public**: never commit personal photos, absolute home paths or secrets.

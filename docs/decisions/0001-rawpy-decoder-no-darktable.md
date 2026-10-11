@@ -3,7 +3,7 @@
 **Status:** Accepted · 2026-10-11
 
 ## Context
-We need to turn RAW files into linear RGB. Options: wrap darktable-cli or RawTherapee-cli (mature, excellent quality), or decode with rawpy (LibRaw) and own the rest of the pipeline.
+The decode stage turns RAW originals into scene-linear images. Options: wrap darktable-cli or RawTherapee-cli (mature, excellent quality), or decode with rawpy (LibRaw) and own the rest of the pipeline.
 
 ## Decision
 Use rawpy (LibRaw) as the only decoder. darktable is not a dependency. It is used only by hand during development, as a quality yardstick.

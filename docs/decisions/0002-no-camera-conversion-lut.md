@@ -11,4 +11,4 @@ No camera LUT for stills. The DNG's embedded ColorMatrix/ForwardMatrix (applied 
 ## Consequences
 - + Removes the biggest risk in the brief (LUT input-space mismatch).
 - + Works for every LibRaw camera with no per-camera assets.
-- − Users who want "the DJI look" get it from a look recipe, not a vendor LUT. A D-Log encode path could be added later if DJI publishes the D-Log M curve.
+- − Users who want "the DJI look" get it from a look, not a vendor LUT. A D-Log encode path could be added later if DJI publishes the D-Log M curve.

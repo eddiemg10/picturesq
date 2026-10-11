@@ -7,7 +7,7 @@ Config must be portable, reproducible and editable by coding agents. The user do
 
 ## Decision
 - Pydantic models are the source of truth; YAML is their serialisation; `picturesq schema` exports JSON Schema.
-- Humans edit through `picturesq ui`; agents edit the file or use CLI commands.
+- Humans edit through the UI (`picturesq ui`); agents edit the file or use CLI commands.
 - Writes are atomic (temp file + rename); the UI watches the file and reloads on external change.
 - Comments in YAML are not preserved (nobody hand-writes them).
 

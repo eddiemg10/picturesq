@@ -1,1 +1,1 @@
-"""Stage orchestration, cache invalidation and memory-capped parallel batch execution."""
+"""Pipeline orchestration: runs stages, manages the proxy cache, memory-capped workers."""

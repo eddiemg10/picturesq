@@ -12,7 +12,7 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-DirArg = Annotated[str, typer.Argument(help="Folder containing RAW files.")]
+ProjectArg = Annotated[str, typer.Argument(help="Project folder containing RAW originals.")]
 
 
 def _not_implemented(command: str, milestone: str) -> None:
@@ -33,48 +33,54 @@ def main(
         typer.Option("--version", callback=_version_callback, is_eager=True, help="Show version."),
     ] = False,
 ) -> None:
-    """picturesq: develop, normalise, look, export."""
+    """picturesq: decode, normalise, grade, export."""
 
 
 @app.command()
-def run(directory: DirArg) -> None:
-    """Run all stages: develop, normalise, look, export."""
+def run(project: ProjectArg) -> None:
+    """Run the whole pipeline: decode, normalise, grade, export."""
     _not_implemented("run", "M1")
 
 
 @app.command()
-def develop(directory: DirArg) -> None:
-    """Decode RAWs to scene-linear and build preview proxies."""
-    _not_implemented("develop", "M1")
+def decode(project: ProjectArg) -> None:
+    """Decode originals to scene-linear and build proxies."""
+    _not_implemented("decode", "M1")
 
 
 @app.command()
-def normalise(directory: DirArg) -> None:
-    """Compute per-image stats, normalise exposure and flag outliers."""
+def normalise(project: ProjectArg) -> None:
+    """Compute per-photo stats, normalise exposure and flag outliers."""
     _not_implemented("normalise", "M2")
 
 
 @app.command()
-def looks(directory: DirArg) -> None:
-    """Render a photo x look contact sheet (terminal, PNG or web)."""
+def preview(project: ProjectArg) -> None:
+    """Render a contact sheet of photos x looks (terminal or PNG)."""
+    _not_implemented("preview", "M3")
+
+
+@app.command()
+def looks() -> None:
+    """List the look library, by category."""
     _not_implemented("looks", "M3")
 
 
 @app.command()
-def ui(directory: DirArg) -> None:
-    """Open the local web editor."""
+def ui(project: ProjectArg) -> None:
+    """Open the local web UI to choose looks and review photos."""
     _not_implemented("ui", "M4")
 
 
 @app.command()
-def export(directory: DirArg) -> None:
-    """Render full-resolution exports."""
+def export(project: ProjectArg) -> None:
+    """Render originals at full resolution and write every enabled output."""
     _not_implemented("export", "M1")
 
 
 @app.command()
 def schema() -> None:
-    """Print the JSON schema for the config files."""
+    """Print the JSON schema for picturesq.yaml and look files."""
     _not_implemented("schema", "M1")
 
 

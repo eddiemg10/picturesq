@@ -8,9 +8,10 @@ One-time setup for working on picturesq with agents.
 - **gh** CLI: already authenticated as `eddiemg10`.
 
 ## 2. GitHub
-- Repo: `eddiemg10/picturesq` (private until v0.1).
+- Repo: `eddiemg10/picturesq` (public, MIT).
 - Project board "picturesq roadmap": Backlog → Ready → In progress → Review → Done.
-- Branch protection needs GitHub Pro for private repos (or wait until public). Until then: never push to `main` directly.
+- `main` is protected: PRs only, CI must pass, linear history.
+- `gh` needs the `project` scope for the board: `gh auth refresh -s project`.
 
 ## 3. Claude Code on GitHub
 In Claude Code, inside the repo: run `/install-github-app` and follow the prompts. This installs the Claude GitHub app and adds the workflow plus the `ANTHROPIC_API_KEY` (or OAuth) secret. You can then mention `@claude` in issues/PRs to get implementations or reviews.

@@ -1,1 +1,1 @@
-"""Pydantic config models (project, look recipe, overrides), YAML load/save, JSON schema export."""
+"""Config models (project, look file, overrides), YAML load/save, JSON schema export."""
