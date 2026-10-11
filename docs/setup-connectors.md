@@ -9,7 +9,7 @@ One-time setup for working on picturesq with agents.
 
 ## 2. GitHub
 - Repo: `eddiemg10/picturesq` (public, MIT).
-- Project board "picturesq roadmap": Backlog → Ready → In progress → Review → Done.
+- Project board ["picturesq roadmap"](https://github.com/users/eddiemg10/projects/1) (public): Backlog → Ready → In progress → Review → Done.
 - `main` is protected: PRs only, CI must pass, linear history.
 - `gh` needs the `project` scope for the board: `gh auth refresh -s project`.
 

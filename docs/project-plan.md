@@ -2,7 +2,7 @@
 
 > Status: **M0 setup (draft for sign-off)** · Last updated: 2026-10-11
 > The single source of truth for scope, decisions and milestones.
-> Vocabulary: [`docs/glossary.md`](glossary.md) (binding). Decision rationale: [`docs/decisions/`](decisions/). Concepts: [`docs/learning-log.md`](learning-log.md). Tasks: GitHub Issues + Project board.
+> Vocabulary: [`docs/glossary.md`](glossary.md) (binding). Decision rationale: [`docs/decisions/`](decisions/). Concepts: [`docs/learning-log.md`](learning-log.md). Tasks: [project board](https://github.com/users/eddiemg10/projects/1).
 
 ---
 
