@@ -7,7 +7,7 @@ picturesq run ./lisbon    # decode → normalise → grade → export
 picturesq ui ./lisbon     # choose looks and set their intensity in a tiny local web UI
 ```
 
-**Status:** pre-alpha (M0, setup). See [`docs/project-plan.md`](docs/project-plan.md).
+**Status:** pre-alpha (M0, setup). Plan: [`docs/project-plan.md`](docs/project-plan.md) · Roadmap: [project board](https://github.com/users/eddiemg10/projects/1).
 
 - Any camera LibRaw supports; built and tested on DJI Osmo Pocket 4 DNGs
 - Runs on an 8 GB, CPU-only laptop (Linux/WSL2, Windows)

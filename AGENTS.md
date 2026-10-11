@@ -12,7 +12,7 @@ The local web UI (`picturesq ui`) is the only way humans edit config. Agents edi
 - Decision rationale: `docs/decisions/` (ADRs; add one when you make a significant decision)
 - Vocabulary (binding): `docs/glossary.md`
 - Concepts: `docs/learning-log.md`
-- Current milestone and tasks: GitHub Project board / issues
+- Current milestone and tasks: [project board](https://github.com/users/eddiemg10/projects/1) / GitHub issues (the only tracker)
 
 ## Hard rules
 - **Vocabulary:** use only glossary terms in code, CLI, config, docs, issues and UI text. British spelling everywhere (`colour`, `normalise`, `grey`), identifiers included. New term? Add it to the glossary in the same PR.
