@@ -56,6 +56,11 @@
 |---|---|
 | **scene-linear** | Pixel values proportional to light in the scene. All maths before the display transform happens here. |
 | **working space** | The colour space of scene-linear images inside picturesq: linear Rec.2020 primaries, float32. |
+| **primaries** | The exact red, green and blue a colour space's channels mean, given as xy chromaticities. |
+| **white point** | The colour of R = G = B in a space. Ours is always D65 (daylight, xy 0.3127, 0.3290). |
+| **gamut** | The range of colours a space can represent: the triangle its primaries span. Rec.2020's contains Rec.709/sRGB's. |
+| **out-of-gamut** | A colour the target space can't represent; after a matrix conversion it has a negative channel. |
+| **XYZ** | CIE 1931 XYZ, the device-independent reference space every RGB space is defined against. Y is luminance. |
 | **display transform** | Maps scene-linear to display range with highlight roll-off. Ours is AgX-style. (OCIO: *view transform*; ACES: *output transform*.) |
 | **display-referred** | Values after the display transform (0–1, encoded for a screen). LUT operations usually run here. |
 | **input space** | The colour space + transfer curve a LUT expects as input (e.g. `srgb`, `rec709`). |
