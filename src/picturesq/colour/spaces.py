@@ -1,7 +1,7 @@
 """RGB colour spaces and the 3x3 matrices between them (linear values only).
 
 A colour space here is three primaries and a white point, as CIE 1931 xy chromaticities.
-Matrices are *derived* from those numbers (ADR-0007), so white maps to white exactly; we
+Matrices are *derived* from those numbers (ADR-0008), so white maps to white exactly; we
 don't use the 4-decimal matrix printed in the sRGB standard.
 
 The transfer function is separate (``colour/transfer.py``): apply these matrices to

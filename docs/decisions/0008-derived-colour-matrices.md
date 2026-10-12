@@ -1,4 +1,4 @@
-# ADR-0007: Derive colour matrices from primaries; never use rounded published matrices
+# ADR-0008: Derive colour matrices from primaries; never use rounded published matrices
 
 **Status:** Accepted · 2026-10-12
 

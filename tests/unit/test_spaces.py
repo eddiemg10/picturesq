@@ -21,7 +21,7 @@ from picturesq.colour.spaces import (
 
 
 def _derived(name: str) -> colour.RGB_Colourspace:
-    """A colour-science space with matrices derived from its primaries (ADR-0007)."""
+    """A colour-science space with matrices derived from its primaries (ADR-0008)."""
     space = colour.RGB_COLOURSPACES[name]
     return colour.RGB_Colourspace(
         f"{name} (derived)",
@@ -63,7 +63,7 @@ def test_rec709_to_rec2020_matches_itu_bt2087() -> None:
 
 
 def test_published_srgb_matrix_is_close_but_not_white_exact() -> None:
-    # Why ADR-0007 derives matrices: colour-science's default sRGB uses the rounded
+    # Why ADR-0008 derives matrices: colour-science's default sRGB uses the rounded
     # published matrix, so white drifts by ~1e-4.
     published = colour.matrix_RGB_to_RGB(ORACLE_REC2020, colour.RGB_COLOURSPACES["sRGB"])
     np.testing.assert_allclose(REC2020_TO_REC709, published, atol=1e-3)
