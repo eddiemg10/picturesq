@@ -11,6 +11,7 @@ The local web UI (`picturesq ui`) is the only way humans edit config. Agents edi
 - Scope, decisions, milestones: `docs/project-plan.md`
 - Decision rationale: `docs/decisions/` (ADRs; add one when you make a significant decision)
 - Vocabulary (binding): `docs/glossary.md`
+- User-facing config reference: `docs/configuration.md` (update it with every config model change; `tests/unit/test_configuration_docs.py` checks it)
 - Concepts: `docs/learning-log.md`
 - Dependencies, what each is for: `docs/dependencies.md`
 - Current milestone and tasks: [project board](https://github.com/users/eddiemg10/projects/1) / GitHub issues (the only tracker)

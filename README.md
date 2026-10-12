@@ -12,7 +12,7 @@ picturesq ui ./lisbon     # choose looks and set their intensity in a tiny local
 - Any camera LibRaw supports; built and tested on DJI Osmo Pocket 4 DNGs
 - Runs on an 8 GB, CPU-only laptop (Linux/WSL2, Windows)
 - Looks in four categories (B/W · Cold · Warm · Cinematic), each with adjustable intensity
-- Config is YAML, written by the web UI and editable by coding agents
+- Config is YAML, written by the web UI and editable by coding agents: see [`docs/configuration.md`](https://github.com/eddiemg10/picturesq/blob/main/docs/configuration.md)
 
 ## Development
 ```bash
