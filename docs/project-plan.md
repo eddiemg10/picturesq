@@ -357,6 +357,6 @@ Dev: pytest, hypothesis, pytest-benchmark, colour-science (oracle), ruff, pyrigh
 ---
 
 ## 14. Open questions
-1. Can the Pocket 4 shoot DNG + JPEG simultaneously? (Useful for the M1 comparison.) *Likely yes: retailer spec sheets list JPEG / DNG / JPEG+DNG. To confirm on the camera (#5).*
+1. Can the Pocket 4 shoot DNG + JPEG simultaneously? (Useful for the M1 comparison.) **Deferred (#5): not checked. The M1 comparison uses the embedded 720×1280 JPEG preview in each DNG as the in-camera reference, for simplicity.**
 2. Are Pocket 4 DNGs mosaic (Bayer) or linear (demosaiced)? This determines whether demosaic settings matter. **Answered (#4): mosaic (Bayer `R G / G B`), so demosaic settings matter.** See the learning log (2026-10-12) for the rest of the DNG structure.
 3. Licences: AgX reference implementations, RawTherapee film-simulation HaldCLUTs (per-pack terms).
