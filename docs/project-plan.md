@@ -345,6 +345,8 @@ Inspiration-image → draft look; sky segmentation (SegFormer, ADE20K) + sky-onl
 
 Dev: pytest, hypothesis, pytest-benchmark, colour-science (oracle), ruff, pyright, pre-commit, playwright (M4).
 
+What each dependency is for: [`docs/dependencies.md`](dependencies.md).
+
 ---
 
 ## 13. Agent integration
