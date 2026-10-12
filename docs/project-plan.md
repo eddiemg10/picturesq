@@ -361,4 +361,4 @@ What each dependency is for: [`docs/dependencies.md`](dependencies.md).
 ## 14. Open questions
 1. Can the Pocket 4 shoot DNG + JPEG simultaneously? (Useful for the M1 comparison.) **Deferred (#5): not checked. The M1 comparison uses the embedded 720×1280 JPEG preview in each DNG as the in-camera reference, for simplicity.**
 2. Are Pocket 4 DNGs mosaic (Bayer) or linear (demosaiced)? This determines whether demosaic settings matter. **Answered (#4): mosaic (Bayer `R G / G B`), so demosaic settings matter.** See the learning log (2026-10-12) for the rest of the DNG structure.
-3. Licences: AgX reference implementations, RawTherapee film-simulation HaldCLUTs (per-pack terms).
+3. Licences: AgX reference implementations, RawTherapee film-simulation Hald CLUTs (per-collection terms). **Answered (#7, [ADR 0007](decisions/0007-asset-licences.md)):** port the AgX maths from published sources only (no GPL code, no verbatim Blender/darktable files); the film-simulation collection (CC BY-SA 4.0 overall, `CreativePack-1` unclear) is not bundled by default, optional download only.
