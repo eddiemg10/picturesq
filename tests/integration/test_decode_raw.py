@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from picturesq.config.project import DecodeConfig
-from picturesq.decode import decode_original
+from picturesq.decode import decode_original, read_baseline_exposure
 
 pytestmark = pytest.mark.integration
 
@@ -38,7 +38,8 @@ def test_half_size_decode_is_scene_linear_float32(samples_dir: Path, name: str) 
     assert image.flags.c_contiguous
     assert np.isfinite(image).all()
     assert image.min() >= 0.0
-    assert image.max() <= 1.0
+    # BaselineExposure can lift values above 1.0 (scene-linear headroom), so no upper bound of 1.
+    assert image.max() > 0.0
 
 
 def test_full_size_decode_is_twice_half_size(samples_dir: Path) -> None:
@@ -61,3 +62,21 @@ def test_grey_patches_stay_neutral(samples_dir: Path, half_size: bool) -> None:
         r, g, b = patch.reshape(-1, 3).mean(axis=0)
         assert r / g == pytest.approx(1.0, abs=RATIO_TOLERANCE)
         assert b / g == pytest.approx(1.0, abs=RATIO_TOLERANCE)
+
+
+def test_baseline_exposure_read_from_dng(samples_dir: Path) -> None:
+    ev = read_baseline_exposure(_sample(samples_dir, "dji-fc4382.dng"))
+    assert ev == pytest.approx(1.32, abs=0.01)
+
+
+def test_baseline_exposure_zero_for_raf(samples_dir: Path) -> None:
+    assert read_baseline_exposure(_sample(samples_dir, "fujifilm-x-s10.raf")) == 0.0
+
+
+def test_baseline_exposure_decode_is_linear_gain(samples_dir: Path) -> None:
+    path = _sample(samples_dir, "dji-fc4382.dng")
+    ev = read_baseline_exposure(path)
+    on = decode_original(path, DecodeConfig(baseline_exposure=True), half_size=True)
+    off = decode_original(path, DecodeConfig(baseline_exposure=False), half_size=True)
+    assert on.max() > off.max()
+    np.testing.assert_allclose(on, off * np.float32(2.0**ev), rtol=1e-5, atol=1e-6)
