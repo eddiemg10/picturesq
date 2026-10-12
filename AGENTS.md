@@ -12,6 +12,7 @@ The local web UI (`picturesq ui`) is the only way humans edit config. Agents edi
 - Decision rationale: `docs/decisions/` (ADRs; add one when you make a significant decision)
 - Vocabulary (binding): `docs/glossary.md`
 - Concepts: `docs/learning-log.md`
+- Dependencies, what each is for: `docs/dependencies.md`
 - Current milestone and tasks: [project board](https://github.com/users/eddiemg10/projects/1) / GitHub issues (the only tracker)
 
 ## Hard rules
