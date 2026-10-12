@@ -1,10 +1,12 @@
 """Command-line interface. One module per verb as they are implemented."""
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from picturesq import __version__
+from picturesq.cli.export import render_project
 
 app = typer.Typer(
     name="picturesq",
@@ -13,6 +15,13 @@ app = typer.Typer(
 )
 
 ProjectArg = Annotated[str, typer.Argument(help="Project folder containing RAW originals.")]
+OutOption = Annotated[
+    Path | None,
+    typer.Option("--out", help="Write exports here instead of <project>/exports."),
+]
+JsonOption = Annotated[
+    bool, typer.Option("--json", help="Print one JSON document on stdout instead of text.")
+]
 
 
 def _not_implemented(command: str, milestone: str) -> None:
@@ -37,9 +46,12 @@ def main(
 
 
 @app.command()
-def run(project: ProjectArg) -> None:
-    """Run the whole pipeline: decode, normalise, grade, export."""
-    _not_implemented("run", "M1")
+def run(project: ProjectArg, out: OutOption = None, as_json: JsonOption = False) -> None:
+    """Run the whole pipeline: decode, normalise, grade, export.
+
+    Creates picturesq.yaml with defaults if missing. For now this is decode + export.
+    """
+    render_project(project, create_config=True, output_names=None, out=out, as_json=as_json)
 
 
 @app.command()
@@ -73,9 +85,20 @@ def ui(project: ProjectArg) -> None:
 
 
 @app.command()
-def export(project: ProjectArg) -> None:
-    """Render originals at full resolution and write every enabled output."""
-    _not_implemented("export", "M1")
+def export(
+    project: ProjectArg,
+    output: Annotated[
+        list[str] | None,
+        typer.Option("--output", help="Write only this output (repeatable)."),
+    ] = None,
+    out: OutOption = None,
+    as_json: JsonOption = False,
+) -> None:
+    """Render originals and write every enabled output.
+
+    Uses default settings if picturesq.yaml is missing, without creating it.
+    """
+    render_project(project, create_config=False, output_names=output, out=out, as_json=as_json)
 
 
 @app.command()
