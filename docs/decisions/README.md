@@ -11,3 +11,4 @@ New ADRs get the next number; superseded ones are marked, not deleted.
 | [0004](0004-yaml-machine-owned.md) | YAML config is machine-owned; web UI is the human editor | Accepted |
 | [0005](0005-web-ui-no-build.md) | No-build web UI (Starlette + htmx) with Python-rendered proxies | Accepted |
 | [0006](0006-glossary-and-public-repo.md) | Binding glossary, British spelling, public repo | Accepted |
+| [0007](0007-asset-licences.md) | Asset licences: AgX references and film-simulation LUT packs | Accepted |
