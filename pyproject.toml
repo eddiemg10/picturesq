@@ -72,3 +72,5 @@ markers = [
     "reference: needs the private local reference set (reference/raw/); never runs in CI",
 ]
 addopts = "-m 'not integration and not slow and not reference'"
+# colour-science (test oracle only) warns about optional plotting/scipy extras we don't need.
+filterwarnings = ["ignore:.*related API features are not available"]
