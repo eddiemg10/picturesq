@@ -23,7 +23,7 @@
 | **category** | A grouping of looks: `bw`, `cold`, `warm`, `cinematic`. | family, collection, group |
 | **look library** | All available looks: built-in + user-installed. | catalogue, pack |
 | **LUT** | A 3D lookup table file (`.cube`). Always used *through* a look file that declares its **input space**. | filter, profile |
-| **Hald CLUT** | A **LUT** stored as a square image (PNG/TIFF) instead of a `.cube`; used by RawTherapee's film-simulation packs. Only ever a source format: convert to `.cube` before use, and keep the pack's licence and attribution with it. | filter pack, preset image |
+| **Hald CLUT** | A **LUT** stored as a square image (PNG/TIFF) instead of a `.cube`; used by RawTherapee's Film Simulation Collection. Only ever a source format: convert to `.cube` before use, and keep the collection's licence and attribution with it. | HaldCLUT, preset image |
 | **operation (op)** | One step inside a look file, e.g. `contrast`, `split_tone`, `lut`. | module, node, tool, effect |
 | **parameter** | A named, adjustable value a look exposes to the UI (e.g. *shadow tint*). | knob, setting, control |
 | **intensity** | How strongly a look applies: 0 % = neutral render, 100 % = as designed, up to 150 %. The only word for this. | strength, amount, opacity, mix |
