@@ -1,4 +1,47 @@
 {
-  "_comment": "CC0 RAW samples from https://raw.pixls.us. Populated in M0 issue 'Select CC0 sample RAWs'. Each entry: {\"name\", \"url\", \"sha256\", \"camera\"}.",
-  "samples": []
+  "_comment": "CC0 RAW samples from https://raw.pixls.us (licence checked per file). Fetched by scripts/fetch_samples.py. Each entry: {name, url, sha256, camera, notes}.",
+  "samples": [
+    {
+      "name": "dji-fc4382.dng",
+      "url": "https://raw.pixls.us/getfile.php/7823/nice/DJI%20-%20FC4382%20-%2016bit%20(4:3).DNG",
+      "sha256": "f33ddaf2a7fa70b395abced251faccea11100d2ab7e54ae0a6adbff043d72027",
+      "camera": "DJI FC4382",
+      "notes": "DJI DNG with BaselineExposure +1.32 EV (closest relative of the Pocket 4 DNGs); bright sky over dark forest (R03-like)."
+    },
+    {
+      "name": "pentax-k5iis.dng",
+      "url": "https://raw.pixls.us/getfile.php/1184/nice/Pentax%20-%20K-5%20II%20s%20-%2014bit%20(3:2).DNG",
+      "sha256": "e7c150aa0cbb621f5c81805fa685ca034fb10ed6e2c350aa46973b42ce130ae5",
+      "camera": "Pentax K-5 II s",
+      "notes": "DNG with BaselineExposure ≈ +0.49 EV; indoor tungsten light at night (R06-like)."
+    },
+    {
+      "name": "pentax-q7.dng",
+      "url": "https://raw.pixls.us/getfile.php/1760/nice/Pentax%20-%20Q7%20-%2012bit%20(4:3).DNG",
+      "sha256": "577eac8d03419bb82714169dd532d58efc82a0abf928d28e4641f1ed5d56c350",
+      "camera": "Pentax Q7",
+      "notes": "Small-sensor DNG, black level 0 (like the Pocket 4); dark low-key interior, ISO 800 (R05-like low key)."
+    },
+    {
+      "name": "sony-ilme-fx3.arw",
+      "url": "https://raw.pixls.us/getfile.php/6874/nice/Sony%20-%20ILME-FX3%20-%2014bit%20(3:2).ARW",
+      "sha256": "394ceb1a356be8b17f18dc013bfd22895ba6ec7195f578b9be1c2fd0d5ea4773",
+      "camera": "Sony ILME-FX3",
+      "notes": "Non-DNG Bayer RAW, black level 512; warm indoor light at ISO 20000 (R10-like noise)."
+    },
+    {
+      "name": "fujifilm-xq1.raf",
+      "url": "https://raw.pixls.us/getfile.php/1741/nice/Fujifilm%20-%20XQ1%20-%2012bit%2012bit%20uncompressed%20(4:3).RAF",
+      "sha256": "663c0bfcb8819c3931444acd9d1491de4d0c0aa1fd745b99e1faa68cc8de033b",
+      "camera": "Fujifilm XQ1",
+      "notes": "X-Trans (6×6 CFA); daylight at −1 EV exposure compensation (R02-like)."
+    },
+    {
+      "name": "fujifilm-x-s10.raf",
+      "url": "https://raw.pixls.us/getfile.php/4190/nice/Fujifilm%20-%20X-S10%20-%2014bit%2014bit%20compressed%20(3:2).RAF",
+      "sha256": "9419d1408ebf850395e5dd563beb96309466546252caf541466034c9cb7e9724",
+      "camera": "Fujifilm X-S10",
+      "notes": "X-Trans (6×6 CFA); colour chart under indoor light, for colour accuracy checks."
+    }
+  ]
 }

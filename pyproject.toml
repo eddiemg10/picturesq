@@ -60,5 +60,6 @@ testpaths = ["tests"]
 markers = [
     "integration: needs real RAW samples (scripts/fetch_samples.py)",
     "slow: full-resolution or performance tests",
+    "reference: needs the private local reference set (reference/raw/); never runs in CI",
 ]
-addopts = "-m 'not integration and not slow'"
+addopts = "-m 'not integration and not slow and not reference'"
