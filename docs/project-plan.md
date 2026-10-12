@@ -250,7 +250,7 @@ Rule: image operations are pure `f(image: float32 H×W×3, params) -> image`; on
 | Maths unit tests | transfer functions, matrices, Oklab, exposure, operations, LUT interpolation | pytest + hypothesis property tests (round-trips, identity, monotonicity, intensity 0 = neutral) |
 | Oracle tests | colour maths against a reference | `colour-science` (dev dependency only) |
 | Goldens | decode/normalise/grade on reference crops | ΔE2000 mean/p95 thresholds vs stored goldens; update with `scripts/update_goldens.py` (reviewed in PR) |
-| Integration | real RAWs end-to-end | CC0 samples from raw.pixls.us, cached in CI; the reference set runs locally (too large and personal to commit) |
+| Integration | real RAWs end-to-end | CC0 samples from raw.pixls.us, cached in CI; the reference set is private and runs locally only (`-m reference`, skipped when absent). Nothing derived from it (crops, goldens) is committed |
 | Performance | per-operation timings, full pipeline | pytest-benchmark (local), smoke perf in CI |
 | Memory | peak per photo at full resolution | RSS sampling; test fails above budget |
 | CLI | `--json` output contracts, exit codes | snapshot tests |
