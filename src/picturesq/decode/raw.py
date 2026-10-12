@@ -2,6 +2,8 @@
 
 Output: float32 ``HxWx3``, linear light, Rec.2020 primaries, D65 white, C-contiguous. The image is
 oriented upright (LibRaw applies the file's orientation tag; we leave ``user_flip`` at its default).
+The DNG ``BaselineExposure`` is applied, so middle grey sits near 0.18 for a well-exposed DNG;
+values above 1.0 are kept (scene-linear headroom). Exposure normalisation across photos is M2.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from numpy.typing import NDArray
 from rawpy._rawpy import ColorSpace, DemosaicAlgorithm, HighlightMode, LibRawError
 
 from picturesq.config.project import DecodeConfig
+from picturesq.decode.exposure import read_baseline_exposure
 
 # Keyed by the Literal values of ``DecodeConfig.demosaic``. LibRaw ignores this choice for X-Trans
 # (Fuji) sensors and always uses its own X-Trans demosaic.
@@ -61,10 +64,14 @@ def decode_original(
     Direct Rec.2020 keeps the neutral axis neutral. Its cost: colours outside the Rec.2020 gamut
     are clipped to 0 by LibRaw before we see them.
 
-    No brightness scaling is applied here (no DNG BaselineExposure, no auto-brightness): exposure
+    If ``config.baseline_exposure`` is set, the DNG ``BaselineExposure`` (stops) is applied as a
+    linear gain ``2**ev``: some cameras record the raw 2 to 4 stops dark on purpose, and without
+    this every render comes out dark. The result is not clipped, so values can exceed 1.0. No
+    other brightness scaling happens here (no auto-brightness): matching exposure across photos
     is the job of the normalise stage.
     """
     try:
+        gain = 2.0 ** read_baseline_exposure(path) if config.baseline_exposure else 1.0
         with rawpy.imread(str(path)) as raw:
             rgb16 = raw.postprocess(
                 demosaic_algorithm=DEMOSAIC_ALGORITHMS[config.demosaic],
@@ -80,6 +87,6 @@ def decode_original(
         raise DecodeError(f"cannot decode {path.name}: {err}") from err
 
     image = np.empty(rgb16.shape, dtype=np.float32)
-    np.multiply(rgb16, np.float32(1.0 / _UINT16_MAX), out=image, dtype=np.float32)
+    np.multiply(rgb16, np.float32(gain / _UINT16_MAX), out=image, dtype=np.float32)
     del rgb16
     return image
