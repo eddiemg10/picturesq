@@ -7,8 +7,8 @@
 ## Test plan
 <!-- Commands run, tests added, contact sheet reviewed, … -->
 
-## Preview
 <!-- stage-sheet:start -->
+## Preview
 <!-- Rendering changes: run `uv run python scripts/stage_sheet.py --pr <N>` after opening the PR. -->
 <!-- stage-sheet:end -->
 
