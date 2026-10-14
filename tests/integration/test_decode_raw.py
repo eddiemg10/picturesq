@@ -6,6 +6,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import rawpy
+from rawpy._rawpy import ColorSpace, HighlightMode
 
 from picturesq.config.project import DecodeConfig
 from picturesq.decode import decode_original, read_baseline_exposure
@@ -37,7 +39,8 @@ def test_half_size_decode_is_scene_linear_float32(samples_dir: Path, name: str) 
     assert image.shape[2] == 3
     assert image.flags.c_contiguous
     assert np.isfinite(image).all()
-    assert image.min() >= 0.0
+    # Out-of-gamut colours keep a negative channel (#47), but nothing is negative overall.
+    assert image.sum(axis=-1).min() >= -0.05
     # BaselineExposure can lift values above 1.0 (scene-linear headroom), so no upper bound of 1.
     assert image.max() > 0.0
 
@@ -80,3 +83,32 @@ def test_baseline_exposure_decode_is_linear_gain(samples_dir: Path) -> None:
     off = decode_original(path, DecodeConfig(baseline_exposure=False), half_size=True)
     assert on.max() > off.max()
     np.testing.assert_allclose(on, off * np.float32(2.0**ev), rtol=1e-5, atol=1e-6)
+
+
+@pytest.mark.parametrize("name", ["sony-ilme-fx3.arw", "dji-fc4382.dng"])
+def test_matches_libraw_rec2020_for_in_gamut_colours(samples_dir: Path, name: str) -> None:
+    """Our float camera → Rec.2020 conversion agrees with LibRaw's own where LibRaw can't clip."""
+    path = _sample(samples_dir, name)
+    ours = decode_original(path, DecodeConfig(baseline_exposure=False), half_size=True)
+    with rawpy.imread(str(path)) as raw:
+        libraw = raw.postprocess(
+            half_size=True,
+            use_camera_wb=True,
+            no_auto_bright=True,
+            gamma=(1, 1),
+            output_bps=16,
+            output_color=ColorSpace.Rec2020,
+            highlight_mode=HighlightMode.Blend,
+        ).astype(np.float32) / np.float32(65535.0)
+    in_gamut = ((ours > 0.002) & (ours < 0.9)).all(axis=-1)
+    error = np.abs(ours[in_gamut] - libraw[in_gamut]).max(axis=-1) / libraw[in_gamut].max(axis=-1)
+    assert np.percentile(error, 99) < 0.01
+
+
+def test_out_of_gamut_colours_survive(samples_dir: Path) -> None:
+    """#47: LibRaw's integer output clipped ~13 % of the Sony sample's pixels to a zero channel."""
+    image = decode_original(
+        _sample(samples_dir, "sony-ilme-fx3.arw"), DecodeConfig(), half_size=True
+    )
+    assert (image.min(axis=-1) == 0.0).mean() < 0.001
+    assert (image.min(axis=-1) < 0.0).mean() > 0.05

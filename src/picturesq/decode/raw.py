@@ -1,6 +1,7 @@
 """Decode an original (RAW file) into a scene-linear image in the working space.
 
-Output: float32 ``HxWx3``, linear light, Rec.2020 primaries, D65 white, C-contiguous. The image is
+Output: float32 ``HxWx3``, linear light, Rec.2020 primaries, D65 white, C-contiguous. Out-of-gamut
+colours keep a negative channel. The image is
 oriented upright (LibRaw applies the file's orientation tag; we leave ``user_flip`` at its default).
 The DNG ``BaselineExposure`` is applied, so middle grey sits near 0.18 for a well-exposed DNG;
 values above 1.0 are kept (scene-linear headroom). Exposure normalisation across photos is M2.
@@ -18,6 +19,7 @@ from numpy.typing import NDArray
 # rawpy re-exports these at runtime, but its type stubs only declare them in rawpy._rawpy.
 from rawpy._rawpy import ColorSpace, DemosaicAlgorithm, HighlightMode, LibRawError
 
+from picturesq.colour.spaces import REC709_TO_REC2020, REC709_TO_XYZ, Matrix, apply_matrix
 from picturesq.config.project import DecodeConfig
 from picturesq.decode.exposure import read_baseline_exposure
 
@@ -48,6 +50,28 @@ class DecodeError(Exception):
     """An original could not be read or decoded (unreadable, corrupt or unsupported)."""
 
 
+def camera_to_working_matrix(
+    rgb_cam: NDArray[np.floating], cam_xyz: NDArray[np.floating]
+) -> Matrix:
+    """The matrix taking white-balanced camera RGB to linear Rec.2020.
+
+    ``rgb_cam`` is LibRaw's camera → linear sRGB matrix (rawpy ``color_matrix``, filled for
+    DNGs); ``cam_xyz`` is the XYZ → camera matrix (rawpy ``rgb_xyz_matrix``, filled for most
+    other RAWs). Either may be all zeros. Without ``rgb_cam`` we derive it from ``cam_xyz``
+    the way dcraw does: camera ← sRGB is ``cam_xyz @ srgb_to_xyz``, each row scaled to sum to
+    1 (so white-balanced white stays white), then inverted. sRGB and Rec.709 share primaries.
+    """
+    rgb_cam = np.asarray(rgb_cam, dtype=np.float64)[:3, :3]
+    if not np.any(rgb_cam):
+        cam_xyz = np.asarray(cam_xyz, dtype=np.float64)[:3, :3]
+        if not np.any(cam_xyz):
+            raise ValueError("the RAW file has no colour matrix")
+        cam_rgb = cam_xyz @ REC709_TO_XYZ
+        cam_rgb /= cam_rgb.sum(axis=1, keepdims=True)
+        rgb_cam = np.linalg.inv(cam_rgb)
+    return REC709_TO_REC2020 @ rgb_cam
+
+
 def decode_original(
     path: Path, config: DecodeConfig, *, half_size: bool = False
 ) -> NDArray[np.float32]:
@@ -56,13 +80,10 @@ def decode_original(
     ``half_size`` skips demosaicing (each 2x2 block becomes one pixel): much faster, for proxies
     and tests.
 
-    Colour space: LibRaw converts camera RGB straight to linear Rec.2020 (``output_color``).
-    We measured LibRaw's XYZ output too: it is D65-referred, and our derived XYZ to Rec.2020
-    matrix reproduces LibRaw's Rec.2020 within 0.2 %, so the white point is the same (D65) in
-    both. But the XYZ route stores Z as a 16-bit value capped at 1.0 while D65 white has Z = 1.089,
-    so bright neutrals lose blue (about 8 % on a near-white pixel), which tints highlights.
-    Direct Rec.2020 keeps the neutral axis neutral. Its cost: colours outside the Rec.2020 gamut
-    are clipped to 0 by LibRaw before we see them.
+    Colour: LibRaw demosaics and white-balances in camera RGB (``output_color=raw``), and we
+    convert camera RGB to linear Rec.2020 ourselves in float32 (:func:`camera_to_working_matrix`).
+    LibRaw's own conversion stores 16-bit unsigned integers, which clips every out-of-gamut
+    colour (a negative channel) to 0 before we see it (#47). Ours keeps negatives.
 
     If ``config.baseline_exposure`` is set, the DNG ``BaselineExposure`` (stops) is applied as a
     linear gain ``2**ev``: some cameras record the raw 2 to 4 stops dark on purpose, and without
@@ -73,6 +94,7 @@ def decode_original(
     try:
         gain = 2.0 ** read_baseline_exposure(path) if config.baseline_exposure else 1.0
         with rawpy.imread(str(path)) as raw:
+            matrix = camera_to_working_matrix(raw.color_matrix, raw.rgb_xyz_matrix)
             rgb16 = raw.postprocess(
                 demosaic_algorithm=DEMOSAIC_ALGORITHMS[config.demosaic],
                 highlight_mode=HIGHLIGHT_MODES[config.highlight_mode],
@@ -81,12 +103,21 @@ def decode_original(
                 no_auto_bright=True,
                 gamma=(1, 1),
                 output_bps=16,
-                output_color=ColorSpace.Rec2020,
+                output_color=ColorSpace.raw,
             )
-    except (LibRawError, OSError) as err:
+    except (LibRawError, OSError, ValueError) as err:
         raise DecodeError(f"cannot decode {path.name}: {err}") from err
 
     image = np.empty(rgb16.shape, dtype=np.float32)
     np.multiply(rgb16, np.float32(gain / _UINT16_MAX), out=image, dtype=np.float32)
     del rgb16
+    return apply_matrix_in_blocks(image, matrix)
+
+
+def apply_matrix_in_blocks(image: NDArray[np.float32], matrix: Matrix) -> NDArray[np.float32]:
+    """``apply_matrix`` in place, a block of rows at a time so the temporary copy stays small."""
+    rows = max(1, (1 << 18) // max(1, image.shape[1]))
+    for top in range(0, image.shape[0], rows):
+        block = image[top : top + rows]
+        apply_matrix(block, matrix, out=block)
     return image
