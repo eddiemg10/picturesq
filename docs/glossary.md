@@ -39,6 +39,7 @@
 | **reference set** | The user's local Pocket 4 RAWs (scenarios R01–R10) used for acceptance. | test images |
 | **stand-in** | A reference set photo covering a scenario until a proper shot exists (`status: stand-in` in the manifest). | placeholder, substitute |
 | **samples** | CC0 RAWs from raw.pixls.us used in CI. | fixtures (fixture = pytest) |
+| **camera JPEG** | The JPEG the camera embedded in the original: the reference our neutral render is compared against (`scripts/compare.py`). Some cameras embed a neighbouring frame; those are left out. | in-camera JPEG, preview |
 | **golden** | A stored expected output used by a regression test. | snapshot (that's for text/JSON) |
 
 ## Pipeline
@@ -66,11 +67,15 @@
 | **log encoding** | Storing each channel as its EV relative to mid grey, scaled to 0–1 between a black and a white EV. The display transform's curve works on this. |
 | **toe / shoulder** | The bottom and top bends of the display transform's S-curve: the toe eases shadows into black, the shoulder rolls highlights off toward white. |
 | **inset / outset** | The display transform's matrices around the curve: **inset** pulls the primaries toward white so bright saturated colours fade to white without hue skews; **outset** gives back some of that saturation afterwards. |
+| **chroma preservation** | The display transform's blend toward a luminance-only tone map that keeps each pixel's colour ratios, so bright colours stay colourful. |
+| **chroma** | How colourful a pixel is, independent of its lightness: the distance from grey in Oklab a/b. |
+| **lens corrections** | Vignetting gain maps and distortion / colour-fringing warps a DNG carries for renderers (`OpcodeList3`). |
+| **sharpening** | An unsharp mask on lightness at each output's final size. |
 | **path to white** | How a colour behaves as it gets brighter: with a good display transform it desaturates smoothly toward white instead of clipping to a skewed hue. |
 | **display-referred** | Values after the display transform (0–1, encoded for a screen). LUT operations usually run here. |
 | **input space** | The colour space + transfer curve a LUT expects as input (e.g. `srgb`, `rec709`). |
 | **transfer function** | The curve between linear and encoded values (sRGB curve, log). "Gamma" only in explanations. |
-| **key** | Overall brightness character of a scene: `low_key`, `normal`, `high_key`. |
+| **key** | Overall brightness character of a scene: `low_key`, `normal`, `high_key`. (Not used by normalise since ADR-0010.) |
 | **EV / stop** | A doubling or halving of light. `exposure_ev: +1` = ×2 in scene-linear. |
 | **white balance (WB)** | Per-channel gains making neutral objects neutral; **as-shot** = camera's recorded values. |
 | **chroma NR / luma NR** | Noise reduction on colour / brightness detail. |

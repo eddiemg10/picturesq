@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from picturesq.colour.oklab import rec2020_to_oklab
+from picturesq.colour.spaces import REC2020_TO_XYZ
 from picturesq.config import ChromaNoiseReductionConfig, ExposureConfig, ProjectConfig
 from picturesq.normalise import chroma_noise_reduction, exposure_ev, median_ev, normalise
 
@@ -56,12 +57,14 @@ def test_chroma_nr_removes_colour_noise_in_shadows_only() -> None:
     config = ChromaNoiseReductionConfig()
     dark, bright = _noisy(0.005), _noisy(1.0)
     dark_before, bright_before = _chroma_noise(dark), _chroma_noise(bright)
-    lightness_before = rec2020_to_oklab(dark)[..., 0].copy()
+    luminance_before = dark @ REC2020_TO_XYZ[1].astype(np.float32)
     chroma_noise_reduction(dark, config)
     chroma_noise_reduction(bright, config)
     assert _chroma_noise(dark) < dark_before / 3
     assert _chroma_noise(bright) == pytest.approx(bright_before, rel=1e-3)
-    np.testing.assert_allclose(rec2020_to_oklab(dark)[..., 0], lightness_before, atol=1e-4)
+    np.testing.assert_allclose(
+        dark @ REC2020_TO_XYZ[1].astype(np.float32), luminance_before, rtol=1e-4, atol=1e-7
+    )
 
 
 def test_chroma_nr_off_and_grey() -> None:
