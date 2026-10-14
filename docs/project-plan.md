@@ -57,7 +57,7 @@ Photoshop-style GUI, local retouching, lens correction, cataloguing/DAM, ML trai
 | D3 | Camera LUT | None; use the DNG colour matrices. [ADR-0002](decisions/0002-no-camera-conversion-lut.md) | DJI's D-Log LUTs are for D-Log *video*; DNG is linear sensor data. |
 | D4 | Working space | Scene-linear float32, linear Rec.2020 primaries | Holds camera colours without clipping; linear makes exposure/WB physically correct. |
 | D5 | Display transform | AgX-style. [ADR-0003](decisions/0003-agx-display-transform.md) | Graceful highlight roll-off, no hue skews; open design. |
-| D6 | Normalise | Key-aware partial exposure correction, as-shot WB + disagreement flag, chroma NR | Keeps night photos moody, fixes mistakes, flags what it can't fix. |
+| D6 | Normalise | Camera-fitted exposure offset (+2 EV); optional partial correction toward a target (off by default); chroma NR in the shadows; as-shot WB + disagreement flag (M2). [ADR-0010](decisions/0010-camera-matched-neutral-render.md) | Measured: cameras brighten by a near-constant amount, not per scene. Batch evening-out stays available. |
 | D7 | Looks | Every look is a look file (YAML operations, optionally a `lut` operation); four categories | One concept; editable by agents; LUTs give breadth. |
 | D8 | LUT maths | Our own numpy trilinear/tetrahedral; colour-science as **test oracle only** | ~30 lines, no heavy runtime dependency, verified against a reference. |
 | D9 | Config | YAML, machine-owned, pydantic models = schema. [ADR-0004](decisions/0004-yaml-machine-owned.md) | Diffable and readable for agents; humans use the UI. |
@@ -68,7 +68,7 @@ Photoshop-style GUI, local retouching, lens correction, cataloguing/DAM, ML trai
 | D14 | Distribution | **Public** GitHub repo from day one, MIT; PyPI via `uv tool install picturesq` | Build in public; free branch protection + CI; standard Python install path. |
 | D15 | Process | GitHub Issues + Project board as the only tracker; PR-only changes, CI-gated | Treat it as a product; small tasks the user can pick up. |
 | D16 | Vocabulary | [`glossary.md`](glossary.md) is binding; British spelling everywhere | Consistent, intentional language across code, CLI, config, docs and UI. |
-| D17 | M1 acceptance | Judged at matched exposure (evaluation-only global EV offset). [ADR-0009](decisions/0009-m1-matched-exposure.md) | The camera JPEG lifts midtones ~2 EV with its own tone mapping; closing that gap is normalise's job (M2). |
+| D17 | Neutral render acceptance | The real export against the camera JPEG: brightness, chroma per lightness band, clipping (`scripts/compare.py`). [ADR-0010](decisions/0010-camera-matched-neutral-render.md) (supersedes 0009) | Judging an exposure-matched image hid that real exports were 2 stops dark. |
 
 ---
 
@@ -82,35 +82,37 @@ Photoshop-style GUI, local retouching, lens correction, cataloguing/DAM, ML trai
 │ 1 DECODE   │  → scene-linear float32 in the working space               [camera-specific]
 └─────┬──────┘  caches: proxy (2048 px, float16 .npy); optional full-res 16-bit TIFF
       ▼                                                                   [camera-agnostic ↓]
-┌────────────┐  stats → key detection → exposure (partial, clamped) → highlight guard
-│ 2 NORMALISE│  → WB disagreement check → chroma NR → overrides → flags
+┌────────────┐  exposure (camera-fitted offset, optional partial correction) → chroma NR
+│ 2 NORMALISE│  → stats → WB disagreement check → overrides → flags
 └─────┬──────┘
       ▼
 ┌────────────┐  look operations (scene-linear, scaled by intensity) → adjustments
 │ 3 GRADE    │  → display transform (AgX) → display-referred operations (e.g. lut)
 └─────┬──────┘
       ▼
-┌────────────┐  per output: resize → sharpen → sRGB encode → 8-bit JPEG + ICC profile + EXIF
+┌────────────┐  per output: resize → (display transform) → sRGB encode → sharpen → 8-bit JPEG + ICC + EXIF
 │ 4 EXPORT   │  + sidecar (config snapshot, version, original hash)
 └────────────┘
 ```
 `picturesq preview` and `picturesq ui` run stages 2–3 on proxies; `picturesq export` runs 1–4 on originals.
 
 ### 4.1 Decode
-- `rawpy.imread(...).postprocess(...)` with gamma 1, no auto-bright, 16-bit output, camera WB, converted to float32 in the working space. Exact parameters (demosaic algorithm, highlight mode) are fixed in M1 with tests.
+- `rawpy.imread(...).postprocess(...)` with gamma 1, no auto-bright, 16-bit output, camera WB, **camera RGB** output; we apply the camera → Rec.2020 matrix ourselves in float32 so out-of-gamut colours survive (#47). Exact parameters (demosaic algorithm, highlight mode) are fixed in M1 with tests.
+- **DNG lens corrections** (`OpcodeList3` gain maps and rectilinear warps), applied in camera RGB before the matrix. Implemented from the DNG spec, off by default until verified against a reference render (ADR-0010).
 - **Proxy:** `half_size=True` skips demosaicing (≈4× fewer pixels, near-instant), then downscale to 2048 px long edge.
 - The cache key is a hash of (original bytes, decode config, picturesq version), so a stale cache is impossible.
 
 ### 4.2 Normalise (algorithm v1)
-1. Luminance Y on the proxy → stats: percentiles p1/p5/p50/p95/p99, clipped fraction, mean chroma.
-2. **Key detection** from the histogram shape: `low_key`, `normal`, `high_key` (thresholds in config).
-3. Target median per key (e.g. 0.06 / 0.18 / 0.35). `gain_ev = log2(target / median)`.
-4. **Partial correction:** `exposure_ev = clamp(correction × gain_ev, ±max_ev)` (defaults 0.6, 2 EV). Hitting the clamp raises flag `exposure_clamped`.
-5. **Highlight guard:** if more than `max_clip_fraction` would exceed the display transform's white point, reduce the gain.
-6. **WB check:** gray-world/white-patch estimate vs as-shot; a difference > N mired raises flag `wb_disagreement` (no automatic change).
-7. **Chroma NR:** blur only chroma (Oklab a/b) with a radius scaled by ISO.
-8. Apply overrides (`exposure_ev`, `wb_kelvin`, `tint`, `skip`).
-9. Write stats + flags per photo, and a project summary; stats outside configured ranges mark the photo as an **outlier**.
+Implemented (ADR-0010):
+1. **Exposure:** `exposure_ev = offset_ev + clamp(correction × (target_ev − median_ev), ±max_correction_ev)`. `offset_ev` (+2.0) is fitted to camera JPEGs; `correction` defaults to 0 because cameras don't even out a batch. The median is measured on a ~100k-pixel grid.
+2. **Chroma NR:** each pixel keeps its luminance and moves toward the local average chromaticity, smoothed on a small copy (radius a fraction of the long edge); full strength in the shadows, faded out 1.5 EV below mid grey.
+
+Still to do (M2):
+3. Stats per photo (p1/p5/p50/p95/p99, clipped fraction, mean chroma) written as JSON, plus a project summary; stats outside configured ranges mark the photo as an **outlier**.
+4. **WB check:** grey-world/white-patch estimate vs as-shot; a difference > N mired raises flag `wb_disagreement` (no automatic change).
+5. Overrides (`exposure_ev`, `wb_kelvin`, `tint`, `skip`) and flags (e.g. `exposure_clamped`).
+
+Dropped after measurement (ADR-0010): key detection with per-key targets and the highlight guard (the camera-fitted curve keeps highlights below the white point; cameras don't normalise per scene). Local tone mapping is not planned: cameras showed no compression beyond their global curve.
 
 ### 4.3 Grade
 - **Per photo:** one look + intensity + adjustments (project default, with optional per-photo override).
@@ -160,12 +162,9 @@ decode:
   highlight_mode: blend
 normalise:
   enabled: true
-  correction: 0.6
-  max_ev: 2.0
-  targets: {low_key: 0.06, normal: 0.18, high_key: 0.35}
-  max_clip_fraction: 0.002
-  white_balance: {mode: as_shot, flag_disagreement_mired: 30}
-  chroma_nr: {enabled: true, amount: auto}
+  exposure: {offset_ev: 2.0, correction: 0.0, target_ev: -1.0, max_correction_ev: 2.0}
+  chroma_nr: {amount: 1.0, radius: 0.004, full_lightness: 0.2, fade_lightness: 0.4}
+  white_balance: {mode: as_shot, flag_disagreement_mired: 30}   # M2
 grade:
   look: {name: cold/nordic, intensity: 0.8, parameters: {}}
   adjustments: {exposure: 0.0, warmth: 0.0, tint: 0.0, contrast: 0.0, saturation: 0.0, vibrance: 0.0}
@@ -286,17 +285,17 @@ Project plan, glossary, ADRs, learning log, scaffold, CI, public repo with prote
 **Exit:** CI green on both OSes; the user signs off this document; reference set shot.
 
 ### M1 — Decode & export (neutral render)
-Decode via rawpy into the working space; proxies + cache; AgX display transform; sRGB JPEG export with ICC/EXIF; `decode`, `export`, `run` (no normalise/grade yet beyond the display transform); `scripts/compare.py` contact sheet: ours vs in-camera JPEG vs darktable default.
+Decode via rawpy into the working space; proxies + cache; AgX display transform fitted to camera JPEGs; exposure offset and chroma NR (pulled forward from M2, ADR-0010); output sharpening; sRGB JPEG export with ICC/EXIF; `decode`, `export`, `run`; `scripts/compare.py` contact sheet and gate: ours vs in-camera JPEG.
 **Concepts:** RAW/demosaic, linear vs display-referred, colour spaces and gamuts, display transforms.
-**Exit:** on the reference set, the neutral render is judged comparable or better than the in-camera JPEG in colour and highlights at matched exposure (one global EV offset, an evaluation aid only; residual shadow differences are expected; [ADR-0009](decisions/0009-m1-matched-exposure.md)); memory budget test passes.
+**Exit:** `scripts/compare.py` passes its gate on the CC0 samples and on the reference set (real export vs camera JPEG: median |ΔEV| ≤ 0.5, chroma per lightness band within 0.8–1.25, no extra clipping; [ADR-0010](decisions/0010-camera-matched-neutral-render.md)), the user judges the sheet comparable or better; memory budget test passes.
 
 ### M2 — Normalise
-Stats, key detection, partial exposure correction, highlight guard, WB disagreement flag, chroma NR, overrides, flags, `normalise` command + contact sheet.
+Stats JSON, WB disagreement flag, overrides, flags, outliers, `normalise` command + contact sheet (exposure and chroma NR landed in M1, ADR-0010).
 **Concepts:** EV/stops and histograms, white balance (temperature/tint, mired), noise.
-**Exit:** the reference-set contact sheet looks even; outliers are flagged, not forced.
+**Exit:** outliers are flagged, not forced; with `correction` on, the reference-set contact sheet looks even.
 
 ### M3 — Grade: look engine, look library, previews
-Operations, look file schema + intensity, `lut` operation (oracle-tested), adjustments, 12–16 built-in looks, sharpening, `preview` and `looks` commands.
+Operations, look file schema + intensity, `lut` operation (oracle-tested), adjustments, 12–16 built-in looks, `preview` and `looks` commands (output sharpening landed in M1).
 **Concepts:** tone curves, Oklab/OkLCh, what a `.cube` LUT is, split toning, unsharp mask.
 **Exit:** an agent makes a described change via config and the preview reflects it.
 

@@ -30,6 +30,14 @@ class DecodeConfig(_Model):
     highlight_mode: Literal["clip", "ignore", "blend", "reconstruct"] = Field(
         default="blend", description="How LibRaw treats clipped sensor highlights."
     )
+    lens_corrections: bool = Field(
+        default=False,
+        description=(
+            "Apply the lens corrections a DNG carries (OpcodeList3: vignetting gain maps, "
+            "distortion and lateral chromatic aberration warps). Experimental: follows the "
+            "DNG spec but is not yet verified against a reference render."
+        ),
+    )
     baseline_exposure: bool = Field(
         default=True,
         description=(
@@ -75,7 +83,7 @@ class ExposureConfig(_Model):
 
 
 class ChromaNoiseReductionConfig(_Model):
-    """Colour noise reduction in the shadows (Oklab a/b blur)."""
+    """Colour noise reduction in the shadows (smooths chromaticity, keeps luminance)."""
 
     amount: float = Field(
         default=1.0, ge=0.0, le=1.0, description="Strength in the darkest tones; 0 turns it off."
@@ -87,16 +95,19 @@ class ChromaNoiseReductionConfig(_Model):
         description="Blur radius as a fraction of the photo's long edge (0.004 = 31 px at 7680).",
     )
     full_lightness: float = Field(
-        default=0.35,
+        default=0.2,
         ge=0.0,
         lt=1.0,
-        description="Oklab lightness up to which the full amount applies (0.35 ≈ 3 EV below grey).",
+        description=(
+            "Lightness (cube root of luminance, as Oklab L for greys) up to which the full "
+            "amount applies; 0.2 is 4.5 EV below mid grey."
+        ),
     )
     fade_lightness: float = Field(
-        default=0.6,
+        default=0.4,
         gt=0.0,
         le=1.0,
-        description="Oklab lightness at which it has faded out (0.6 ≈ mid grey and above).",
+        description="Lightness at which it has faded out (0.4 is about 1.5 EV below mid grey).",
     )
 
     @model_validator(mode="after")

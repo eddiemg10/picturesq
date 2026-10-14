@@ -231,18 +231,25 @@ def _fit_gamut(rgb: FloatArray, luminance: FloatArray) -> None:
     """Pull pixels with a channel outside [0, 1] toward grey of the same luminance (in place).
 
     ``luminance`` has shape (..., 1) and must lie in [0, 1]. Moving along the line to grey
-    keeps the hue (in linear RGB) and the luminance; only chroma is given up.
+    keeps the hue (in linear RGB) and the luminance; only chroma is given up. Only the
+    (usually few) pixels outside the range are touched.
     """
-    high = rgb.max(axis=-1, keepdims=True)
-    low = rgb.min(axis=-1, keepdims=True)
+    # Element-wise over the three planes: numpy's max/min over a length-3 axis is ~10x slower.
+    red, green, blue = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    high = np.maximum(np.maximum(red, green), blue)
+    low = np.minimum(np.minimum(red, green), blue)
+    outside = (high > 1.0) | (low < 0.0)
+    if not outside.any():
+        return
+    pixels = rgb[outside]
+    grey = luminance[..., 0][outside][:, None]
+    high, low = high[outside][:, None], low[outside][:, None]
     scale = np.ones_like(high)
     with np.errstate(divide="ignore", invalid="ignore"):
-        np.minimum(scale, (1.0 - luminance) / (high - luminance), out=scale, where=high > 1.0)
-        np.minimum(scale, luminance / (luminance - low), out=scale, where=low < 0.0)
+        np.minimum(scale, (1.0 - grey) / (high - grey), out=scale, where=high > 1.0)
+        np.minimum(scale, grey / (grey - low), out=scale, where=low < 0.0)
     np.maximum(scale, 0.0, out=scale)
-    np.subtract(rgb, luminance, out=rgb)
-    np.multiply(rgb, scale, out=rgb)
-    np.add(rgb, luminance, out=rgb)
+    rgb[outside] = grey + (pixels - grey) * scale
 
 
 def _keep_ratios(image: FloatArray, curve: AgxCurve) -> FloatArray:

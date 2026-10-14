@@ -22,6 +22,7 @@ from rawpy._rawpy import ColorSpace, DemosaicAlgorithm, HighlightMode, LibRawErr
 from picturesq.colour.spaces import REC709_TO_REC2020, REC709_TO_XYZ, Matrix, apply_matrix
 from picturesq.config.project import DecodeConfig
 from picturesq.decode.exposure import read_baseline_exposure
+from picturesq.decode.opcodes import NO_CORRECTIONS, apply_lens_corrections, read_lens_corrections
 
 # Keyed by the Literal values of ``DecodeConfig.demosaic``. LibRaw ignores this choice for X-Trans
 # (Fuji) sensors and always uses its own X-Trans demosaic.
@@ -85,6 +86,10 @@ def decode_original(
     LibRaw's own conversion stores 16-bit unsigned integers, which clips every out-of-gamut
     colour (a negative channel) to 0 before we see it (#47). Ours keeps negatives.
 
+    Lens corrections: if ``config.lens_corrections`` is set, the DNG's ``OpcodeList3`` gain
+    maps (vignetting) and rectilinear warps (distortion, lateral chromatic aberration) are
+    applied in camera RGB, before the colour matrix (``decode/opcodes.py``).
+
     If ``config.baseline_exposure`` is set, the DNG ``BaselineExposure`` (stops) is applied as a
     linear gain ``2**ev``: some cameras record the raw 2 to 4 stops dark on purpose, and without
     this every render comes out dark. The result is not clipped, so values can exceed 1.0. No
@@ -93,8 +98,13 @@ def decode_original(
     """
     try:
         gain = 2.0 ** read_baseline_exposure(path) if config.baseline_exposure else 1.0
+        corrections = read_lens_corrections(path) if config.lens_corrections else NO_CORRECTIONS
         with rawpy.imread(str(path)) as raw:
             matrix = camera_to_working_matrix(raw.color_matrix, raw.rgb_xyz_matrix)
+            if raw.sizes.flip != 0:
+                # The opcodes are in sensor orientation; we have no sample to verify LibRaw's
+                # rotation codes against, so we don't guess.
+                corrections = NO_CORRECTIONS
             rgb16 = raw.postprocess(
                 demosaic_algorithm=DEMOSAIC_ALGORITHMS[config.demosaic],
                 highlight_mode=HIGHLIGHT_MODES[config.highlight_mode],
@@ -108,8 +118,11 @@ def decode_original(
     except (LibRawError, OSError, ValueError) as err:
         raise DecodeError(f"cannot decode {path.name}: {err}") from err
 
-    image = np.empty(rgb16.shape, dtype=np.float32)
-    np.multiply(rgb16, np.float32(gain / _UINT16_MAX), out=image, dtype=np.float32)
+    if corrections:
+        image = apply_lens_corrections(rgb16, corrections, gain / _UINT16_MAX)
+    else:
+        image = np.empty(rgb16.shape, dtype=np.float32)
+        np.multiply(rgb16, np.float32(gain / _UINT16_MAX), out=image, dtype=np.float32)
     del rgb16
     return apply_matrix_in_blocks(image, matrix)
 
