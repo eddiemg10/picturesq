@@ -131,9 +131,11 @@ def publish(sheet_path: Path, number: int, sha: str, section_for: Callable[[str]
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(sheet_path, target)
             run("git", "add", str(target.relative_to(worktree)), cwd=worktree)
-            message = f"chore(previews): stage sheet for #{number} at {sha}"
-            run("git", "commit", "-m", message, cwd=worktree)
-            run("git", "push", "origin", BRANCH, cwd=worktree)
+            unchanged = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=worktree)
+            if unchanged.returncode != 0:  # re-running at the same commit has nothing to push
+                message = f"chore(previews): stage sheet for #{number} at {sha}"
+                run("git", "commit", "-m", message, cwd=worktree)
+                run("git", "push", "origin", BRANCH, cwd=worktree)
         finally:
             run("git", "worktree", "remove", "--force", str(worktree))
             run("git", "branch", "-D", BRANCH)
