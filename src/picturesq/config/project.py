@@ -45,9 +45,10 @@ Fraction = Annotated[float, Field(ge=0.0, lt=1.0)]
 class DisplayTransformConfig(_Model):
     """The AgX-style display transform (ADR-0003): inset → log encode → sigmoid → outset.
 
-    Defaults are our own (ADR-0007), not copied from another implementation: contrast and toe
-    were chosen by eye against the camera JPEGs of the CC0 samples at matched exposure
-    (ADR-0009); inset and outset by measuring Oklab hue drift on saturated exposure ramps
+    Defaults are our own (ADR-0007), not copied from another implementation: contrast 1.0 and
+    toe 1.5 keep shadows at least as bright as a plain sRGB view of the linear image (higher
+    contrast crushed the 2-6 EV below mid grey where most of an unnormalised photo sits);
+    inset and outset by measuring Oklab hue drift on saturated exposure ramps
     (less inset drifts more, more inset desaturates).
     """
 
@@ -58,12 +59,12 @@ class DisplayTransformConfig(_Model):
         default=6.5, gt=0.0, description="Scene EV (relative to mid grey) that maps to white."
     )
     contrast: float = Field(
-        default=1.3,
+        default=1.0,
         gt=0.0,
         description="Midtone contrast; 1.0 matches the slope of the plain sRGB curve at mid grey.",
     )
     toe: float = Field(
-        default=2.0,
+        default=1.5,
         gt=0.0,
         le=10.0,
         description="Toe sharpness; higher keeps shadows linear longer.",

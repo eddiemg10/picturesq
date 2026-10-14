@@ -27,8 +27,8 @@ grade:
   display_transform:
     min_ev: -10.0
     max_ev: 6.5
-    contrast: 1.3
-    toe: 2.0
+    contrast: 1.0
+    toe: 1.5
     shoulder: 1.5
     inset:
     - 0.25
@@ -112,8 +112,8 @@ The defaults for the first two keys may change during M1 while they are tested o
 |---|---|---|---|
 | `min_ev` | number < 0 | `-10.0` | Scene brightness, in stops relative to mid grey, that becomes black. |
 | `max_ev` | number > 0 | `6.5` | Scene brightness, in stops relative to mid grey, that becomes white. Higher keeps more detail in bright skies but makes highlights greyer. |
-| `contrast` | number > 0 | `1.3` | Midtone contrast. `1.0` matches a plain sRGB display of the linear image at mid grey; higher is punchier. |
-| `toe` | number, 0–10 | `2.0` | How the shadows approach black: higher keeps them linear longer, then drops into black faster. |
+| `contrast` | number > 0 | `1.0` | Midtone contrast. `1.0` matches a plain sRGB display of the linear image at mid grey; higher is punchier. |
+| `toe` | number, 0–10 | `1.5` | How the shadows approach black: higher keeps them linear longer, then drops into black faster. |
 | `shoulder` | number, 0–10 | `1.5` | How highlights approach white: lower rolls off earlier and more gently, higher keeps them bright longer, then rolls off harder. |
 | `inset` | three numbers, 0–1 (R, G, B) | `[0.25, 0.25, 0.25]` | How much each primary is pulled toward white before the curve. More inset makes very bright, saturated colours fade to white with less hue shift, but desaturates. |
 | `outset` | three numbers, 0–1 (R, G, B) | `[0.35, 0.35, 0.35]` | How much saturation each primary gets back after the curve. Larger than `inset` gives a net saturation boost in the midtones. |
