@@ -60,5 +60,6 @@ skills/      # Claude skill shipped for end users' agents
 ## Git / PR conventions
 - Branch from `main`: `feat/…`, `fix/…`, `docs/…`, `chore/…`. Squash-merge via PR; `main` is protected and CI must be green.
 - PR title in conventional-commit style; body: summary, linked issue, test plan, learning note (if any).
+- PRs that change rendering (anything under `decode/ normalise/ grade/ colour/ export/ pipeline/`) must run `uv run python scripts/stage_sheet.py --pr <N>` after opening the PR, and re-run it after pushing rendering changes. Eyeball the stage sheet against the camera JPEG before asking for review. CC0 samples only (the script enforces it).
 - Update `AGENTS.md` / the project plan / glossary / ADRs when decisions change.
 - The repo is **public**: never commit personal photos, absolute home paths or secrets.

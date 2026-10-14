@@ -5,13 +5,43 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
+from numpy.typing import NDArray
+
 from picturesq.colour.display import display_transform
 from picturesq.colour.transfer import srgb_encode
-from picturesq.config import ProjectConfig
+from picturesq.config import OutputConfig, ProjectConfig
 from picturesq.decode import DecodeError, decode_original
 from picturesq.export import resize_to_long_edge, to_8bit, write_jpeg
 
 EXPORTS_DIRNAME = "exports"
+
+# Scene-linear stages that run after decode, as (name, fn(image, config) -> image).
+# Normalise (M2) and grade (M3) are added here; render_scene and the stage sheet
+# (scripts/stage_sheet.py) both iterate this, so a new stage gets a panel automatically.
+SCENE_STAGES: tuple[
+    tuple[str, Callable[[NDArray[np.float32], ProjectConfig], NDArray[np.float32]]], ...
+] = ()
+
+
+def render_scene(image: NDArray[np.float32], config: ProjectConfig) -> NDArray[np.float32]:
+    """Run the scene-linear stages after decode (normalise, grade); today the identity."""
+    for _name, stage in SCENE_STAGES:
+        image = stage(image, config)
+    return image
+
+
+def render_output(image: NDArray[np.float32], output: OutputConfig) -> NDArray[np.uint8]:
+    """Resize, display transform, sRGB encode and quantise ``image`` for one output.
+
+    ``image`` is never modified.
+    """
+    sized = resize_to_long_edge(image, output.long_edge)
+    # The same object back means `image` is still needed by the caller, so the transform
+    # gets a new array. A resized array is ours to overwrite.
+    display = display_transform(sized, out=None if sized is image else sized)
+    srgb_encode(display, out=display)
+    return to_8bit(display)
 
 
 class StemCollisionError(Exception):
@@ -78,19 +108,12 @@ def export_originals(
         photo_started = time.perf_counter()
         result = PhotoResult(name=original.name)
         try:
-            image = decode_original(original, config.decode)
-            # Normalise (M2) and grade (M3) slot in here, on `image`.
+            image = render_scene(decode_original(original, config.decode), config)
             for name in names:
                 spec = config.export.outputs[name]
-                sized = resize_to_long_edge(image, spec.long_edge)
-                # The same object back means `image` is still needed by later outputs, so
-                # the transform gets a new array. A resized array is ours to overwrite.
-                display = display_transform(sized, out=None if sized is image else sized)
-                srgb_encode(display, out=display)
                 path = exports_dir / name / f"{original.stem}.jpg"
-                write_jpeg(to_8bit(display), path, quality=spec.quality)
+                write_jpeg(render_output(image, spec), path, quality=spec.quality)
                 result.outputs[name] = path
-                del sized, display
             del image
         except (DecodeError, OSError) as error:
             result.error = str(error)

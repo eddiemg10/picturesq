@@ -18,6 +18,7 @@
 | **proxy** | A small cached scene-linear version of a photo (2048 px, float16) used for all interactive work. | thumbnail, preview (that's the rendered result) |
 | **preview** | A display-ready render of a proxy, shown in the terminal or UI. | proxy, thumbnail |
 | **contact sheet** | A grid of previews (photos × looks, or photos only). | gallery, mosaic |
+| **stage sheet** | A contact sheet of one CC0 sample after each pipeline stage, beside the camera JPEG; shown in PR descriptions. | PR preview, screenshot |
 | **look** | A named, reusable creative grade, e.g. *cold/nordic*. Defined by a **look file**. | style, preset, filter, recipe, profile |
 | **look file** | YAML defining a look: metadata, **parameters**, and a list of **operations**, which may include a `lut` operation referencing a `.cube`. | recipe |
 | **category** | A grouping of looks: `bw`, `cold`, `warm`, `cinematic`. | family, collection, group |
