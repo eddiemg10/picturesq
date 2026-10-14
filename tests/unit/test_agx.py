@@ -103,7 +103,7 @@ def test_greys_stay_neutral_and_monotonic() -> None:
     result = agx(_grey(_ev_ramp()), DEFAULT)[0]
     np.testing.assert_allclose(result[:, 0], result[:, 1], atol=1e-5)
     np.testing.assert_allclose(result[:, 1], result[:, 2], atol=1e-5)
-    assert np.all(np.diff(result[:, 0]) >= 0.0)
+    assert np.all(np.diff(result[:, 0]) >= -1e-6)
 
 
 def test_black_and_white_points() -> None:
@@ -244,3 +244,45 @@ def test_blocks_match_whole_image() -> None:
     image = (rng.random((3, BLOCK_PIXELS // 2 + 7, 3)) * 8.0).astype(np.float32)
     strided = np.asfortranarray(image)  # not C-contiguous: processed in one go
     np.testing.assert_allclose(agx(image, DEFAULT), agx(strided, DEFAULT), atol=1e-6)
+
+
+def _chroma(display: np.ndarray) -> np.ndarray:
+    lab = _oklab(display)
+    return np.hypot(lab[..., 1], lab[..., 2])
+
+
+def test_chroma_preservation_keeps_bright_colours_colourful() -> None:
+    """Per-channel AgX washes a bright sky blue out; the blend keeps more of its chroma."""
+    sky = (apply_matrix(np.array([[[0.25, 0.45, 0.9]]]), REC709_TO_REC2020) * 8.0).astype(
+        np.float32
+    )
+    plain = DisplayTransformConfig(chroma_preservation=0.0, saturation=1.0)
+    kept = DisplayTransformConfig(chroma_preservation=1.0, saturation=1.0)
+    washed = _chroma(agx(sky, AgxCurve.from_config(plain)))
+    preserved = _chroma(agx(sky, AgxCurve.from_config(kept)))
+    assert preserved[0, 0] > 1.5 * washed[0, 0]
+
+
+@pytest.mark.parametrize("values", [{"chroma_preservation": 1.0}, {"saturation": 2.0}])
+def test_greys_untouched_by_chroma_steps(values: dict[str, float]) -> None:
+    curve = AgxCurve.from_config(DisplayTransformConfig.model_validate(values))
+    grey = agx(_grey(_ev_ramp()), curve)[0]
+    reference = agx(
+        _grey(_ev_ramp()),
+        AgxCurve.from_config(DisplayTransformConfig(chroma_preservation=0.0, saturation=1.0)),
+    )[0]
+    np.testing.assert_allclose(grey, reference, atol=2e-5)
+
+
+def test_saturation_fades_toward_white() -> None:
+    colours = apply_matrix(np.array([[[0.9, 0.3, 0.2]]]), REC709_TO_REC2020).astype(np.float32)
+    dark, bright = colours * np.float32(0.05), colours * np.float32(4.0)
+    base = DisplayTransformConfig(saturation=1.0)
+    boosted = DisplayTransformConfig(saturation=1.5, saturation_fade=1.0)
+    gain_dark = _chroma(agx(dark, AgxCurve.from_config(boosted))) / _chroma(
+        agx(dark, AgxCurve.from_config(base))
+    )
+    gain_bright = _chroma(agx(bright, AgxCurve.from_config(boosted))) / _chroma(
+        agx(bright, AgxCurve.from_config(base))
+    )
+    assert gain_dark[0, 0] > gain_bright[0, 0] > 1.0

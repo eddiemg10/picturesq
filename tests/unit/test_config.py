@@ -11,6 +11,7 @@ from picturesq.config import (
     ConfigError,
     OutputConfig,
     ProjectConfig,
+    SharpenConfig,
     dump_project_config,
     load_project_config,
     save_project_config,
@@ -24,8 +25,12 @@ def test_defaults_match_the_project_plan() -> None:
     assert config.version == 1
     assert config.decode.demosaic == "ahd"
     assert config.decode.highlight_mode == "blend"
-    assert config.export.outputs["web"] == OutputConfig(long_edge=2048, quality=90)
-    assert config.export.outputs["archive"] == OutputConfig(long_edge=None, quality=95)
+    assert config.export.outputs["web"] == OutputConfig(
+        long_edge=2048, quality=90, sharpen=SharpenConfig(amount=0.5, radius=0.8)
+    )
+    assert config.export.outputs["archive"] == OutputConfig(
+        long_edge=None, quality=95, sharpen=SharpenConfig(amount=0.3, radius=1.2)
+    )
     assert config.export.enabled == ["web", "archive"]
 
 
