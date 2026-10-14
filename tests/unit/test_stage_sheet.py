@@ -104,3 +104,44 @@ def test_compose_size_matches_layout(count: int) -> None:
     assert sheet.width == 10 + columns * 60
     rows = -(-count // 3)
     assert sheet.height == 38 + rows * (28 + 40 + 10)
+
+
+def _synthetic_measure(ev: float) -> float:
+    """A non-linear, rising 'render': median of a clipped tone-mapped ramp."""
+    from picturesq.colour.transfer import srgb_encode
+    from picturesq.preview.stage_sheet import median_luminance
+
+    ramp = np.linspace(0.01, 1.0, 2000, dtype=np.float32)
+    scene = np.repeat(ramp[:, None], 3, axis=1).reshape(40, 50, 3) * np.float32(2.0**ev)
+    display = np.clip(scene / (1.0 + scene), 0.0, 1.0)  # stand-in display transform
+    return median_luminance(np.round(srgb_encode(display) * 255.0).astype(np.uint8))
+
+
+def test_match_exposure_reproduces_target() -> None:
+    from picturesq.preview.stage_sheet import match_exposure
+
+    target = _synthetic_measure(1.3)
+    found = match_exposure(_synthetic_measure, target)
+    assert not found.clamped
+    assert found.ev == pytest.approx(1.3, abs=0.05)
+    assert found.achieved == pytest.approx(target, abs=0.01)
+
+
+def test_match_exposure_is_monotonic_in_target() -> None:
+    from picturesq.preview.stage_sheet import match_exposure
+
+    targets = [0.05, 0.1, 0.2, 0.3, 0.4]
+    evs = [match_exposure(_synthetic_measure, t).ev for t in targets]
+    assert evs == sorted(evs)
+    assert len(set(evs)) == len(evs)
+
+
+def test_match_exposure_clamps_unreachable_targets() -> None:
+    from picturesq.preview.stage_sheet import match_exposure, stats_table
+
+    high = match_exposure(_synthetic_measure, 2.0)
+    low = match_exposure(_synthetic_measure, -0.1, lo=-1.0, hi=1.0)
+    assert (high.ev, high.clamped) == (6.0, True)
+    assert (low.ev, low.clamped) == (-1.0, True)
+    assert "clamped" in stats_table([], 0.0, 0.0, high)
+    assert "+6.00 EV" in stats_table([], 0.0, 0.0, high)

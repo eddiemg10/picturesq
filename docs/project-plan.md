@@ -68,6 +68,7 @@ Photoshop-style GUI, local retouching, lens correction, cataloguing/DAM, ML trai
 | D14 | Distribution | **Public** GitHub repo from day one, MIT; PyPI via `uv tool install picturesq` | Build in public; free branch protection + CI; standard Python install path. |
 | D15 | Process | GitHub Issues + Project board as the only tracker; PR-only changes, CI-gated | Treat it as a product; small tasks the user can pick up. |
 | D16 | Vocabulary | [`glossary.md`](glossary.md) is binding; British spelling everywhere | Consistent, intentional language across code, CLI, config, docs and UI. |
+| D17 | M1 acceptance | Judged at matched exposure (evaluation-only global EV offset). [ADR-0009](decisions/0009-m1-matched-exposure.md) | The camera JPEG lifts midtones ~2 EV with its own tone mapping; closing that gap is normalise's job (M2). |
 
 ---
 
@@ -287,7 +288,7 @@ Project plan, glossary, ADRs, learning log, scaffold, CI, public repo with prote
 ### M1 — Decode & export (neutral render)
 Decode via rawpy into the working space; proxies + cache; AgX display transform; sRGB JPEG export with ICC/EXIF; `decode`, `export`, `run` (no normalise/grade yet beyond the display transform); `scripts/compare.py` contact sheet: ours vs in-camera JPEG vs darktable default.
 **Concepts:** RAW/demosaic, linear vs display-referred, colour spaces and gamuts, display transforms.
-**Exit:** on the reference set, the neutral render is judged at least as good as the in-camera JPEG; memory budget test passes.
+**Exit:** on the reference set, the neutral render is judged comparable or better than the in-camera JPEG in colour and highlights at matched exposure (one global EV offset, an evaluation aid only; residual shadow differences are expected; [ADR-0009](decisions/0009-m1-matched-exposure.md)); memory budget test passes.
 
 ### M2 — Normalise
 Stats, key detection, partial exposure correction, highlight guard, WB disagreement flag, chroma NR, overrides, flags, `normalise` command + contact sheet.

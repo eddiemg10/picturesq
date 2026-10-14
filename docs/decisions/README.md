@@ -13,3 +13,4 @@ New ADRs get the next number; superseded ones are marked, not deleted.
 | [0006](0006-glossary-and-public-repo.md) | Binding glossary, British spelling, public repo | Accepted |
 | [0007](0007-asset-licences.md) | Asset licences: AgX references and film-simulation LUT collections | Accepted |
 | [0008](0008-derived-colour-matrices.md) | Derive colour matrices from primaries; never use rounded published matrices | Accepted |
+| [0009](0009-m1-matched-exposure.md) | M1 is judged at matched exposure | Accepted |
