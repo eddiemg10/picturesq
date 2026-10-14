@@ -28,6 +28,13 @@ class DecodeConfig(_Model):
     highlight_mode: Literal["clip", "ignore", "blend", "reconstruct"] = Field(
         default="blend", description="How LibRaw treats clipped sensor highlights."
     )
+    baseline_exposure: bool = Field(
+        default=True,
+        description=(
+            "Apply the DNG BaselineExposure tag (brightening the camera's deliberate "
+            "underexposure)."
+        ),
+    )
 
 
 class OutputConfig(_Model):

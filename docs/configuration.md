@@ -22,6 +22,7 @@ version: 1
 decode:
   demosaic: ahd
   highlight_mode: blend
+  baseline_exposure: true
 export:
   outputs:
     web:
@@ -72,8 +73,9 @@ Setting `outputs` replaces the default outputs entirely, so list every output yo
 |---|---|---|---|
 | `demosaic` | `linear` \| `vng` \| `ppg` \| `ahd` \| `dcb` \| `dht` \| `aahd` | `ahd` | Algorithm that reconstructs full colour from the sensor's colour-filter mosaic. `linear` is fastest and softest. `ahd`, `dcb`, `dht` and `aahd` keep more fine detail. |
 | `highlight_mode` | `clip` \| `ignore` \| `blend` \| `reconstruct` | `blend` | What to do where the sensor clipped (blown highlights). `clip` cuts to white; `ignore` leaves channels unclipped (can turn magenta); `blend` fades smoothly to white; `reconstruct` rebuilds detail from unclipped channels (slower). |
+| `baseline_exposure` | `true` \| `false` | `true` | Apply the DNG `BaselineExposure` tag (brightening the camera's deliberate underexposure). Some cameras record the raw 2 to 4 stops dark on purpose; with this off, their photos decode that much too dark. Has no effect on originals without the tag. |
 
-The defaults for both keys may change during M1 while they are tested on real photos.
+The defaults for the first two keys may change during M1 while they are tested on real photos.
 
 ### `export`
 
