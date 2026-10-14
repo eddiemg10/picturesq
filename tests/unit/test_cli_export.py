@@ -75,7 +75,7 @@ def test_json_output(tmp_path: Path) -> None:
     first = document["photos"][0]
     assert set(first) == {"photo", "outputs", "error", "seconds"}
     assert first["error"] is None
-    assert first["outputs"]["web"].endswith("exports/web/a.jpg")
+    assert Path(first["outputs"]["web"]) == project / "exports" / "web" / "a.jpg"
     assert document["summary"]["photos"] == 2
     assert document["summary"]["failed"] == 0
 
