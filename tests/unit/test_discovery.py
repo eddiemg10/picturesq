@@ -35,9 +35,11 @@ def test_ignores_non_originals(tmp_path: Path) -> None:
 
 
 def test_sorted_by_casefolded_name(tmp_path: Path) -> None:
-    for name in ("b.dng", "A.dng", "a.dng", "C.dng", "img_10.dng", "img_2.dng"):
+    # Names differ by more than case: Windows filesystems treat "A.dng" and "a.dng" as one file.
+    # A plain sort would put "B.dng" and "C.dng" before "a.dng".
+    for name in ("C.dng", "a.dng", "B.dng", "img_10.dng", "img_2.dng"):
         _touch(tmp_path / name)
-    assert _names(tmp_path) == ["A.dng", "a.dng", "b.dng", "C.dng", "img_10.dng", "img_2.dng"]
+    assert _names(tmp_path) == ["a.dng", "B.dng", "C.dng", "img_10.dng", "img_2.dng"]
 
 
 def test_symlink_to_file_counts(tmp_path: Path) -> None:
