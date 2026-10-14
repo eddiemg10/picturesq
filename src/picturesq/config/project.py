@@ -1,8 +1,8 @@
 """Project config model: the contents of ``<project>/picturesq.yaml``.
 
-v0 holds the decode, grade (display transform only) and export sections (M1). Normalise,
-looks, adjustments and per-photo overrides are added in the milestones that implement
-them, so the config never offers a setting the pipeline ignores.
+v0 holds the decode, normalise (exposure, chroma noise reduction), grade (display transform
+only) and export sections. Looks, adjustments and per-photo overrides are added in the
+milestones that implement them, so the config never offers a setting the pipeline ignores.
 """
 
 from typing import Annotated, Literal
@@ -42,6 +42,78 @@ class DecodeConfig(_Model):
 Fraction = Annotated[float, Field(ge=0.0, lt=1.0)]
 
 
+class ExposureConfig(_Model):
+    """One global exposure change per photo (ADR-0010)."""
+
+    offset_ev: float = Field(
+        default=2.0,
+        ge=-4.0,
+        le=6.0,
+        description=(
+            "Brightening applied to every photo, in EV. Cameras render about 2 EV brighter than "
+            "the raw's own exposure; fitted to camera JPEGs."
+        ),
+    )
+    correction: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "How far each photo's median brightness is pulled toward target_ev (0 = off, "
+            "1 = all the way). Evens out a batch; cameras don't do it."
+        ),
+    )
+    target_ev: float = Field(
+        default=-1.0,
+        ge=-6.0,
+        le=3.0,
+        description="Median brightness that correction pulls toward, in EV relative to mid grey.",
+    )
+    max_correction_ev: float = Field(
+        default=2.0, ge=0.0, le=6.0, description="Largest change correction may make, in EV."
+    )
+
+
+class ChromaNoiseReductionConfig(_Model):
+    """Colour noise reduction in the shadows (Oklab a/b blur)."""
+
+    amount: float = Field(
+        default=1.0, ge=0.0, le=1.0, description="Strength in the darkest tones; 0 turns it off."
+    )
+    radius: float = Field(
+        default=0.004,
+        gt=0.0,
+        le=0.05,
+        description="Blur radius as a fraction of the photo's long edge (0.004 = 31 px at 7680).",
+    )
+    full_lightness: float = Field(
+        default=0.35,
+        ge=0.0,
+        lt=1.0,
+        description="Oklab lightness up to which the full amount applies (0.35 ≈ 3 EV below grey).",
+    )
+    fade_lightness: float = Field(
+        default=0.6,
+        gt=0.0,
+        le=1.0,
+        description="Oklab lightness at which it has faded out (0.6 ≈ mid grey and above).",
+    )
+
+    @model_validator(mode="after")
+    def _fade_above_full(self) -> "ChromaNoiseReductionConfig":
+        if self.fade_lightness <= self.full_lightness:
+            raise ValueError("fade_lightness must be greater than full_lightness")
+        return self
+
+
+class NormaliseConfig(_Model):
+    """Stage 2 settings: per-photo exposure and noise reduction."""
+
+    enabled: bool = Field(default=True, description="Run the normalise stage.")
+    exposure: ExposureConfig = Field(default_factory=ExposureConfig)
+    chroma_nr: ChromaNoiseReductionConfig = Field(default_factory=ChromaNoiseReductionConfig)
+
+
 class DisplayTransformConfig(_Model):
     """The AgX-style display transform (ADR-0003): inset → log encode → sigmoid → outset.
 
@@ -56,21 +128,21 @@ class DisplayTransformConfig(_Model):
         default=-10.0, lt=0.0, description="Scene EV (relative to mid grey) that maps to black."
     )
     max_ev: float = Field(
-        default=6.5, gt=0.0, description="Scene EV (relative to mid grey) that maps to white."
+        default=9.0, gt=0.0, description="Scene EV (relative to mid grey) that maps to white."
     )
     contrast: float = Field(
-        default=1.0,
+        default=1.3,
         gt=0.0,
         description="Midtone contrast; 1.0 matches the slope of the plain sRGB curve at mid grey.",
     )
     toe: float = Field(
-        default=1.5,
+        default=2.1,
         gt=0.0,
         le=10.0,
         description="Toe sharpness; higher keeps shadows linear longer.",
     )
     shoulder: float = Field(
-        default=1.5,
+        default=2.1,
         gt=0.0,
         le=10.0,
         description=(
@@ -80,6 +152,27 @@ class DisplayTransformConfig(_Model):
     inset: tuple[Fraction, Fraction, Fraction] = Field(
         default=(0.25, 0.25, 0.25),
         description="How far each primary (R, G, B) is pulled toward white before the curve.",
+    )
+    chroma_preservation: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Blend toward a render that keeps each pixel's colour ratios: 0 is pure per-channel "
+            "AgX (bright colours wash out toward white), 1 keeps highlights fully saturated."
+        ),
+    )
+    saturation: float = Field(
+        default=1.25, ge=0.0, le=3.0, description="Overall chroma scale after the curve; 1 is none."
+    )
+    saturation_fade: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "How much of the saturation change fades out toward white: 1 = none left at white, "
+            "0 = the same everywhere."
+        ),
     )
     outset: tuple[Fraction, Fraction, Fraction] = Field(
         default=(0.35, 0.35, 0.35),
@@ -105,6 +198,15 @@ class GradeConfig(_Model):
     display_transform: DisplayTransformConfig = Field(default_factory=DisplayTransformConfig)
 
 
+class SharpenConfig(_Model):
+    """Unsharp mask on lightness, at the output's size (after resizing)."""
+
+    amount: float = Field(
+        default=0.5, ge=0.0, le=3.0, description="Strength; 0 turns sharpening off."
+    )
+    radius: float = Field(default=0.8, gt=0.0, le=5.0, description="Blur radius in output pixels.")
+
+
 class OutputConfig(_Model):
     """One export target, e.g. ``web`` or ``archive``."""
 
@@ -112,12 +214,17 @@ class OutputConfig(_Model):
         default=None, gt=0, description="Long edge in pixels; null keeps the full resolution."
     )
     quality: int = Field(default=90, ge=1, le=100, description="JPEG quality.")
+    sharpen: SharpenConfig = Field(default_factory=SharpenConfig)
 
 
 def _default_outputs() -> dict[str, OutputConfig]:
     return {
-        "web": OutputConfig(long_edge=2048, quality=90),
-        "archive": OutputConfig(long_edge=None, quality=95),
+        "web": OutputConfig(
+            long_edge=2048, quality=90, sharpen=SharpenConfig(amount=0.5, radius=0.8)
+        ),
+        "archive": OutputConfig(
+            long_edge=None, quality=95, sharpen=SharpenConfig(amount=0.3, radius=1.2)
+        ),
     }
 
 
@@ -147,5 +254,6 @@ class ProjectConfig(_Model):
 
     version: Literal[1] = Field(default=1, description="Config format version.")
     decode: DecodeConfig = Field(default_factory=DecodeConfig)
+    normalise: NormaliseConfig = Field(default_factory=NormaliseConfig)
     grade: GradeConfig = Field(default_factory=GradeConfig)
     export: ExportConfig = Field(default_factory=ExportConfig)
