@@ -41,10 +41,14 @@ class ExportResult:
 
 
 def check_stems(originals: Sequence[Path]) -> None:
-    """Raise StemCollisionError if two originals would write to the same export name."""
+    """Raise StemCollisionError if two originals would write to the same export name.
+
+    Names are compared case-insensitively: on Windows and macOS ``IMG.jpg`` and ``img.jpg``
+    are one file, and the check must fail the same way on every OS.
+    """
     seen: dict[str, Path] = {}
     for original in originals:
-        other = seen.setdefault(original.stem, original)
+        other = seen.setdefault(original.stem.casefold(), original)
         if other is not original:
             raise StemCollisionError(
                 f"{other.name} and {original.name} share the name {original.stem!r}; "

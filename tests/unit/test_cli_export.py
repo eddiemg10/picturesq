@@ -150,6 +150,13 @@ def test_stem_collision_fails_before_writing(tmp_path: Path) -> None:
     assert not (project / "exports").exists()
 
 
+def test_stem_collision_ignores_case() -> None:
+    # No files needed, so this also runs on case-insensitive filesystems.
+    with pytest.raises(pipeline_export.StemCollisionError):
+        pipeline_export.check_stems([Path("IMG_1.dng"), Path("img_1.NEF")])
+    pipeline_export.check_stems([Path("IMG_1.dng"), Path("IMG_2.dng")])
+
+
 def test_run_creates_config_export_does_not(tmp_path: Path) -> None:
     project = _project(tmp_path, config=False)
     assert runner.invoke(app, ["export", str(project)]).exit_code == 0
