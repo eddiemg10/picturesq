@@ -1,7 +1,8 @@
 """Render a stage sheet for a CC0 sample, and optionally publish it to a PR description.
 
 Panels: the camera's embedded JPEG, each scene-linear pipeline stage seen through the display
-transform, the export, and the export with clipped pixels marked. Only samples listed in
+transform, the export, the export at the exposure that matches the camera JPEG's median
+(ADR 0009), and the export with clipped pixels marked. Only samples listed in
 reference/samples.json are accepted, so private photos can never be published.
 
 Usage:
@@ -33,11 +34,14 @@ from picturesq import __version__
 from picturesq.config import OutputConfig, ProjectConfig
 from picturesq.decode import decode_original, read_baseline_exposure
 from picturesq.export import resize_to_long_edge
-from picturesq.pipeline.export import SCENE_STAGES, render_output
+from picturesq.pipeline.export import SCENE_STAGES, render_output, render_scene
 from picturesq.preview.stage_sheet import (
+    ExposureMatch,
     Panel,
     compose_sheet,
     mark_clipped,
+    match_exposure,
+    median_luminance,
     panel_stats,
     preview_section,
     replace_section,
@@ -81,8 +85,13 @@ def camera_jpeg(path: Path) -> NDArray[np.uint8] | None:
     return None
 
 
-def build_panels(sample: Path, config: ProjectConfig) -> tuple[list[Panel], float, float]:
-    """Render every panel with the production path. Returns (panels, baseline EV, decode s)."""
+def build_panels(
+    sample: Path, config: ProjectConfig
+) -> tuple[list[Panel], float, float, ExposureMatch | None]:
+    """Render every panel with the production path.
+
+    Returns (panels, baseline EV, decode s, exposure match or None without a camera JPEG).
+    """
     started = time.perf_counter()
     full = decode_original(sample, config.decode)
     decode_seconds = time.perf_counter() - started
@@ -90,11 +99,19 @@ def build_panels(sample: Path, config: ProjectConfig) -> tuple[list[Panel], floa
     view = OutputConfig(long_edge=PANEL_WIDTH)
 
     jpeg = camera_jpeg(sample)
+    match: ExposureMatch | None = None
     if jpeg is None:
         jpeg = np.full((PANEL_WIDTH * 3 // 4, PANEL_WIDTH, 3), 128, dtype=np.uint8)
         panels = [Panel("camera JPEG: no embedded JPEG", jpeg)]
     else:
         panels = [Panel("camera JPEG", jpeg)]
+        target = median_luminance(jpeg)
+        scene = render_scene(image, config)
+
+        def measure(ev: float) -> float:
+            return median_luminance(render_output(scene * np.float32(2.0**ev), view))
+
+        match = match_exposure(measure, target)  # ADR 0009: an evaluation aid, not a pipeline step
 
     panels.append(Panel("decode (via display transform)", render_output(image, view)))
     staged = image
@@ -105,8 +122,12 @@ def build_panels(sample: Path, config: ProjectConfig) -> tuple[list[Panel], floa
     export = render_output(full, config.export.outputs["web"])  # the real web output
     del full
     panels.append(Panel("export (web)", export))
+    if match is not None:
+        scaled = render_scene(image, config) * np.float32(2.0**match.ev)
+        label = f"export, exposure-matched ({match.ev:+.2f} EV)"
+        panels.append(Panel(label, render_output(scaled, view)))
     panels.append(Panel("clipping (magenta)", mark_clipped(export)))
-    return panels, read_baseline_exposure(sample), decode_seconds
+    return panels, read_baseline_exposure(sample), decode_seconds, match
 
 
 def publish(sheet_path: Path, number: int, sha: str, section_for: Callable[[str], str]) -> None:
@@ -178,7 +199,7 @@ def main() -> int:
         return 1
 
     config = ProjectConfig()
-    panels, baseline, decode_seconds = build_panels(sample, config)
+    panels, baseline, decode_seconds, match = build_panels(sample, config)
     sha = run("git", "rev-parse", "--short", "HEAD")
     title = f"{name} · picturesq {__version__} · {sha} · default config"
     sheet = compose_sheet(title, panels, (PANEL_WIDTH, PANEL_WIDTH * 3 // 4))
@@ -187,7 +208,7 @@ def main() -> int:
     sheet.save(out, quality=88)
     print(f"wrote {out} ({sheet.width}x{sheet.height})\n")
 
-    table = stats_table([panel_stats(p) for p in panels], baseline, decode_seconds)
+    table = stats_table([panel_stats(p) for p in panels], baseline, decode_seconds, match)
     print(table)
     caption = (
         f"{name} (CC0) · {sha} · panels: "

@@ -6,7 +6,7 @@ JPEG, plus a clipping view and a stats table. It goes in PR descriptions.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import PurePath
 from typing import Final
@@ -75,14 +75,55 @@ def mark_clipped(pixels: Uint8Array) -> Uint8Array:
     return out
 
 
+def median_luminance(pixels: Uint8Array) -> float:
+    """Median Rec.709 Y of the display-linear (sRGB-decoded) values of ``pixels``, 0 to 1."""
+    linear = srgb_decode(pixels.astype(np.float32) / np.float32(255.0))
+    return float(np.median(linear @ REC709_LUMA))
+
+
+@dataclass(frozen=True)
+class ExposureMatch:
+    """Result of ``match_exposure``."""
+
+    ev: float
+    achieved: float  # the measured value at ``ev``
+    clamped: bool  # the target was outside what [lo, hi] can reach, so ``ev`` is a bound
+
+
+def match_exposure(
+    measure: Callable[[float], float],
+    target: float,
+    lo: float = -4.0,
+    hi: float = 6.0,
+    iterations: int = 25,
+) -> ExposureMatch:
+    """Find the EV offset in [lo, hi] at which ``measure(ev)`` equals ``target``, by bisection.
+
+    ``measure`` must not decrease as EV rises (the median of a brighter render is never lower).
+    Bisection rather than a closed form because the display transform is non-linear. A target
+    outside ``[measure(lo), measure(hi)]`` returns the nearer bound with ``clamped`` set.
+    """
+    at_lo, at_hi = measure(lo), measure(hi)
+    if target <= at_lo:
+        return ExposureMatch(lo, at_lo, clamped=target < at_lo)
+    if target >= at_hi:
+        return ExposureMatch(hi, at_hi, clamped=target > at_hi)
+    for _ in range(iterations):
+        mid = (lo + hi) / 2.0
+        if measure(mid) < target:
+            lo = mid
+        else:
+            hi = mid
+    ev = (lo + hi) / 2.0
+    return ExposureMatch(ev, measure(ev), clamped=False)
+
+
 def panel_stats(panel: Panel) -> PanelStats:
     """Median luminance (of display-linear values), % clipped and size of one panel."""
-    linear = srgb_decode(panel.pixels.astype(np.float32) / np.float32(255.0))
-    luminance = linear @ REC709_LUMA
     height, width = panel.pixels.shape[:2]
     return PanelStats(
         label=panel.label,
-        median_luminance=float(np.median(luminance)),
+        median_luminance=median_luminance(panel.pixels),
         clipped_percent=float(clipped_mask(panel.pixels).mean() * 100.0),
         width=width,
         height=height,
@@ -90,9 +131,15 @@ def panel_stats(panel: Panel) -> PanelStats:
 
 
 def stats_table(
-    stats: Sequence[PanelStats], baseline_exposure: float, decode_seconds: float
+    stats: Sequence[PanelStats],
+    baseline_exposure: float,
+    decode_seconds: float,
+    match: ExposureMatch | None = None,
 ) -> str:
-    """Markdown table of ``stats`` followed by a BaselineExposure / decode time line."""
+    """Markdown table of ``stats`` followed by a BaselineExposure / decode time line.
+
+    With ``match``, a line gives the exposure offset that matched the camera JPEG.
+    """
     lines = [
         "| Panel | Median luminance | Clipped | Size |",
         "|---|---|---|---|",
@@ -107,6 +154,10 @@ def stats_table(
         f"BaselineExposure: {baseline_exposure:+.2f} EV · decode: {decode_seconds:.1f} s "
         "· luminance is Rec.709 Y of the display-linear values (0 to 1)"
     )
+    if match is not None:
+        note = " (clamped at the search limit; target not reachable)" if match.clamped else ""
+        lines.append("")
+        lines.append(f"Exposure offset to match camera JPEG: {match.ev:+.2f} EV{note}")
     return "\n".join(lines)
 
 
