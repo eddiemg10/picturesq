@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 
 from picturesq.colour.display import display_transform
 from picturesq.colour.transfer import srgb_encode
-from picturesq.config import OutputConfig, ProjectConfig
+from picturesq.config import DisplayTransformConfig, OutputConfig, ProjectConfig
 from picturesq.decode import DecodeError, decode_original
 from picturesq.export import resize_to_long_edge, to_8bit, write_jpeg
 
@@ -31,7 +31,9 @@ def render_scene(image: NDArray[np.float32], config: ProjectConfig) -> NDArray[n
     return image
 
 
-def render_output(image: NDArray[np.float32], output: OutputConfig) -> NDArray[np.uint8]:
+def render_output(
+    image: NDArray[np.float32], output: OutputConfig, display: DisplayTransformConfig
+) -> NDArray[np.uint8]:
     """Resize, display transform, sRGB encode and quantise ``image`` for one output.
 
     ``image`` is never modified.
@@ -39,9 +41,9 @@ def render_output(image: NDArray[np.float32], output: OutputConfig) -> NDArray[n
     sized = resize_to_long_edge(image, output.long_edge)
     # The same object back means `image` is still needed by the caller, so the transform
     # gets a new array. A resized array is ours to overwrite.
-    display = display_transform(sized, out=None if sized is image else sized)
-    srgb_encode(display, out=display)
-    return to_8bit(display)
+    result = display_transform(sized, display, out=None if sized is image else sized)
+    srgb_encode(result, out=result)
+    return to_8bit(result)
 
 
 class StemCollisionError(Exception):
@@ -112,7 +114,11 @@ def export_originals(
             for name in names:
                 spec = config.export.outputs[name]
                 path = exports_dir / name / f"{original.stem}.jpg"
-                write_jpeg(render_output(image, spec), path, quality=spec.quality)
+                write_jpeg(
+                    render_output(image, spec, config.grade.display_transform),
+                    path,
+                    quality=spec.quality,
+                )
                 result.outputs[name] = path
             del image
         except (DecodeError, OSError) as error:

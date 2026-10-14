@@ -1,13 +1,15 @@
 """Project config model: the contents of ``<project>/picturesq.yaml``.
 
-v0 holds the decode and export sections (M1). Normalise, grade and per-photo overrides
-are added in the milestones that implement them, so the config never offers a setting
-the pipeline ignores.
+v0 holds the decode, grade (display transform only) and export sections (M1). Normalise,
+looks, adjustments and per-photo overrides are added in the milestones that implement
+them, so the config never offers a setting the pipeline ignores.
 """
 
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+
+from picturesq.colour.transfer import SRGB_GREY_ENCODED, SRGB_GREY_SLOPE_PER_EV
 
 CONFIG_FILENAME = "picturesq.yaml"
 
@@ -35,6 +37,71 @@ class DecodeConfig(_Model):
             "underexposure)."
         ),
     )
+
+
+Fraction = Annotated[float, Field(ge=0.0, lt=1.0)]
+
+
+class DisplayTransformConfig(_Model):
+    """The AgX-style display transform (ADR-0003): inset → log encode → sigmoid → outset.
+
+    Defaults are our own (ADR-0007), not copied from another implementation: contrast and toe
+    were chosen by eye against the camera JPEGs of the CC0 samples at matched exposure
+    (ADR-0009); inset and outset by measuring Oklab hue drift on saturated exposure ramps
+    (less inset drifts more, more inset desaturates).
+    """
+
+    min_ev: float = Field(
+        default=-10.0, lt=0.0, description="Scene EV (relative to mid grey) that maps to black."
+    )
+    max_ev: float = Field(
+        default=6.5, gt=0.0, description="Scene EV (relative to mid grey) that maps to white."
+    )
+    contrast: float = Field(
+        default=1.3,
+        gt=0.0,
+        description="Midtone contrast; 1.0 matches the slope of the plain sRGB curve at mid grey.",
+    )
+    toe: float = Field(
+        default=2.0,
+        gt=0.0,
+        le=10.0,
+        description="Toe sharpness; higher keeps shadows linear longer.",
+    )
+    shoulder: float = Field(
+        default=1.5,
+        gt=0.0,
+        le=10.0,
+        description=(
+            "Shoulder sharpness; higher keeps highlights linear longer, then rolls off harder."
+        ),
+    )
+    inset: tuple[Fraction, Fraction, Fraction] = Field(
+        default=(0.25, 0.25, 0.25),
+        description="How far each primary (R, G, B) is pulled toward white before the curve.",
+    )
+    outset: tuple[Fraction, Fraction, Fraction] = Field(
+        default=(0.35, 0.35, 0.35),
+        description="How much saturation each primary (R, G, B) gets back after the curve.",
+    )
+
+    @model_validator(mode="after")
+    def _curve_reaches_black_and_white(self) -> "DisplayTransformConfig":
+        # The sigmoid starts at mid grey with the given slope and bends to reach (0, 0) and
+        # (1, 1); it can only bend *away* from the straight line, so the slope must be
+        # steeper than the line from mid grey to each corner.
+        slope = self.contrast * SRGB_GREY_SLOPE_PER_EV
+        if slope * self.max_ev <= 1.0 - SRGB_GREY_ENCODED:
+            raise ValueError("contrast is too low for max_ev: raise contrast or max_ev")
+        if slope * -self.min_ev <= SRGB_GREY_ENCODED:
+            raise ValueError("contrast is too low for min_ev: raise contrast or lower min_ev")
+        return self
+
+
+class GradeConfig(_Model):
+    """Stage 3 settings. v0: the display transform only; looks and adjustments come in M3."""
+
+    display_transform: DisplayTransformConfig = Field(default_factory=DisplayTransformConfig)
 
 
 class OutputConfig(_Model):
@@ -79,4 +146,5 @@ class ProjectConfig(_Model):
 
     version: Literal[1] = Field(default=1, description="Config format version.")
     decode: DecodeConfig = Field(default_factory=DecodeConfig)
+    grade: GradeConfig = Field(default_factory=GradeConfig)
     export: ExportConfig = Field(default_factory=ExportConfig)

@@ -8,6 +8,8 @@ Every function takes a float array of any shape and returns an array of the same
 Pass ``out`` (which may be the input itself) to avoid allocating a new array.
 """
 
+import math
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -24,6 +26,14 @@ _SRGB_OFFSET = 0.055
 
 MIDDLE_GREY = 0.18
 """Scene-linear mid grey: 0 EV."""
+SRGB_GREY_ENCODED = (1.0 + _SRGB_OFFSET) * MIDDLE_GREY ** (1.0 / _SRGB_EXPONENT) - _SRGB_OFFSET
+"""Mid grey after the sRGB curve (≈ 0.4614, 117.6/255)."""
+SRGB_GREY_SLOPE_PER_EV = (SRGB_GREY_ENCODED + _SRGB_OFFSET) * math.log(2.0) / _SRGB_EXPONENT
+"""Slope of the sRGB curve at mid grey, in encoded units per EV (≈ 0.149).
+
+The derivative of ``1.055 * (0.18 * 2**ev) ** (1/2.4) - 0.055`` at ``ev = 0``. The display
+transform's ``contrast`` is relative to it.
+"""
 EV_FLOOR = 2.0**-20
 """Linear values at or below this (including zero and negatives) are clamped before log2."""
 

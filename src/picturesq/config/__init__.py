@@ -3,7 +3,9 @@
 from picturesq.config.project import (
     CONFIG_FILENAME,
     DecodeConfig,
+    DisplayTransformConfig,
     ExportConfig,
+    GradeConfig,
     OutputConfig,
     ProjectConfig,
 )
@@ -18,7 +20,9 @@ __all__ = [
     "CONFIG_FILENAME",
     "ConfigError",
     "DecodeConfig",
+    "DisplayTransformConfig",
     "ExportConfig",
+    "GradeConfig",
     "OutputConfig",
     "ProjectConfig",
     "dump_project_config",

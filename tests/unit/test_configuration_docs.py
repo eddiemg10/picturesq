@@ -8,7 +8,9 @@ import yaml
 
 from picturesq.config import (
     DecodeConfig,
+    DisplayTransformConfig,
     ExportConfig,
+    GradeConfig,
     OutputConfig,
     ProjectConfig,
     dump_project_config,
@@ -33,7 +35,17 @@ def test_examples_are_valid(block: str) -> None:
     ProjectConfig.model_validate(yaml.safe_load(block))
 
 
-@pytest.mark.parametrize("model", [ProjectConfig, DecodeConfig, ExportConfig, OutputConfig])
+@pytest.mark.parametrize(
+    "model",
+    [
+        ProjectConfig,
+        DecodeConfig,
+        GradeConfig,
+        DisplayTransformConfig,
+        ExportConfig,
+        OutputConfig,
+    ],
+)
 def test_reference_lists_every_key(model: type[ProjectConfig]) -> None:
     text = DOC.read_text(encoding="utf-8")
     for name in model.model_fields:

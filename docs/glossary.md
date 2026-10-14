@@ -63,6 +63,10 @@
 | **out-of-gamut** | A colour the target space can't represent; after a matrix conversion it has a negative channel. |
 | **XYZ** | CIE 1931 XYZ, the device-independent reference space every RGB space is defined against. Y is luminance. |
 | **display transform** | Maps scene-linear to display range with highlight roll-off. Ours is AgX-style. (OCIO: *view transform*; ACES: *output transform*.) |
+| **log encoding** | Storing each channel as its EV relative to mid grey, scaled to 0–1 between a black and a white EV. The display transform's curve works on this. |
+| **toe / shoulder** | The bottom and top bends of the display transform's S-curve: the toe eases shadows into black, the shoulder rolls highlights off toward white. |
+| **inset / outset** | The display transform's matrices around the curve: **inset** pulls the primaries toward white so bright saturated colours fade to white without hue skews; **outset** gives back some of that saturation afterwards. |
+| **path to white** | How a colour behaves as it gets brighter: with a good display transform it desaturates smoothly toward white instead of clipping to a skewed hue. |
 | **display-referred** | Values after the display transform (0–1, encoded for a screen). LUT operations usually run here. |
 | **input space** | The colour space + transfer curve a LUT expects as input (e.g. `srgb`, `rec709`). |
 | **transfer function** | The curve between linear and encoded values (sRGB curve, log). "Gamma" only in explanations. |
