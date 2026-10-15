@@ -252,9 +252,21 @@ def _fit_gamut(rgb: FloatArray, luminance: FloatArray) -> None:
     rgb[outside] = grey + (pixels - grey) * scale
 
 
+def _luminance(rgb: FloatArray, weights: NDArray[np.float32]) -> FloatArray:
+    """Weighted sum of the three planes, shape (...).
+
+    Element-wise rather than ``rgb @ weights``: BLAS sums in an order that depends on the
+    memory layout, so the same pixels would give results a rounding error apart.
+    """
+    out = rgb[..., 0] * weights[0]
+    out += rgb[..., 1] * weights[1]
+    out += rgb[..., 2] * weights[2]
+    return out
+
+
 def _keep_ratios(image: FloatArray, curve: AgxCurve) -> FloatArray:
     """Tone-map luminance only, keeping each pixel's RGB ratios: Rec.709 display-linear."""
-    luminance = image @ _REC2020_LUMINANCE
+    luminance = _luminance(image, _REC2020_LUMINANCE)
     np.maximum(luminance, EV_FLOOR, out=luminance)
     display = luminance.copy()
     _log_encode(display, curve)
@@ -272,7 +284,7 @@ def _saturate(rgb: FloatArray, amount: float, fade: float) -> None:
     ``1 + (amount - 1) * (1 - fade)`` at white: bright colours are already near the edge of
     the gamut, and boosting them only pushes a channel against 1.
     """
-    luminance = np.clip(rgb @ _REC709_LUMINANCE, 0.0, 1.0)[..., None]
+    luminance = np.clip(_luminance(rgb, _REC709_LUMINANCE), 0.0, 1.0)[..., None]
     scale = 1.0 + (amount - 1.0) * (1.0 - fade * luminance)
     np.subtract(rgb, luminance, out=rgb)
     np.multiply(rgb, scale, out=rgb)
