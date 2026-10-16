@@ -243,7 +243,9 @@ def test_blocks_match_whole_image() -> None:
     rng = np.random.default_rng(2)
     image = (rng.random((3, BLOCK_PIXELS // 2 + 7, 3)) * 8.0).astype(np.float32)
     strided = np.asfortranarray(image)  # not C-contiguous: processed in one go
-    np.testing.assert_allclose(agx(image, DEFAULT), agx(strided, DEFAULT), atol=1e-6)
+    # The two memory layouts round float32 sums differently on some platforms (Windows
+    # numpy: up to 1.3e-6); 1e-5 is still ~400x below one 8-bit step.
+    np.testing.assert_allclose(agx(image, DEFAULT), agx(strided, DEFAULT), atol=1e-5)
 
 
 def _chroma(display: np.ndarray) -> np.ndarray:
