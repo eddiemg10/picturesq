@@ -24,7 +24,7 @@ The offset is an evaluation aid only: there is no config key and it has no effec
 ## Consequences
 - + M1 has a gate it can pass or fail on its own merits.
 - + The offsets recorded during the M1 review are target data for tuning M2's exposure algorithm.
-- − Matching the median can push the sky into clipping, because the display transform hard-clips; that is expected and visible in the matched panel.
+- − Matching the median brightens the highlights by the same offset. With the v0 hard-clip display transform this blew the sky out; AgX (#17) rolls highlights off, so the matched panel now shows real highlight behaviour.
 - − The camera's local tone mapping still differs in the shadows; the bar accepts that.
 
 ## Alternatives considered

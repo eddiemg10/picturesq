@@ -97,6 +97,7 @@ def build_panels(
     decode_seconds = time.perf_counter() - started
     image = resize_to_long_edge(full, WORK_LONG_EDGE)  # in scene-linear, before viewing
     view = OutputConfig(long_edge=PANEL_WIDTH)
+    display = config.grade.display_transform
 
     jpeg = camera_jpeg(sample)
     match: ExposureMatch | None = None
@@ -109,23 +110,25 @@ def build_panels(
         scene = render_scene(image, config)
 
         def measure(ev: float) -> float:
-            return median_luminance(render_output(scene * np.float32(2.0**ev), view))
+            return median_luminance(render_output(scene * np.float32(2.0**ev), view, display))
 
         match = match_exposure(measure, target)  # ADR 0009: an evaluation aid, not a pipeline step
 
-    panels.append(Panel("decode (via display transform)", render_output(image, view)))
+    panels.append(Panel("decode (via display transform)", render_output(image, view, display)))
     staged = image
     for name, stage in SCENE_STAGES:
         staged = stage(staged, config)
-        panels.append(Panel(f"{name} (via display transform)", render_output(staged, view)))
+        panels.append(
+            Panel(f"{name} (via display transform)", render_output(staged, view, display))
+        )
 
-    export = render_output(full, config.export.outputs["web"])  # the real web output
+    export = render_output(full, config.export.outputs["web"], display)  # the real web output
     del full
     panels.append(Panel("export (web)", export))
     if match is not None:
         scaled = render_scene(image, config) * np.float32(2.0**match.ev)
         label = f"export, exposure-matched ({match.ev:+.2f} EV)"
-        panels.append(Panel(label, render_output(scaled, view)))
+        panels.append(Panel(label, render_output(scaled, view, display)))
     panels.append(Panel("clipping (magenta)", mark_clipped(export)))
     return panels, read_baseline_exposure(sample), decode_seconds, match
 

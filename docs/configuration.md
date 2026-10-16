@@ -11,7 +11,7 @@ lisbon/
 
 You don't need to write it: `picturesq run` creates it with defaults, and `picturesq ui` edits it for you. Coding agents can edit it directly. Every key is optional, so an empty file (or `{}`) means "all defaults".
 
-> **Status:** config format version `1`, pre-alpha. This page documents what exists today (`decode`, `export`). Sections for normalise, grade and per-photo overrides are added as those stages ship.
+> **Status:** config format version `1`, pre-alpha. This page documents what exists today (`decode`, `grade.display_transform`, `export`). Sections for normalise, looks, adjustments and per-photo overrides are added as those stages ship.
 
 ## Defaults
 
@@ -23,6 +23,21 @@ decode:
   demosaic: ahd
   highlight_mode: blend
   baseline_exposure: true
+grade:
+  display_transform:
+    min_ev: -10.0
+    max_ev: 6.5
+    contrast: 1.0
+    toe: 1.5
+    shoulder: 1.5
+    inset:
+    - 0.25
+    - 0.25
+    - 0.25
+    outset:
+    - 0.35
+    - 0.35
+    - 0.35
 export:
   outputs:
     web:
@@ -55,6 +70,13 @@ export:
   enabled: [web, instagram]
 ```
 
+A punchier, more saturated neutral render with more room for bright skies:
+
+```yaml
+grade:
+  display_transform: {contrast: 1.5, max_ev: 7.5, outset: [0.4, 0.4, 0.4]}
+```
+
 Setting `outputs` replaces the default outputs entirely, so list every output you want to keep (`archive` isn't defined above, so it can't be enabled).
 
 ## Reference
@@ -65,6 +87,7 @@ Setting `outputs` replaces the default outputs entirely, so list every output yo
 |---|---|---|---|
 | `version` | `1` | `1` | Config format version. Only `1` is accepted. |
 | `decode` | mapping | see below | How RAW originals are decoded. |
+| `grade` | mapping | see below | How images are rendered for display. Today only the display transform. |
 | `export` | mapping | see below | Which files `picturesq export` writes. |
 
 ### `decode`
@@ -76,6 +99,26 @@ Setting `outputs` replaces the default outputs entirely, so list every output yo
 | `baseline_exposure` | `true` \| `false` | `true` | Apply the DNG `BaselineExposure` tag (brightening the camera's deliberate underexposure). Some cameras record the raw 2 to 4 stops dark on purpose; with this off, their photos decode that much too dark. Has no effect on originals without the tag. |
 
 The defaults for the first two keys may change during M1 while they are tested on real photos.
+
+### `grade`
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `display_transform` | mapping | see below | The AgX-style display transform that turns scene light into display values, rolling highlights off toward white instead of clipping them. |
+
+#### `grade.display_transform`
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `min_ev` | number < 0 | `-10.0` | Scene brightness, in stops relative to mid grey, that becomes black. |
+| `max_ev` | number > 0 | `6.5` | Scene brightness, in stops relative to mid grey, that becomes white. Higher keeps more detail in bright skies but makes highlights greyer. |
+| `contrast` | number > 0 | `1.0` | Midtone contrast. `1.0` matches a plain sRGB display of the linear image at mid grey; higher is punchier. |
+| `toe` | number, 0–10 | `1.5` | How the shadows approach black: higher keeps them linear longer, then drops into black faster. |
+| `shoulder` | number, 0–10 | `1.5` | How highlights approach white: lower rolls off earlier and more gently, higher keeps them bright longer, then rolls off harder. |
+| `inset` | three numbers, 0–1 (R, G, B) | `[0.25, 0.25, 0.25]` | How much each primary is pulled toward white before the curve. More inset makes very bright, saturated colours fade to white with less hue shift, but desaturates. |
+| `outset` | three numbers, 0–1 (R, G, B) | `[0.35, 0.35, 0.35]` | How much saturation each primary gets back after the curve. Larger than `inset` gives a net saturation boost in the midtones. |
+
+Mid grey (scene `0.18`) always stays mid grey on screen, whatever these values are. `contrast` must be high enough for the curve to reach black at `min_ev` and white at `max_ev`; a config where it can't is rejected.
 
 ### `export`
 
