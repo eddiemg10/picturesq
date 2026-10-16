@@ -27,3 +27,7 @@ ADR-0010 ruled out local tone mapping because the camera showed no compression o
 - − Deep shadows get `amount` (1.15×) more contrast, including noise; they already had more local contrast than the camera (+0.45 stops), which luma NR has to address.
 - − Cost: ~3.5 s on a 12 MP photo and ~6 s on 26 MP at full resolution, ~100 MB extra peak.
 - − The camera's per-scene behaviour varies (DJI sky −0.23, Fuji XQ1 −0.59, some reference photos +0.3 to +0.5): one set of defaults can't match all of them.
+
+## State after this ADR
+- Brightness and highlight gates pass on both sets. The colour gate still fails as it did before local contrast: bright blues (skies) are ~0.8× the camera's chroma and lean ~5° toward purple. Tracked in #54, together with the DNG `ProfileHueSatMap` the DJI files carry.
+- Dark speckle inside sun glints predates local contrast: #55.
