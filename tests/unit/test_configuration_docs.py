@@ -7,12 +7,17 @@ import pytest
 import yaml
 
 from picturesq.config import (
+    ChromaNoiseReductionConfig,
     DecodeConfig,
     DisplayTransformConfig,
     ExportConfig,
+    ExposureConfig,
     GradeConfig,
+    LocalContrastConfig,
+    NormaliseConfig,
     OutputConfig,
     ProjectConfig,
+    SharpenConfig,
     dump_project_config,
 )
 
@@ -40,10 +45,15 @@ def test_examples_are_valid(block: str) -> None:
     [
         ProjectConfig,
         DecodeConfig,
+        NormaliseConfig,
+        ExposureConfig,
+        ChromaNoiseReductionConfig,
         GradeConfig,
+        LocalContrastConfig,
         DisplayTransformConfig,
         ExportConfig,
         OutputConfig,
+        SharpenConfig,
     ],
 )
 def test_reference_lists_every_key(model: type[ProjectConfig]) -> None:

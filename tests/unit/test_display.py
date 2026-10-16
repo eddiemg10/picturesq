@@ -32,7 +32,7 @@ def test_output_in_unit_range() -> None:
 def test_config_is_used() -> None:
     grey = np.full((1, 1, 3), 2.0, dtype=np.float32)
     default = display_transform(grey.copy())
-    darker = display_transform(grey.copy(), DisplayTransformConfig(max_ev=9.0))
+    darker = display_transform(grey.copy(), DisplayTransformConfig(max_ev=11.0))
     assert darker[0, 0, 0] < default[0, 0, 0]
 
 

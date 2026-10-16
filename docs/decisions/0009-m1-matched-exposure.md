@@ -1,6 +1,6 @@
 # ADR-0009: M1 is judged at matched exposure
 
-**Status:** Accepted · 2026-10-14
+**Status:** Superseded by [ADR-0010](0010-camera-matched-neutral-render.md) · 2026-10-14
 
 ## Context
 M1's exit criterion was "the neutral render is judged at least as good as the in-camera JPEG". M1 has no normalise stage, and the camera JPEG is not a neutral render: it applies its own tone curve and local tone mapping that lift shadows and midtones by 1 to 2 EV. Measured on the CC0 DJI sample (camera JPEG over our render, by camera-JPEG brightness band):

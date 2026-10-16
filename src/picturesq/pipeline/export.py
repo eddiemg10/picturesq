@@ -13,19 +13,23 @@ from picturesq.colour.transfer import srgb_encode
 from picturesq.config import DisplayTransformConfig, OutputConfig, ProjectConfig
 from picturesq.decode import DecodeError, decode_original
 from picturesq.export import resize_to_long_edge, to_8bit, write_jpeg
+from picturesq.export.sharpen import sharpen
+from picturesq.grade import grade
+from picturesq.normalise import normalise
 
 EXPORTS_DIRNAME = "exports"
 
-# Scene-linear stages that run after decode, as (name, fn(image, config) -> image).
-# Normalise (M2) and grade (M3) are added here; render_scene and the stage sheet
-# (scripts/stage_sheet.py) both iterate this, so a new stage gets a panel automatically.
+# Scene-linear stages that run after decode, as (name, fn(image, config) -> image). Stages
+# may modify the image in place. Grade's look operations (M3) are added here; render_scene
+# and the stage sheet (scripts/stage_sheet.py) both iterate this, so a new stage gets a
+# panel automatically.
 SCENE_STAGES: tuple[
     tuple[str, Callable[[NDArray[np.float32], ProjectConfig], NDArray[np.float32]]], ...
-] = ()
+] = (("normalise", normalise), ("grade", grade))
 
 
 def render_scene(image: NDArray[np.float32], config: ProjectConfig) -> NDArray[np.float32]:
-    """Run the scene-linear stages after decode (normalise, grade); today the identity."""
+    """Run the scene-linear stages after decode (normalise, grade), in place."""
     for _name, stage in SCENE_STAGES:
         image = stage(image, config)
     return image
@@ -34,7 +38,7 @@ def render_scene(image: NDArray[np.float32], config: ProjectConfig) -> NDArray[n
 def render_output(
     image: NDArray[np.float32], output: OutputConfig, display: DisplayTransformConfig
 ) -> NDArray[np.uint8]:
-    """Resize, display transform, sRGB encode and quantise ``image`` for one output.
+    """Resize, display transform, sRGB encode, sharpen and quantise ``image`` for one output.
 
     ``image`` is never modified.
     """
@@ -43,6 +47,7 @@ def render_output(
     # gets a new array. A resized array is ours to overwrite.
     result = display_transform(sized, display, out=None if sized is image else sized)
     srgb_encode(result, out=result)
+    sharpen(result, output.sharpen)
     return to_8bit(result)
 
 

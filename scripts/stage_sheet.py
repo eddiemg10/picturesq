@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import io
 import json
 import os
 import shutil
@@ -26,13 +25,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
-import rawpy
-from numpy.typing import NDArray
-from PIL import Image, ImageOps
 
 from picturesq import __version__
 from picturesq.config import OutputConfig, ProjectConfig
 from picturesq.decode import decode_original, read_baseline_exposure
+from picturesq.decode.embedded import camera_jpeg
 from picturesq.export import resize_to_long_edge
 from picturesq.pipeline.export import SCENE_STAGES, render_output, render_scene
 from picturesq.preview.stage_sheet import (
@@ -70,21 +67,6 @@ def run(*cmd: str, cwd: Path = ROOT) -> str:
     return subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
 
 
-def camera_jpeg(path: Path) -> NDArray[np.uint8] | None:
-    """The JPEG (or bitmap) embedded in the original, upright, or None if there is none."""
-    try:
-        with rawpy.imread(str(path)) as raw:
-            thumb = raw.extract_thumb()
-    except (rawpy.LibRawNoThumbnailError, rawpy.LibRawUnsupportedThumbnailError):
-        return None
-    if thumb.format == rawpy.ThumbFormat.JPEG:
-        image = ImageOps.exif_transpose(Image.open(io.BytesIO(thumb.data)))  # EXIF orientation
-        return np.asarray(image.convert("RGB"), dtype=np.uint8)
-    if thumb.format == rawpy.ThumbFormat.BITMAP:
-        return np.asarray(thumb.data, dtype=np.uint8)
-    return None
-
-
 def build_panels(
     sample: Path, config: ProjectConfig
 ) -> tuple[list[Panel], float, float, ExposureMatch | None]:
@@ -107,7 +89,7 @@ def build_panels(
     else:
         panels = [Panel("camera JPEG", jpeg)]
         target = median_luminance(jpeg)
-        scene = render_scene(image, config)
+        scene = render_scene(image.copy(), config)  # stages work in place
 
         def measure(ev: float) -> float:
             return median_luminance(render_output(scene * np.float32(2.0**ev), view, display))
@@ -115,18 +97,19 @@ def build_panels(
         match = match_exposure(measure, target)  # ADR 0009: an evaluation aid, not a pipeline step
 
     panels.append(Panel("decode (via display transform)", render_output(image, view, display)))
-    staged = image
+    staged = image.copy()
     for name, stage in SCENE_STAGES:
         staged = stage(staged, config)
         panels.append(
             Panel(f"{name} (via display transform)", render_output(staged, view, display))
         )
 
-    export = render_output(full, config.export.outputs["web"], display)  # the real web output
+    full = render_scene(full, config)  # the real export path: every stage, then the output
+    export = render_output(full, config.export.outputs["web"], display)
     del full
     panels.append(Panel("export (web)", export))
     if match is not None:
-        scaled = render_scene(image, config) * np.float32(2.0**match.ev)
+        scaled = render_scene(image.copy(), config) * np.float32(2.0**match.ev)
         label = f"export, exposure-matched ({match.ev:+.2f} EV)"
         panels.append(Panel(label, render_output(scaled, view, display)))
     panels.append(Panel("clipping (magenta)", mark_clipped(export)))

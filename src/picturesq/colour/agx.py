@@ -17,6 +17,15 @@ parameterisation and defaults (ADR-0007):
 4. **Outset.** Decode the curve's output with the sRGB curve, then apply the inverse of an
    inset matrix to give back some of the saturation the inset removed.
 
+Two finishing steps match the result to camera rendering (ADR-0010):
+
+5. **Chroma preservation.** Blend with a render that tone-maps luminance only and keeps
+   each pixel's RGB ratios. Per-channel curves wash bright colours out much faster than
+   cameras do (a blue sky at 70 % display brightness kept a third of the camera's chroma);
+   the blend keeps highlights colourful while bright colours still reach white at the top.
+6. **Saturation.** Scale chroma around each pixel's luminance, then pull any channel that
+   left ``[0, 1]`` back toward grey of the same luminance (hue kept).
+
 Greys are untouched by the matrices (white maps to white), so a grey ramp only sees the curve:
 scene 0.18 maps to display 0.18.
 """
@@ -28,7 +37,9 @@ from numpy.typing import NDArray
 
 from picturesq.colour.spaces import (
     REC709,
+    REC709_TO_XYZ,
     REC2020_TO_REC709,
+    REC2020_TO_XYZ,
     Matrix,
     RgbSpace,
     apply_matrix,
@@ -55,6 +66,9 @@ per pixel (about 1 s instead of 21 s on a 32 MP image).
 """
 BLOCK_PIXELS = 1 << 18
 """``agx`` works through the image in blocks this size, so its temporaries stay small."""
+
+_REC2020_LUMINANCE = REC2020_TO_XYZ[1].astype(np.float32)
+_REC709_LUMINANCE = REC709_TO_XYZ[1].astype(np.float32)
 
 
 def inset_space(base: RgbSpace, inset: PerPrimary) -> RgbSpace:
@@ -100,6 +114,9 @@ class AgxCurve:
     """``srgb_decode(sigmoid(x))`` at ``TABLE_SIZE`` evenly spaced x in ``[0, 1]``."""
     table_step: NDArray[np.float32]
     """``table[i + 1] - table[i]`` (0 after the last sample), for interpolation."""
+    chroma_preservation: float
+    saturation: float
+    saturation_fade: float
 
     @classmethod
     def from_config(cls, config: DisplayTransformConfig) -> "AgxCurve":
@@ -121,6 +138,9 @@ class AgxCurve:
             toe_limit=_limit(slope * pivot_x, pivot_y, config.toe),
             shoulder_power=config.shoulder,
             shoulder_limit=_limit(slope * (1.0 - pivot_x), 1.0 - pivot_y, config.shoulder),
+            chroma_preservation=config.chroma_preservation,
+            saturation=config.saturation,
+            saturation_fade=config.saturation_fade,
             table=np.empty(0, dtype=np.float32),
             table_step=np.empty(0, dtype=np.float32),
         )
@@ -194,15 +214,84 @@ def _lookup(x: FloatArray, curve: AgxCurve) -> None:
     np.add(x, np.take(curve.table, index), out=x)
 
 
+def _log_encode(values: FloatArray, curve: AgxCurve) -> None:
+    """Replace scene-linear ``values`` by their position on the curve's log axis, in [0, 1].
+
+    ``(log2(v / mid grey) - min_ev) / range_ev``, folded into one multiply-add. Negatives and
+    zeros clamp to the EV floor, far below min_ev, so they end up at 0.
+    """
+    np.maximum(values, EV_FLOOR, out=values)
+    np.log2(values, out=values)
+    np.multiply(values, 1.0 / curve.range_ev, out=values)
+    np.add(values, -(np.log2(MIDDLE_GREY) + curve.min_ev) / curve.range_ev, out=values)
+    np.clip(values, 0.0, 1.0, out=values)
+
+
+def _fit_gamut(rgb: FloatArray, luminance: FloatArray) -> None:
+    """Pull pixels with a channel outside [0, 1] toward grey of the same luminance (in place).
+
+    ``luminance`` has shape (..., 1) and must lie in [0, 1]. Moving along the line to grey
+    keeps the hue (in linear RGB) and the luminance; only chroma is given up. Only the
+    (usually few) pixels outside the range are touched.
+    """
+    # Element-wise over the three planes: numpy's max/min over a length-3 axis is ~10x slower.
+    red, green, blue = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    high = np.maximum(np.maximum(red, green), blue)
+    low = np.minimum(np.minimum(red, green), blue)
+    outside = (high > 1.0) | (low < 0.0)
+    if not outside.any():
+        return
+    pixels = rgb[outside]
+    grey = luminance[..., 0][outside][:, None]
+    high, low = high[outside][:, None], low[outside][:, None]
+    scale = np.ones_like(high)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        np.minimum(scale, (1.0 - grey) / (high - grey), out=scale, where=high > 1.0)
+        np.minimum(scale, grey / (grey - low), out=scale, where=low < 0.0)
+    np.maximum(scale, 0.0, out=scale)
+    rgb[outside] = grey + (pixels - grey) * scale
+
+
+def _keep_ratios(image: FloatArray, curve: AgxCurve) -> FloatArray:
+    """Tone-map luminance only, keeping each pixel's RGB ratios: Rec.709 display-linear."""
+    luminance = image @ _REC2020_LUMINANCE
+    np.maximum(luminance, EV_FLOOR, out=luminance)
+    display = luminance.copy()
+    _log_encode(display, curve)
+    _lookup(display, curve)
+    rgb = apply_matrix(image, REC2020_TO_REC709)
+    np.multiply(rgb, (display / luminance)[..., None], out=rgb)
+    _fit_gamut(rgb, display[..., None])
+    return rgb
+
+
+def _saturate(rgb: FloatArray, amount: float, fade: float) -> None:
+    """Scale chroma around each pixel's luminance, then fit the gamut (in place).
+
+    The scale is ``amount`` at black and moves toward 1 as luminance rises, reaching
+    ``1 + (amount - 1) * (1 - fade)`` at white: bright colours are already near the edge of
+    the gamut, and boosting them only pushes a channel against 1.
+    """
+    luminance = np.clip(rgb @ _REC709_LUMINANCE, 0.0, 1.0)[..., None]
+    scale = 1.0 + (amount - 1.0) * (1.0 - fade * luminance)
+    np.subtract(rgb, luminance, out=rgb)
+    np.multiply(rgb, scale, out=rgb)
+    np.add(rgb, luminance, out=rgb)
+    _fit_gamut(rgb, luminance)
+
+
 def _agx_block(image: FloatArray, curve: AgxCurve, out: FloatArray) -> None:
+    # Computed first: `out` may be `image`.
+    kept = _keep_ratios(image, curve) if curve.chroma_preservation > 0.0 else None
     apply_matrix(image, curve.inset_matrix, out=out)
-    # Log encode: (log2(v / mid grey) - min_ev) / range_ev, folded into one multiply-add.
-    # Negatives and zeros clamp to the EV floor, far below min_ev, so they end up at 0.
-    np.maximum(out, EV_FLOOR, out=out)
-    np.log2(out, out=out)
-    np.multiply(out, 1.0 / curve.range_ev, out=out)
-    np.add(out, -(np.log2(MIDDLE_GREY) + curve.min_ev) / curve.range_ev, out=out)
-    np.clip(out, 0.0, 1.0, out=out)
+    _log_encode(out, curve)
     _lookup(out, curve)  # sigmoid, then sRGB decode to display-linear
     apply_matrix(out, curve.outset_matrix, out=out)
+    np.clip(out, 0.0, 1.0, out=out)
+    if kept is not None:
+        np.multiply(out, 1.0 - curve.chroma_preservation, out=out)
+        np.multiply(kept, curve.chroma_preservation, out=kept)
+        np.add(out, kept, out=out)
+    if curve.saturation != 1.0:
+        _saturate(out, curve.saturation, curve.saturation_fade)
     np.clip(out, 0.0, 1.0, out=out)
