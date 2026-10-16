@@ -14,4 +14,5 @@ New ADRs get the next number; superseded ones are marked, not deleted.
 | [0007](0007-asset-licences.md) | Asset licences: AgX references and film-simulation LUT collections | Accepted |
 | [0008](0008-derived-colour-matrices.md) | Derive colour matrices from primaries; never use rounded published matrices | Accepted |
 | [0009](0009-m1-matched-exposure.md) | M1 is judged at matched exposure | Superseded by 0010 |
-| [0010](0010-camera-matched-neutral-render.md) | The neutral render is fitted to camera JPEGs and gated on the real export | Accepted |
+| [0010](0010-camera-matched-neutral-render.md) | The neutral render is fitted to camera JPEGs and gated on the real export | Accepted; decision 2 amended by 0011 |
+| [0011](0011-local-contrast.md) | Local contrast keeps the detail the display transform's shoulder flattens | Accepted |

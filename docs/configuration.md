@@ -11,7 +11,7 @@ lisbon/
 
 You don't need to write it: `picturesq run` creates it with defaults, and `picturesq ui` edits it for you. Coding agents can edit it directly. Every key is optional, so an empty file (or `{}`) means "all defaults".
 
-> **Status:** config format version `1`, pre-alpha. This page documents what exists today (`decode`, `normalise`, `grade.display_transform`, `export`). Sections for looks, adjustments and per-photo overrides are added as those stages ship.
+> **Status:** config format version `1`, pre-alpha. This page documents what exists today (`decode`, `normalise`, `grade.local_contrast`, `grade.display_transform`, `export`). Sections for looks, adjustments and per-photo overrides are added as those stages ship.
 
 ## Defaults
 
@@ -37,6 +37,14 @@ normalise:
     full_lightness: 0.2
     fade_lightness: 0.4
 grade:
+  local_contrast:
+    enabled: true
+    detail_floor: 0.8
+    amount: 1.15
+    radius: 0.05
+    edge_ev: 1.0
+    detail_limit_ev: 0.25
+    max_gain: 4.0
   display_transform:
     min_ev: -10.0
     max_ev: 9.0
@@ -172,7 +180,24 @@ The exposure change is `offset_ev + correction × (target_ev − the photo's med
 
 | Key | Type | Default | Description |
 |---|---|---|---|
+| `local_contrast` | mapping | see below | Keeps detail (clouds, distant hills) where the display transform would flatten it. |
 | `display_transform` | mapping | see below | The AgX-style display transform that turns scene light into display values, rolling highlights off toward white instead of clipping them. |
+
+#### `grade.local_contrast`
+
+The display transform squeezes bright and very dark tones together, and the small differences that make up detail (clouds against a bright sky, haze between hills) get squeezed with them. Local contrast splits the image into broad areas, whose brightness the display transform still decides, and the detail on top of them, which it amplifies where the curve is flat. Big sharp steps such as a horizon count as edges and are left alone, so they get no halo.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `true` \| `false` | `true` | Run local contrast. |
+| `detail_floor` | number, 0–2 | `0.8` | Least contrast detail in tones brighter than mid grey keeps after the display transform, in display stops per scene stop. The curve alone leaves about 0.2 in a bright sky; `0` turns this part off. |
+| `amount` | number, 0–3 | `1.15` | Extra detail contrast everywhere. `1` adds none. |
+| `radius` | number, 0–0.25 | `0.05` | Size of the broad areas, as a fraction of the photo's long edge. Anything smaller counts as detail. |
+| `edge_ev` | number, 0–6 | `1.0` | Brightness steps much bigger than this many stops are treated as edges and not amplified (no halos). Lower protects more edges but keeps less detail. |
+| `detail_limit_ev` | number, 0–3 | `0.25` | Detail bigger than about this many stops (a sun glint, a lamp) is amplified less, so it isn't pushed into white. Cloud texture is a few tenths of a stop. |
+| `max_gain` | number, 1–10 | `4.0` | The most detail is ever amplified, as a factor. |
+
+Defaults were fitted to camera JPEGs ([ADR-0011](decisions/0011-local-contrast.md)).
 
 #### `grade.display_transform`
 

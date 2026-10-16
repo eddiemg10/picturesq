@@ -203,9 +203,65 @@ class DisplayTransformConfig(_Model):
         return self
 
 
-class GradeConfig(_Model):
-    """Stage 3 settings. v0: the display transform only; looks and adjustments come in M3."""
+class LocalContrastConfig(_Model):
+    """Keep detail where the display transform's curve flattens it (ADR-0011).
 
+    Defaults fitted to camera JPEGs: detail keeps at least ``detail_floor`` display stops per
+    scene stop, and gets ``amount`` more contrast everywhere.
+    """
+
+    enabled: bool = Field(default=True, description="Run local contrast.")
+    detail_floor: float = Field(
+        default=0.8,
+        ge=0.0,
+        le=2.0,
+        description=(
+            "Least contrast detail above mid grey keeps after the display transform, in display "
+            "stops per scene stop (the curve's shoulder alone gives ~0.2 in a bright sky)."
+        ),
+    )
+    amount: float = Field(
+        default=1.15,
+        ge=0.0,
+        le=3.0,
+        description="Extra detail contrast everywhere; 1 adds none.",
+    )
+    radius: float = Field(
+        default=0.05,
+        gt=0.0,
+        le=0.25,
+        description=(
+            "Size of the broad areas whose brightness the curve sets, as a fraction of the "
+            "long edge; smaller detail than this counts as detail."
+        ),
+    )
+    edge_ev: float = Field(
+        default=1.0,
+        gt=0.0,
+        le=6.0,
+        description=(
+            "Steps in brightness much larger than this (in EV), like a horizon, are kept as "
+            "edges and not amplified (no halos); smaller ones count as detail."
+        ),
+    )
+    detail_limit_ev: float = Field(
+        default=0.25,
+        gt=0.0,
+        le=3.0,
+        description=(
+            "Detail larger than about this many EV (a sun glint, a lamp) is amplified less: "
+            "what gets added levels off at (gain - 1) times this."
+        ),
+    )
+    max_gain: float = Field(
+        default=4.0, ge=1.0, le=10.0, description="Most detail is ever amplified, as a factor."
+    )
+
+
+class GradeConfig(_Model):
+    """Stage 3 settings. v0: local contrast and the display transform; looks come in M3."""
+
+    local_contrast: LocalContrastConfig = Field(default_factory=LocalContrastConfig)
     display_transform: DisplayTransformConfig = Field(default_factory=DisplayTransformConfig)
 
 

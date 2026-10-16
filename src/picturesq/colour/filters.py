@@ -75,3 +75,45 @@ def gaussian_blur_plane(plane: FloatArray, sigma: float) -> FloatArray:
             result += weight * window
         out = result
     return out
+
+
+def _recursive_pass(lines: FloatArray, weights: FloatArray) -> None:
+    """One left-to-right and one right-to-left recursive pass along axis 1, in place.
+
+    ``weights[:, i]`` is how much of pixel ``i - 1`` carries into pixel ``i`` (0 stops the
+    smoothing there). The loop runs over columns, vectorised across lines.
+    """
+    for i in range(1, lines.shape[1]):
+        lines[:, i] += weights[:, i] * (lines[:, i - 1] - lines[:, i])
+    for i in range(lines.shape[1] - 2, -1, -1):
+        lines[:, i] += weights[:, i + 1] * (lines[:, i + 1] - lines[:, i])
+
+
+def edge_aware_blur(
+    plane: FloatArray, sigma: float, edge: float, iterations: int = 3
+) -> FloatArray:
+    """Smooth a 2-D plane without blurring across steps much larger than ``edge``.
+
+    The domain transform recursive filter (Gastal & Oliveira, 2011): spatial scale ``sigma``
+    pixels, range scale ``edge`` (in the plane's units). Between two neighbours that differ
+    by ``d``, the distance the filter sees is stretched by ``1 + sigma / edge * d``, so a
+    big step works like a wall. Python loops over rows and columns: meant for small planes
+    (about 0.15 s at 512 x 384).
+    """
+    ratio = np.float32(sigma / edge)
+    stretch_x = np.ones_like(plane)
+    stretch_x[:, 1:] += ratio * np.abs(np.diff(plane, axis=1))
+    stretch_y = np.ones_like(plane)
+    stretch_y[1:, :] += ratio * np.abs(np.diff(plane, axis=0))
+    stretch_y = np.ascontiguousarray(stretch_y.T)
+    out = plane.astype(np.float32, copy=True)
+    for k in range(iterations):
+        # Each iteration halves the spatial scale so the total matches `sigma` (the paper's
+        # schedule).
+        sigma_k = sigma * np.sqrt(3.0) * 2.0 ** (iterations - k - 1) / np.sqrt(4.0**iterations - 1)
+        carry = np.float32(np.exp(-np.sqrt(2.0) / sigma_k))
+        _recursive_pass(out, carry**stretch_x)
+        transposed = np.ascontiguousarray(out.T)
+        _recursive_pass(transposed, carry**stretch_y)
+        out = np.ascontiguousarray(transposed.T)
+    return out

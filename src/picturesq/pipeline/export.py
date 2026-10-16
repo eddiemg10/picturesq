@@ -14,6 +14,7 @@ from picturesq.config import DisplayTransformConfig, OutputConfig, ProjectConfig
 from picturesq.decode import DecodeError, decode_original
 from picturesq.export import resize_to_long_edge, to_8bit, write_jpeg
 from picturesq.export.sharpen import sharpen
+from picturesq.grade import grade
 from picturesq.normalise import normalise
 
 EXPORTS_DIRNAME = "exports"
@@ -24,7 +25,7 @@ EXPORTS_DIRNAME = "exports"
 # panel automatically.
 SCENE_STAGES: tuple[
     tuple[str, Callable[[NDArray[np.float32], ProjectConfig], NDArray[np.float32]]], ...
-] = (("normalise", normalise),)
+] = (("normalise", normalise), ("grade", grade))
 
 
 def render_scene(image: NDArray[np.float32], config: ProjectConfig) -> NDArray[np.float32]:
