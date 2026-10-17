@@ -69,6 +69,11 @@
 | **inset / outset** | The display transform's matrices around the curve: **inset** pulls the primaries toward white so bright saturated colours fade to white without hue skews; **outset** gives back some of that saturation afterwards. |
 | **chroma preservation** | The display transform's blend toward a luminance-only tone map that keeps each pixel's colour ratios, so bright colours stay colourful. |
 | **local contrast** | The grade step that keeps detail where the display transform's curve is flat: log luminance is split into a **base** (broad areas, smoothed without crossing strong edges) and **detail** (the rest); the curve still places the base, and the detail is amplified so it keeps at least `detail_floor` contrast (ADR-0011). |
+| **blue rendering** | The display transform's camera-matched treatment of blues (skies): deeper, more colourful and a few degrees more cyan than an accurate render, as camera JPEGs show them (ADR-0012). On by default; `grade.display_transform.blue_rendering.enabled: false` turns it off. |
+| **colour matrix** | A DNG's 3×3 matrix from XYZ to camera RGB, measured under one **calibration illuminant**; most DNGs carry two (tungsten and daylight), blended by the photo's white balance. |
+| **colour temperature (CCT)** | Where a white sits between warm and cool, in kelvin: tungsten ~2850 K, daylight ~5500–6500 K. Correlated colour temperature: the nearest black-body colour. |
+| **chromatic adaptation** | Converting colours seen under one white to those that look the same under another (Bradford). |
+| **gamut fit** | Bringing an out-of-gamut colour into the display gamut by reducing its chroma at constant Oklab hue and lightness. |
 | **chroma** | How colourful a pixel is, independent of its lightness: the distance from grey in Oklab a/b. |
 | **ringing** | Over- and undershoot that sharp resampling filters (Lanczos) leave beside edges; **anti-ringing** clamps each result to the range of the nearby source pixels. |
 | **lens corrections** | Vignetting gain maps and distortion / colour-fringing warps a DNG carries for renderers (`OpcodeList3`). |

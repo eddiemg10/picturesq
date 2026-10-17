@@ -7,6 +7,7 @@ import pytest
 import yaml
 
 from picturesq.config import (
+    BlueRenderingConfig,
     ChromaNoiseReductionConfig,
     DecodeConfig,
     DisplayTransformConfig,
@@ -51,6 +52,7 @@ def test_examples_are_valid(block: str) -> None:
         GradeConfig,
         LocalContrastConfig,
         DisplayTransformConfig,
+        BlueRenderingConfig,
         ExportConfig,
         OutputConfig,
         SharpenConfig,

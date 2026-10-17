@@ -21,6 +21,7 @@ from rawpy._rawpy import ColorSpace, DemosaicAlgorithm, HighlightMode, LibRawErr
 
 from picturesq.colour.spaces import REC709_TO_REC2020, REC709_TO_XYZ, Matrix, apply_matrix
 from picturesq.config.project import DecodeConfig
+from picturesq.decode.dng_colour import dng_camera_to_working, read_dng_colour
 from picturesq.decode.exposure import read_baseline_exposure
 from picturesq.decode.opcodes import NO_CORRECTIONS, apply_lens_corrections, read_lens_corrections
 
@@ -82,7 +83,10 @@ def decode_original(
     and tests.
 
     Colour: LibRaw demosaics and white-balances in camera RGB (``output_color=raw``), and we
-    convert camera RGB to linear Rec.2020 ourselves in float32 (:func:`camera_to_working_matrix`).
+    convert camera RGB to linear Rec.2020 ourselves in float32. For DNGs (with
+    ``config.colour_matrix == "dng"``) the matrix follows the DNG specification, blending the
+    file's two colour matrices by the as-shot white (``decode/dng_colour.py``, ADR-0012);
+    otherwise it is LibRaw's (:func:`camera_to_working_matrix`).
     LibRaw's own conversion stores 16-bit unsigned integers, which clips every out-of-gamut
     colour (a negative channel) to 0 before we see it (#47). Ours keeps negatives.
 
@@ -99,8 +103,12 @@ def decode_original(
     try:
         gain = 2.0 ** read_baseline_exposure(path) if config.baseline_exposure else 1.0
         corrections = read_lens_corrections(path) if config.lens_corrections else NO_CORRECTIONS
+        dng_colour = read_dng_colour(path) if config.colour_matrix == "dng" else None
         with rawpy.imread(str(path)) as raw:
-            matrix = camera_to_working_matrix(raw.color_matrix, raw.rgb_xyz_matrix)
+            if dng_colour is not None:
+                matrix, _white = dng_camera_to_working(dng_colour)
+            else:
+                matrix = camera_to_working_matrix(raw.color_matrix, raw.rgb_xyz_matrix)
             if raw.sizes.flip != 0:
                 # The opcodes are in sensor orientation; we have no sample to verify LibRaw's
                 # rotation codes against, so we don't guess.

@@ -69,6 +69,7 @@ Photoshop-style GUI, local retouching, lens correction, cataloguing/DAM, ML trai
 | D15 | Process | GitHub Issues + Project board as the only tracker; PR-only changes, CI-gated | Treat it as a product; small tasks the user can pick up. |
 | D16 | Vocabulary | [`glossary.md`](glossary.md) is binding; British spelling everywhere | Consistent, intentional language across code, CLI, config, docs and UI. |
 | D17 | Neutral render acceptance | The real export against the camera JPEG: brightness, chroma per lightness band, clipping (`scripts/compare.py`). [ADR-0010](decisions/0010-camera-matched-neutral-render.md) (supersedes 0009) | Judging an exposure-matched image hid that real exports were 2 stops dark. |
+| D18 | Camera colour | DNG-specification colour matrices (blended by white balance), and a camera-matched blue rendering that is on by default and can be turned off. [ADR-0012](decisions/0012-sky-colour.md) | LibRaw ignored half the DNG colour data; camera JPEGs render skies deeper and slightly cyan, and DJI's are the target. |
 
 ---
 

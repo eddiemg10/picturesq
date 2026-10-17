@@ -25,6 +25,8 @@ Two finishing steps match the result to camera rendering (ADR-0010):
    the blend keeps highlights colourful while bright colours still reach white at the top.
 6. **Saturation.** Scale chroma around each pixel's luminance, then pull any channel that
    left ``[0, 1]`` back toward grey of the same luminance (hue kept).
+7. **Blue rendering.** Deepen and slightly cyan-shift blues (skies) the way camera JPEGs
+   do (``colour/blue_rendering.py``, ADR-0012); off with ``blue_rendering.enabled: false``.
 
 Greys are untouched by the matrices (white maps to white), so a grey ramp only sees the curve:
 scene 0.18 maps to display 0.18.
@@ -35,6 +37,7 @@ from dataclasses import dataclass, replace
 import numpy as np
 from numpy.typing import NDArray
 
+from picturesq.colour.blue_rendering import blue_rendering
 from picturesq.colour.spaces import (
     REC709,
     REC709_TO_XYZ,
@@ -53,7 +56,7 @@ from picturesq.colour.transfer import (
     FloatArray,
     srgb_decode,
 )
-from picturesq.config import DisplayTransformConfig
+from picturesq.config import BlueRenderingConfig, DisplayTransformConfig
 
 PerPrimary = tuple[float, float, float]
 
@@ -117,6 +120,7 @@ class AgxCurve:
     chroma_preservation: float
     saturation: float
     saturation_fade: float
+    blue: BlueRenderingConfig
 
     @classmethod
     def from_config(cls, config: DisplayTransformConfig) -> "AgxCurve":
@@ -141,6 +145,7 @@ class AgxCurve:
             chroma_preservation=config.chroma_preservation,
             saturation=config.saturation,
             saturation_fade=config.saturation_fade,
+            blue=config.blue_rendering,
             table=np.empty(0, dtype=np.float32),
             table_step=np.empty(0, dtype=np.float32),
         )
@@ -295,3 +300,8 @@ def _agx_block(image: FloatArray, curve: AgxCurve, out: FloatArray) -> None:
     if curve.saturation != 1.0:
         _saturate(out, curve.saturation, curve.saturation_fade)
     np.clip(out, 0.0, 1.0, out=out)
+    if curve.blue.enabled:
+        pixels = out.reshape(-1, 3)  # a copy when `out` isn't contiguous
+        blue_rendering(pixels, curve.blue)
+        if not np.shares_memory(pixels, out):
+            out[...] = pixels.reshape(out.shape)
