@@ -1,9 +1,10 @@
-"""What the machine offers: physical cores and the cache each core can count on.
+"""What the machine offers: physical cores, the cache each core can count on, and memory.
 
-Used to choose threads and block sizes automatically (``picturesq.parallel``), so nobody has
-to tune them per machine. Read from the operating system without extra dependencies:
-Linux ``/sys``, macOS ``sysctl``, Windows ``GetLogicalProcessorInformation``. Every reader
-returns None when it can't tell, and callers fall back to safe defaults.
+Used to choose threads, block sizes and workers automatically (``picturesq.parallel``,
+``picturesq.pipeline.workers``), so nobody has to tune them per machine. Read from the
+operating system without extra dependencies: Linux ``/sys`` and ``/proc``, macOS ``sysctl``
+and ``vm_stat``, Windows ``GetLogicalProcessorInformation`` and ``GlobalMemoryStatusEx``.
+Every reader returns None when it can't tell, and callers fall back to safe defaults.
 
 Physical cores, not logical CPUs: a hyperthread shares its core's arithmetic units and
 cache with its sibling, which gains nothing on numpy's tight loops (measured in #68: 8
@@ -21,7 +22,9 @@ from functools import cache
 from pathlib import Path
 
 _SYS_CPU = Path("/sys/devices/system/cpu")
-_CGROUP_CPU_MAX = Path("/sys/fs/cgroup/cpu.max")
+_CGROUP = Path("/sys/fs/cgroup")
+_CGROUP_CPU_MAX = _CGROUP / "cpu.max"
+_PROC_MEMINFO = Path("/proc/meminfo")
 
 
 @dataclass(frozen=True)
@@ -216,3 +219,118 @@ def _windows() -> tuple[int | None, int | None]:
     if best is None:
         return physical, None
     return physical, best[1] // max(1, best[2] // logical_per_core)
+
+
+def available_memory() -> int | None:
+    """Bytes of memory a new process could use now without the system swapping, or None.
+
+    Not cached: unlike the CPU, this changes while we run. On Linux it is ``MemAvailable``
+    (free memory plus caches the kernel can drop), lowered to what a container's cgroup v2
+    ``memory.max`` still allows.
+    """
+    if sys.platform.startswith("linux"):
+        return linux_available_memory(_PROC_MEMINFO, _CGROUP)
+    if sys.platform == "darwin":
+        return _macos_available_memory()
+    if sys.platform == "win32":
+        return _windows_available_memory()
+    return None
+
+
+def parse_meminfo(text: str) -> int | None:
+    """``MemAvailable`` from ``/proc/meminfo`` (``"MemAvailable:  6889308 kB"``), in bytes."""
+    for line in text.splitlines():
+        name, _, value = line.partition(":")
+        if name == "MemAvailable":
+            number, *unit = value.split()
+            return int(number) * (1024 if unit == ["kB"] else 1)
+    return None
+
+
+def cgroup_available_memory(root: Path) -> int | None:
+    """What a cgroup v2 ``memory.max`` still allows, or None when unlimited.
+
+    The cgroup's usage (``memory.current``) counts file caches too; the inactive ones are
+    reclaimed before the limit bites, so they count as available.
+    """
+    limit = _read(root / "memory.max")
+    current = _read(root / "memory.current")
+    if limit is None or limit == "max" or current is None:
+        return None
+    try:
+        available = int(limit) - int(current)
+    except ValueError:
+        return None
+    for line in (_read(root / "memory.stat") or "").splitlines():
+        name, _, value = line.partition(" ")
+        if name == "inactive_file" and value.strip().isdigit():
+            available += int(value)
+    return max(0, available)
+
+
+def linux_available_memory(meminfo: Path, cgroup: Path) -> int | None:
+    text = _read(meminfo)
+    system = parse_meminfo(text) if text is not None else None
+    container = cgroup_available_memory(cgroup)
+    known = [value for value in (system, container) if value is not None]
+    return min(known) if known else None
+
+
+def parse_vm_stat(text: str) -> int | None:
+    """Free and reclaimable memory from macOS ``vm_stat`` output, in bytes.
+
+    Counts the pages Activity Monitor treats as available: free, inactive, speculative and
+    purgeable.
+    """
+    page_size: int | None = None
+    pages: dict[str, int] = {}
+    for line in text.splitlines():
+        if "page size of" in line:
+            page_size = int(line.split("page size of")[1].split()[0])
+            continue
+        name, _, value = line.partition(":")
+        value = value.strip().rstrip(".")
+        if value.isdigit():
+            pages[name.strip()] = int(value)
+    wanted = ("Pages free", "Pages inactive", "Pages speculative", "Pages purgeable")
+    if page_size is None or "Pages free" not in pages:
+        return None
+    return page_size * sum(pages.get(name, 0) for name in wanted)
+
+
+def _macos_available_memory() -> int | None:
+    try:
+        result = subprocess.run(["vm_stat"], capture_output=True, text=True, check=False, timeout=2)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    available = parse_vm_stat(result.stdout) if result.returncode == 0 else None
+    total = _sysctl("hw.memsize")
+    if available is not None and total is not None:
+        return min(available, total)
+    return available
+
+
+def _windows_available_memory() -> int | None:
+    import ctypes
+    from ctypes import wintypes
+
+    class MemoryStatus(ctypes.Structure):  # MEMORYSTATUSEX
+        _fields_ = (
+            ("length", wintypes.DWORD),
+            ("memory_load", wintypes.DWORD),
+            ("total_physical", ctypes.c_ulonglong),
+            ("available_physical", ctypes.c_ulonglong),
+            ("total_page_file", ctypes.c_ulonglong),
+            ("available_page_file", ctypes.c_ulonglong),
+            ("total_virtual", ctypes.c_ulonglong),
+            ("available_virtual", ctypes.c_ulonglong),
+            ("available_extended_virtual", ctypes.c_ulonglong),
+        )
+
+    status = MemoryStatus()
+    status.length = ctypes.sizeof(MemoryStatus)
+    try:
+        ok = ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))  # type: ignore[attr-defined]
+    except (AttributeError, OSError):
+        return None
+    return int(status.available_physical) if ok else None

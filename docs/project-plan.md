@@ -169,7 +169,8 @@ exceeds it.
 
 **Rules**
 - Full-resolution stages operate in place where possible (`np.multiply(a, b, out=a)`), process neighbourhood operations in row tiles, and free arrays eagerly.
-- Worker count = `min(cores, floor(memory_budget / photo_peak))`. `photo_peak` is measured by a test, not guessed (1.01 GiB for a 33 MP photo). Each photo also uses one thread per physical core over cache-sized blocks (`picturesq.parallel`); threads and block size are detected per machine and never change the output.
+- Photos are scheduled by memory (`picturesq.pipeline.workers`, ADR-0015): each photo's photo peak is predicted from its pixel count (read from the original's header, no decode), and a photo starts only when it fits beside the running ones within the **memory budget** (default 60 % of available memory; `--memory-budget`). One photo always runs, even over budget (with a warning). Largest photos first. The photo peak is measured by a test, not guessed (1.01 GiB for a 33 MP photo); each worker process counts its fixed part once.
+- Each photo's threads = physical cores ÷ photos running when it starts, over cache-sized blocks (`picturesq.parallel`). At most cores ÷ 2 photos run at once by default (`--workers` overrides): on the 4-core laptop 2 photos × 2 threads beat 1 × 4 by ~11 % (6 × 33 MP: 15.3 vs 17.2 s/photo) and 4 × 1 was no faster than 2 × 2 with ~50 % more memory. Workers, threads and block size never change the output (tested byte-identical).
 - Interactive paths never touch full-resolution data.
 - Budgets are enforced by tests (§8).
 
@@ -238,7 +239,7 @@ operations:
 | `picturesq schema [project\|look]` | Print the JSON Schema (`look` in M3) |
 | `picturesq doctor` | Check the environment: versions (LibRaw and its features, Python libraries), CPU, the threads and block size chosen and why, terminal graphics (a guess), memory (after #22); exits 1 on any error |
 
-Global flags: `--out PATH` (redirect generated files), `--json` (machine-readable output), `--threads N` and `--block-pixels N` (default: detected from the CPU; env `PICTURESQ_THREADS`, `PICTURESQ_BLOCK_PIXELS`), `--workers N`, `--memory-budget 2.5GB`, `-v/-q`.
+Global flags: `--out PATH` (redirect generated files), `--json` (machine-readable output), `--threads N` and `--block-pixels N` (default: detected from the CPU; env `PICTURESQ_THREADS`, `PICTURESQ_BLOCK_PIXELS`), `--workers N` (most photos exported at once; default physical cores ÷ 2; env `PICTURESQ_WORKERS`), `--memory-budget 3GB` / `2.5GiB` (default 60 % of available memory; env `PICTURESQ_MEMORY_BUDGET`), `-v/-q`. These five are machine settings: they never change the output, so they are not in `picturesq.yaml`.
 Exit codes: 0 ok, 1 error, 2 invalid config/usage, 3 completed with flags (only with `--strict`).
 
 ### Project folder layout

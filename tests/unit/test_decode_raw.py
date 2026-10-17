@@ -9,7 +9,7 @@ import pytest
 
 from picturesq.colour.spaces import REC709_TO_REC2020
 from picturesq.config.project import DecodeConfig
-from picturesq.decode import DecodeError, decode_original
+from picturesq.decode import DecodeError, decode_original, read_pixel_count
 from picturesq.decode.raw import (
     DEMOSAIC_ALGORITHMS,
     HIGHLIGHT_MODES,
@@ -38,6 +38,14 @@ def test_non_raw_file_raises_decode_error(tmp_path: Path) -> None:
 def test_missing_file_raises_decode_error(tmp_path: Path) -> None:
     with pytest.raises(DecodeError):
         decode_original(tmp_path / "missing.raf", DecodeConfig())
+
+
+def test_pixel_count_of_unreadable_files_raises_decode_error(tmp_path: Path) -> None:
+    junk = tmp_path / "junk.dng"
+    junk.write_bytes(b"not a raw file" * 100)
+    for path in (junk, tmp_path / "missing.raf"):
+        with pytest.raises(DecodeError):
+            read_pixel_count(path)
 
 
 def test_camera_matrix_prefers_rgb_cam_and_keeps_white() -> None:

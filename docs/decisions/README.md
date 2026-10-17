@@ -19,3 +19,4 @@ New ADRs get the next number; superseded ones are marked, not deleted.
 | [0012](0012-sky-colour.md) | DNG-specification colour matrices and a camera-matched blue rendering | Accepted |
 | [0013](0013-pixel-aligned-colour-gate.md) | The colour gate compares chroma at the same pixels | Accepted |
 | [0014](0014-export-metadata.md) | Exports carry allowlisted capture EXIF and a reproducible sidecar | Accepted |
+| [0015](0015-parallelism-policy.md) | Threads within a photo, photos scheduled by memory, and both as machine settings | Accepted |

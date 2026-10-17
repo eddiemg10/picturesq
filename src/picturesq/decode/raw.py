@@ -17,7 +17,7 @@ import rawpy
 from numpy.typing import NDArray
 
 # rawpy re-exports these at runtime, but its type stubs only declare them in rawpy._rawpy.
-from rawpy._rawpy import ColorSpace, DemosaicAlgorithm, HighlightMode, LibRawError
+from rawpy._rawpy import ColorSpace, DemosaicAlgorithm, HighlightMode, LibRawError, RawPy
 
 from picturesq.colour.spaces import REC709_TO_REC2020, REC709_TO_XYZ, Matrix, apply_matrix
 from picturesq.config.project import DecodeConfig
@@ -146,6 +146,22 @@ def decode_original(
         np.multiply(rgb16, np.float32(gain / _UINT16_MAX), out=image, dtype=np.float32)
     del rgb16
     return apply_matrix_in_blocks(image, matrix)
+
+
+def read_pixel_count(path: Path) -> int:
+    """Pixels the decoded image of ``path`` has at most (before the default crop).
+
+    Reads only the file's header (milliseconds): nothing is unpacked or demosaiced. Used to
+    size the worker pool before any photo is decoded. Raises DecodeError like decoding.
+    """
+    raw = RawPy()
+    try:
+        raw.open_file(str(path))
+        return int(raw.sizes.width) * int(raw.sizes.height)
+    except (LibRawError, OSError, ValueError) as err:
+        raise DecodeError(f"cannot read {path.name}: {err}") from err
+    finally:
+        raw.close()
 
 
 def default_crop_box(sizes: Any, shape: tuple[int, int]) -> Box | None:
