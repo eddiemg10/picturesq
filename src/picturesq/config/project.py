@@ -30,6 +30,14 @@ class DecodeConfig(_Model):
     highlight_mode: Literal["clip", "ignore", "blend", "reconstruct"] = Field(
         default="blend", description="How LibRaw treats clipped sensor highlights."
     )
+    colour_matrix: Literal["dng", "libraw"] = Field(
+        default="dng",
+        description=(
+            "Camera colour matrix. 'dng': as the DNG specification says, blending the file's "
+            "two colour matrices by the photo's white balance (ADR-0012); 'libraw': LibRaw's "
+            "matrix (always the daylight one). Non-DNG RAWs always use LibRaw's."
+        ),
+    )
     lens_corrections: bool = Field(
         default=False,
         description=(
@@ -125,6 +133,75 @@ class NormaliseConfig(_Model):
     chroma_nr: ChromaNoiseReductionConfig = Field(default_factory=ChromaNoiseReductionConfig)
 
 
+class BlueRenderingConfig(_Model):
+    """Render blues (skies) the way camera JPEGs do: deeper, more colourful, a little cyan.
+
+    A camera-matching adjustment in the display transform (ADR-0012), not a creative look.
+    Measured against the DJI Pocket 4's and DJI drone's JPEGs, an accurate render of a blue
+    sky is paler, lighter and ~4 degrees more purple than the camera's; the defaults are fitted
+    to those JPEGs (and checked on held-out photos). Other makers differ (Fujifilm's skies
+    are close to accurate), so this is the one place the neutral render leans toward DJI's
+    look. Set ``enabled: false`` for a colorimetric sky.
+
+    Applied in display-referred Oklab: a pixel's weight is a raised-cosine window in hue
+    around ``hue`` (zero beyond ``hue_width``) times a ramp in chroma from ``chroma_start``
+    to ``chroma_full``, so greys, whites and other hues are untouched.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description=(
+            "Apply the camera-matched blue rendering; false leaves blues as the colour "
+            "matrix and display transform give them (colorimetric)."
+        ),
+    )
+    hue: float = Field(
+        default=250.0,
+        ge=0.0,
+        lt=360.0,
+        description="Centre of the affected hues (Oklab hue, degrees).",
+    )
+    hue_width: float = Field(
+        default=70.0,
+        gt=0.0,
+        le=120.0,
+        description="Hues this far (degrees) or further from the centre are untouched.",
+    )
+    hue_shift: float = Field(
+        default=-4.0,
+        ge=-30.0,
+        le=30.0,
+        description="Hue rotation at the window's centre (degrees); negative turns blue to cyan.",
+    )
+    chroma: float = Field(
+        default=1.3,
+        ge=0.5,
+        le=2.0,
+        description="Chroma (colourfulness) scale at the centre; 1 is none.",
+    )
+    lightness: float = Field(
+        default=0.94, ge=0.5, le=1.5, description="Lightness scale at the centre; below 1 darkens."
+    )
+    chroma_start: float = Field(
+        default=0.01,
+        ge=0.0,
+        le=0.2,
+        description="Oklab chroma below which pixels are untouched (greys and whites).",
+    )
+    chroma_full: float = Field(
+        default=0.05,
+        gt=0.0,
+        le=0.4,
+        description="Oklab chroma at and above which the full adjustment applies.",
+    )
+
+    @model_validator(mode="after")
+    def _ramp_rises(self) -> "BlueRenderingConfig":
+        if self.chroma_full <= self.chroma_start:
+            raise ValueError("chroma_full must be greater than chroma_start")
+        return self
+
+
 class DisplayTransformConfig(_Model):
     """The AgX-style display transform (ADR-0003): inset → log encode → sigmoid → outset.
 
@@ -174,10 +251,10 @@ class DisplayTransformConfig(_Model):
         ),
     )
     saturation: float = Field(
-        default=1.25, ge=0.0, le=3.0, description="Overall chroma scale after the curve; 1 is none."
+        default=1.15, ge=0.0, le=3.0, description="Overall chroma scale after the curve; 1 is none."
     )
     saturation_fade: float = Field(
-        default=1.0,
+        default=0.7,
         ge=0.0,
         le=1.0,
         description=(
@@ -189,6 +266,7 @@ class DisplayTransformConfig(_Model):
         default=(0.35, 0.35, 0.35),
         description="How much saturation each primary (R, G, B) gets back after the curve.",
     )
+    blue_rendering: BlueRenderingConfig = Field(default_factory=BlueRenderingConfig)
 
     @model_validator(mode="after")
     def _curve_reaches_black_and_white(self) -> "DisplayTransformConfig":

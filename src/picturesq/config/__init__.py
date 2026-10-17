@@ -2,6 +2,7 @@
 
 from picturesq.config.project import (
     CONFIG_FILENAME,
+    BlueRenderingConfig,
     ChromaNoiseReductionConfig,
     DecodeConfig,
     DisplayTransformConfig,
@@ -23,6 +24,7 @@ from picturesq.config.yaml_io import (
 
 __all__ = [
     "CONFIG_FILENAME",
+    "BlueRenderingConfig",
     "ChromaNoiseReductionConfig",
     "ConfigError",
     "DecodeConfig",
