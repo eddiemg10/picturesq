@@ -52,19 +52,27 @@ def render_scene(image: NDArray[np.float32], config: ProjectConfig) -> NDArray[n
 
 
 def render_output(
-    image: NDArray[np.float32], output: OutputConfig, display: DisplayTransformConfig
+    image: NDArray[np.float32],
+    output: OutputConfig,
+    display: DisplayTransformConfig,
+    *,
+    consume: bool = False,
 ) -> NDArray[np.uint8]:
     """Resize, display transform, sRGB encode, sharpen and quantise ``image`` for one output.
 
-    ``image`` is never modified. Works in blocks on several cores (``picturesq.parallel``):
-    the display transform and sRGB encoding a block of pixels at a time, then sharpening
-    and quantising a block of rows at a time, straight into the 8-bit result. Only one
-    full-size float copy exists besides ``image``.
+    Works in blocks on several cores (``picturesq.parallel``): the display transform and
+    sRGB encoding a block of pixels at a time, then sharpening and quantising a block of
+    rows at a time, straight into the 8-bit result.
+
+    ``image`` is left unchanged unless ``consume`` is set: then the caller is done with it,
+    and an output that isn't resized transforms it in place instead of into a new array,
+    saving one full-resolution float copy (12 bytes per pixel). The pixels are the same
+    either way. A resized output always works on its own (smaller) array.
     """
     sized = resize_to_long_edge(image, output.long_edge)
-    # The same object back means `image` is still needed by the caller, so the transform
-    # gets a new array. A resized array is ours to overwrite.
-    encoded = sized if sized is not image else np.empty_like(sized)
+    # The same object back means no resize happened: transform into a new array unless the
+    # caller has given `image` up. A resized array is ours to overwrite.
+    encoded = sized if sized is not image or consume else np.empty_like(sized)
     curve = AgxCurve.from_config(display)
     source, target = sized.reshape(-1, 3), encoded.reshape(-1, 3)
 
@@ -154,10 +162,12 @@ def export_originals(
             capture = read_capture_exif(original)
             original_sha256 = sha256_file(original)
             image = render_scene(decode_original(original, config.decode), config)
-            for name in names:
+            for index, name in enumerate(names):
                 spec = config.export.outputs[name]
                 path = exports_dir / name / f"{original.stem}.jpg"
-                pixels = render_output(image, spec, config.grade.display_transform)
+                # The last output may use up the scene image: nothing reads it afterwards.
+                last = index == len(names) - 1
+                pixels = render_output(image, spec, config.grade.display_transform, consume=last)
                 height, width = pixels.shape[:2]
                 exif = export_exif(capture, width=width, height=height, software=SOFTWARE)
                 write_jpeg(pixels, path, quality=spec.quality, exif=exif)
