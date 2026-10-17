@@ -15,6 +15,7 @@ from picturesq.config.project import (
     ProjectConfig,
     SharpenConfig,
 )
+from picturesq.config.schema import dump_schema, project_schema
 from picturesq.config.yaml_io import (
     ConfigError,
     dump_project_config,
@@ -38,6 +39,8 @@ __all__ = [
     "ProjectConfig",
     "SharpenConfig",
     "dump_project_config",
+    "dump_schema",
     "load_project_config",
+    "project_schema",
     "save_project_config",
 ]
