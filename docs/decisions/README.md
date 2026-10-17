@@ -18,3 +18,4 @@ New ADRs get the next number; superseded ones are marked, not deleted.
 | [0011](0011-local-contrast.md) | Local contrast keeps the detail the display transform's shoulder flattens | Accepted |
 | [0012](0012-sky-colour.md) | DNG-specification colour matrices and a camera-matched blue rendering | Accepted |
 | [0013](0013-pixel-aligned-colour-gate.md) | The colour gate compares chroma at the same pixels | Accepted |
+| [0014](0014-export-metadata.md) | Exports carry allowlisted capture EXIF and a reproducible sidecar | Accepted |

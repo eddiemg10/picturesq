@@ -1,4 +1,4 @@
-"""Render each original and write every enabled output (v0: decode -> display -> export)."""
+"""Render each original and write every enabled output, each with EXIF and a sidecar."""
 
 import time
 from collections.abc import Callable, Sequence
@@ -8,16 +8,27 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
+from picturesq import __version__
 from picturesq.colour.display import display_transform
 from picturesq.colour.transfer import srgb_encode
 from picturesq.config import DisplayTransformConfig, OutputConfig, ProjectConfig
-from picturesq.decode import DecodeError, decode_original
-from picturesq.export import resize_to_long_edge, to_8bit, write_jpeg
+from picturesq.decode import DecodeError, decode_original, read_capture_exif
+from picturesq.export import (
+    export_exif,
+    resize_to_long_edge,
+    sha256_file,
+    sidecar_document,
+    sidecar_path,
+    to_8bit,
+    write_jpeg,
+    write_sidecar,
+)
 from picturesq.export.sharpen import sharpen
 from picturesq.grade import grade
 from picturesq.normalise import normalise
 
 EXPORTS_DIRNAME = "exports"
+SOFTWARE = f"picturesq {__version__}"
 
 # Scene-linear stages that run after decode, as (name, fn(image, config) -> image). Stages
 # may modify the image in place. Grade's look operations (M3) are added here; render_scene
@@ -101,7 +112,8 @@ def export_originals(
     outputs: Sequence[str] | None = None,
     on_photo: Callable[[PhotoResult], None] | None = None,
 ) -> ExportResult:
-    """Render ``originals`` and write ``<exports_dir>/<output>/<stem>.jpg`` per output.
+    """Render ``originals`` and write ``<exports_dir>/<output>/<stem>.jpg`` per output, each
+    with the original's capture EXIF and a ``<stem>.picturesq.json`` sidecar.
 
     ``outputs`` restricts the run to the named outputs (default: the enabled ones, in
     config order). A photo that fails to decode is recorded and the run continues.
@@ -115,15 +127,26 @@ def export_originals(
         photo_started = time.perf_counter()
         result = PhotoResult(name=original.name)
         try:
+            capture = read_capture_exif(original)
+            original_sha256 = sha256_file(original)
             image = render_scene(decode_original(original, config.decode), config)
             for name in names:
                 spec = config.export.outputs[name]
                 path = exports_dir / name / f"{original.stem}.jpg"
-                write_jpeg(
-                    render_output(image, spec, config.grade.display_transform),
-                    path,
-                    quality=spec.quality,
+                pixels = render_output(image, spec, config.grade.display_transform)
+                height, width = pixels.shape[:2]
+                exif = export_exif(capture, width=width, height=height, software=SOFTWARE)
+                write_jpeg(pixels, path, quality=spec.quality, exif=exif)
+                del pixels
+                # After the JPEG: a sidecar on disk means its export is complete.
+                document = sidecar_document(
+                    version=__version__,
+                    original=original,
+                    original_sha256=original_sha256,
+                    output=name,
+                    config=config,
                 )
+                write_sidecar(sidecar_path(path), document)
                 result.outputs[name] = path
             del image
         except (DecodeError, OSError) as error:

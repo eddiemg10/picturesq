@@ -1,12 +1,11 @@
 """YAML load/save for config models. Writes are atomic (ADR-0004)."""
 
-import os
-import tempfile
 from pathlib import Path
 
 import yaml
 from pydantic import ValidationError
 
+from picturesq.atomic import atomic_write
 from picturesq.config.project import ProjectConfig
 
 
@@ -57,14 +56,4 @@ def save_project_config(config: ProjectConfig, path: Path) -> None:
     A crash mid-write leaves the old file intact, and a watcher (the UI) never reads a
     half-written file.
     """
-    text = dump_project_config(config)
-    fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as file:
-            file.write(text)
-            file.flush()
-            os.fsync(file.fileno())
-        os.replace(temp_name, path)
-    except BaseException:
-        Path(temp_name).unlink(missing_ok=True)
-        raise
+    atomic_write(path, dump_project_config(config).encode("utf-8"))

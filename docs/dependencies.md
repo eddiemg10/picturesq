@@ -29,6 +29,7 @@ convert to 8-bit only when handing the array to Pillow.
 | hypothesis | Property-based tests for the colour and normalise maths. |
 | colour-science | Test oracle: our colour maths is checked against it. Never imported by `src/`. |
 | types-pyyaml | Type stubs so pyright can check YAML code. |
+| jsonschema | Checks that `picturesq schema` is a valid JSON Schema and that the documented config validates against it. |
 | ruff | Lint and format. |
 | pyright | Type checking. |
 | pre-commit | Git hooks (including the large-file check). |

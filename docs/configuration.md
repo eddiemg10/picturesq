@@ -11,6 +11,10 @@ lisbon/
 
 You don't need to write it: `picturesq run` creates it with defaults, and `picturesq ui` edits it for you. Coding agents can edit it directly. Every key is optional, so an empty file (or `{}`) means "all defaults".
 
+The machine-readable version of this page is the JSON Schema: `picturesq schema` prints it, and [`docs/schema/picturesq.schema.json`](schema/picturesq.schema.json) is a copy. Agents and editors can validate a `picturesq.yaml` against it.
+
+Every export records the config that rendered it in its **sidecar** (`exports/<output>/<photo>.picturesq.json`); the sidecar's `config` section is a valid `picturesq.yaml`.
+
 > **Status:** config format version `1`, pre-alpha. This page documents what exists today (`decode`, `normalise`, `grade.local_contrast`, `grade.display_transform`, `export`). Sections for looks, adjustments and per-photo overrides are added as those stages ship.
 
 ## Defaults
