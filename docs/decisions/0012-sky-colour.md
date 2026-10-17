@@ -27,10 +27,15 @@ We measured where the difference comes from, step by step, on 10 same-frame phot
 - **Fading chroma preservation with scene brightness** (to whiten light sources, for the Pentax near-whites): no effect; those near-whites aren't light sources.
 
 ## Consequences
-- + Skies match the camera: blue-sky hue −0.0 … +0.3° (median) and chroma 1.00–1.03× (was +4.9° and 0.83×).
-- + The reference set passes the colour gate; the CC0 darkest band (1.25 → 1.17) now passes too.
+- + Skies match the camera: median blue-sky hue +0.2° and chroma 1.03× of the camera's (was +4.9° and 0.83×), on 10 same-frame photos with blue sky.
+- + Full-resolution gate (`scripts/compare.py`), chroma ratio per lightness band:
+
+  | set | before (ADR-0011) | after |
+  |---|---|---|
+  | reference | 0.89 1.04 1.05 **0.74** 0.86 0.88 | 0.93 1.03 1.07 0.96 0.92 0.81: **gate passes** (brightness 0.25 EV, no extra clipping) |
+  | CC0 | **1.25** 1.19 1.13 0.95 1.02 **1.51** | 1.17 1.15 1.09 0.93 1.04 **1.56** (brightness 0.46 EV, no extra clipping) |
 - + Warm and tungsten-lit scenes use the right camera matrix (the Pentax K-5 IIs interior takes 74 % of the tungsten matrix, the waxworks stage light 44 %).
-- − **The CC0 colour gate still fails in the near-white band (1.51)**: both Pentax samples render a white card / blanket cream where the Pentax JPEG shows it white. The tint is already in the scene-linear decode with the DNG's own `AsShotNeutral`, so the camera's JPEG used a more neutralising white balance than it recorded. That is white-balance work (M2) and is tracked separately, as is the gate comparing different pixels when brightness differs (see the PR).
+- − **The CC0 colour gate still fails in the near-white band (1.56)**: both Pentax samples render a white card / blanket cream where the Pentax JPEG shows it white. The tint is already in the scene-linear decode with the DNG's own `AsShotNeutral`, so the camera's JPEG used a more neutralising white balance than it recorded. That is white-balance work (M2), tracked in #57; the gate comparing different pixels when brightness differs is #58.
 - − Skies from other makers come out slightly more saturated than their own JPEGs (Fujifilm X-S10 ~1.14×). `blue_rendering.enabled: false` is the escape hatch.
-- − Per-photo sky hue still varies around the camera's by −5.6 … +5.4° (median +0.2°): the camera's sky rendering isn't a single fixed rotation.
+- − Per-photo sky hue still varies around the camera's by −5.6 … +5.4°: the camera's sky rendering isn't a single fixed rotation.
 - Cost: blue rendering converts each block to Oklab once (~0.3 s per 33 MP image); the DNG matrix is computed once per photo.
