@@ -39,7 +39,7 @@ def resize_to_long_edge(image: FloatArray, long_edge: int | None) -> FloatArray:
     out = np.empty((size[1], size[0], image.shape[2]), dtype=np.float32)
 
     def resize_channel(channel: int) -> None:  # Pillow releases the GIL while resizing
-        plane = Image.fromarray(np.ascontiguousarray(image[..., channel]))
+        plane = _pillow_plane(image, channel)
         sharp = np.asarray(plane.resize(size, Image.Resampling.LANCZOS))
         area = np.asarray(plane.resize(size, Image.Resampling.BOX))
         np.clip(
@@ -51,6 +51,20 @@ def resize_to_long_edge(image: FloatArray, long_edge: int | None) -> FloatArray:
 
     parallel.run(partial(resize_channel, channel) for channel in range(image.shape[2]))
     return out
+
+
+def _pillow_plane(image: FloatArray, channel: int) -> Image.Image:
+    """One channel of ``image`` as a Pillow float image, copied a block of rows at a time.
+
+    Pillow always copies an array it is given, so handing it a contiguous copy of the whole
+    plane would hold two full-resolution planes per channel (8 bytes per pixel, 24 with the
+    three channels resizing at once). Pasting row bands holds only Pillow's own plane.
+    """
+    height, width = image.shape[:2]
+    plane = Image.new("F", (width, height))
+    for top, bottom in parallel.row_blocks(height, width):
+        plane.paste(Image.fromarray(np.ascontiguousarray(image[top:bottom, :, channel])), (0, top))
+    return plane
 
 
 def _neighbourhood(plane: FloatArray, combine: np.ufunc) -> FloatArray:

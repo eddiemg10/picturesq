@@ -10,23 +10,27 @@ real originals in a fresh process and fails if the measured peak exceeds this mo
 them when a change makes the pipeline leaner; a change that needs them raised has added a
 full-resolution array (12 bytes per pixel) and should say why.
 
-Measured on Linux, default config, ``web`` + ``archive`` outputs, 4 threads (2026-10-17):
+Measured on Linux, default config, ``web`` + ``archive`` outputs, 4 threads (2026-10-17,
+after #69):
 
-- DJI FC4382 sample, 12.1 MP: 571 MiB in 13 s
-- Pocket 4, 33.2 MP: 1206 MiB in 28 s
+- DJI FC4382 sample, 12.1 MP: 589 MiB
+- Pocket 4, 33.2 MP: 1031 MiB (was 1206 MiB before #69)
 
-That is ~32 bytes per pixel (the scene image, the output's encoded copy and the 8-bit
-result) over ~205 MiB of overhead; the constants below leave ~10 % headroom, less than
-one extra full-resolution array. Per-thread temporaries are block-sized, so the thread
-count barely moves the peak (glibc's per-thread memory pools would; see
-``parallel.limit_allocator_arenas``).
+The peak is the ``web`` output's resize: the scene image plus one Pillow copy of each
+channel, three resized at once (24 bytes per pixel), plus Pillow's half-resized
+intermediates, which grow with the photo's height rather than its area (~220 MiB at
+33 MP). The fixed part below covers those and the interpreter; with ~26 bytes per pixel
+the model leaves ~10 % headroom at both sizes, less than one extra full-resolution array.
+Per-thread temporaries are block-sized, so the thread count barely moves the peak (glibc's
+per-thread memory pools would; see ``parallel.limit_allocator_arenas``); fewer threads
+resize fewer channels at once, so the model is an upper bound for them too.
 """
 
 from typing import Final
 
-PROCESS_OVERHEAD_BYTES: Final = 256 * 2**20
-"""Python, numpy, rawpy and friends, plus what doesn't scale with the photo."""
-PEAK_BYTES_PER_PIXEL: Final = 34
+PROCESS_OVERHEAD_BYTES: Final = 352 * 2**20
+"""Python, numpy, rawpy and friends, plus what doesn't scale with the photo's area."""
+PEAK_BYTES_PER_PIXEL: Final = 26
 """Full-resolution arrays alive at the peak (a float32 RGB image is 12 bytes per pixel)."""
 
 

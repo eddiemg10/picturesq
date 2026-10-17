@@ -139,34 +139,37 @@ Dropped after measurement (ADR-0010): key detection with per-key targets and the
 | Full-resolution float32 RGB image | ~380 MiB per array |
 | Full-resolution 16-bit TIFF on disk | ~200 MB |
 | 2048 px float16 proxy on disk | ~14 MB |
-| **Photo peak** (measured, `web` + `archive`, 4 threads) | **1206 MiB** (12.1 MP DJI sample: 571 MiB); was 1776 MiB before #68 |
+| **Photo peak** (measured, `web` + `archive`, 4 threads) | **1031 MiB** (12.1 MP DJI sample: 589 MiB); was 1776 MiB before #68, 1206 MiB before #69 |
 | Whole export (measured, 4 threads) | **28 s** (12.1 MP DJI sample: 13 s); was 63 s on one thread before #68 |
 | Per-pixel operation on a 1000 px proxy | ~5–30 ms |
 
 Measured per stage on the Pocket 4 photo (2026-10-17, Linux, i5-8250U: 4 cores / 8 hardware
 threads; memory is the process's high-water mark during the stage, above the ~55 MiB the
 interpreter starts at). "Before" is one thread with the old 256k-pixel blocks; "after" is #68's
-automatic settings (4 threads, 64k-pixel blocks):
+automatic settings (4 threads, 64k-pixel blocks); "#69" adds banded Pillow planes and the
+last output transforming the scene image in place (its memory includes the interpreter;
+times preliminary, measured on a busy machine):
 
-| Stage | Before | After |
-|---|---|---|
-| decode | 3.1 s · 570 MiB | 3.3 s · 568 MiB (LibRaw; not ours to thread) |
-| normalise | 8.5 s · 772 MiB | 4.2 s · 1101 MiB (three channels resized at once) |
-| grade | 7.3 s · 643 MiB | 4.0 s · 652 MiB |
-| output `web` | 5.6 s · 815 MiB | 2.4 s · 1150 MiB |
-| output `archive` | 40.8 s · 1724 MiB | 16.2 s · 929 MiB |
+| Stage | Before | After | #69 |
+|---|---|---|---|
+| decode | 3.1 s · 570 MiB | 3.3 s · 568 MiB (LibRaw; not ours to thread) | 3.0 s · 625 MiB |
+| normalise | 8.5 s · 772 MiB | 4.2 s · 1101 MiB (three channels resized at once) | 4.1 s · 844 MiB |
+| grade | 7.3 s · 643 MiB | 4.0 s · 652 MiB | 3.3 s · 706 MiB |
+| output `web` | 5.6 s · 815 MiB | 2.4 s · 1150 MiB | 2.8 s · 1012 MiB |
+| output `archive` | 40.8 s · 1724 MiB | 16.2 s · 929 MiB | 14.9 s · 903 MiB (JPEG writing; the render 606 MiB) |
 
 What's left: the display transform is ~9 s of `archive` on 4 threads, ~6 s of it blue
 rendering, which converts every pixel to Oklab just to find the blue ones (an algorithmic
 fix, not a threading one). Threads stop helping beyond the physical cores: hyperthreads
-share a core's arithmetic units and cache. The photo peak is modelled as ~205 MiB + ~32 bytes
-per pixel; `picturesq.pipeline.budget` holds the model and
+share a core's arithmetic units and cache. The photo peak is now the `web` output's resize
+(the scene image plus a Pillow copy of each channel, and Pillow's half-resized intermediates);
+it is modelled as 352 MiB + 26 bytes per pixel; `picturesq.pipeline.budget` holds the model and
 `tests/integration/test_memory_budget.py` (`pytest -m slow`) fails if a real export
 exceeds it.
 
 **Rules**
 - Full-resolution stages operate in place where possible (`np.multiply(a, b, out=a)`), process neighbourhood operations in row tiles, and free arrays eagerly.
-- Worker count = `min(cores, floor(memory_budget / photo_peak))`. `photo_peak` is measured by a test, not guessed (1.18 GiB for a 33 MP photo). Each photo also uses one thread per physical core over cache-sized blocks (`picturesq.parallel`); threads and block size are detected per machine and never change the output.
+- Worker count = `min(cores, floor(memory_budget / photo_peak))`. `photo_peak` is measured by a test, not guessed (1.01 GiB for a 33 MP photo). Each photo also uses one thread per physical core over cache-sized blocks (`picturesq.parallel`); threads and block size are detected per machine and never change the output.
 - Interactive paths never touch full-resolution data.
 - Budgets are enforced by tests (§8).
 

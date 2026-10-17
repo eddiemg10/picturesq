@@ -78,3 +78,19 @@ def test_ordinary_edges_keep_lanczos_sharpness() -> None:
     lanczos = np.asarray(plane.resize((200, 20), Image.Resampling.LANCZOS))
     inside = (lanczos >= 0.0) & (lanczos <= 1.0)
     assert np.allclose(out[..., 0][inside], lanczos[inside], atol=0.02)
+
+
+def test_planes_copied_in_row_bands_match_whole_plane_copies() -> None:
+    """Pillow gets each channel a band of rows at a time; its plane must be the same."""
+    from PIL import Image
+
+    from picturesq import parallel
+    from picturesq.export.resize import _pillow_plane
+
+    rng = np.random.default_rng(3)
+    image = (rng.random((97, 143, 3), dtype=np.float32) * 5.0).astype(np.float32)
+    with parallel.using(parallel.Parallelism(threads=1, block_pixels=500)):  # 28 bands
+        for channel in range(3):
+            whole = Image.fromarray(np.ascontiguousarray(image[..., channel]))
+            banded = _pillow_plane(image, channel)
+            np.testing.assert_array_equal(np.asarray(banded), np.asarray(whole))
