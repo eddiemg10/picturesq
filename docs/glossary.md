@@ -49,6 +49,7 @@
 |---|---|---|
 | **pipeline** | The full chain: decode → normalise → grade → export. | workflow, process |
 | **photo peak** | The most memory one process uses at once to export one photo; measured by a test and used to size the worker pool. | peak memory, footprint |
+| **block** | A run of pixels or rows that one thread works on at a time, sized to fit the CPU cache (`--block-pixels`). Code only, and CLI/docs about performance. | tile (for row ranges), chunk, batch |
 | **stage** | One of the four pipeline steps below. | phase (that's project management), step |
 | **decode** | Stage 1: original → scene-linear image in the working space (rawpy/LibRaw), plus proxy. | develop, import, convert, ingest |
 | **normalise** | Stage 2: adaptive per-photo correction to a common baseline (exposure, WB check, chroma NR). | auto, correct, balance |

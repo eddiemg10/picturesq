@@ -7,7 +7,7 @@ from typing import Annotated
 
 import typer
 
-from picturesq import __version__
+from picturesq import __version__, parallel
 from picturesq.cli.decode import decode_project
 from picturesq.cli.export import render_project
 from picturesq.config import dump_schema, project_schema
@@ -45,8 +45,28 @@ def main(
         bool,
         typer.Option("--version", callback=_version_callback, is_eager=True, help="Show version."),
     ] = False,
+    threads: Annotated[
+        int | None,
+        typer.Option(
+            "--threads",
+            min=1,
+            envvar="PICTURESQ_THREADS",
+            help="Threads per photo (default: one per physical core).",
+        ),
+    ] = None,
+    block_pixels: Annotated[
+        int | None,
+        typer.Option(
+            "--block-pixels",
+            min=1024,
+            envvar="PICTURESQ_BLOCK_PIXELS",
+            help="Pixels per block of work (default: from the CPU cache size).",
+        ),
+    ] = None,
 ) -> None:
     """picturesq: decode, normalise, grade, export."""
+    # Machine settings, not project config: they never change the output (bit-identical).
+    parallel.use(parallel.auto(threads=threads, block_pixels=block_pixels))
 
 
 @app.command()

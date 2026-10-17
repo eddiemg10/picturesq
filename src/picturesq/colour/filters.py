@@ -53,12 +53,18 @@ def upsample_rows(small: FloatArray, height: int, width: int, top: int, bottom: 
     return rows[:, x0] * (1.0 - fx) + rows[:, x1] * fx
 
 
+def gaussian_radius(sigma: float) -> int:
+    """Kernel radius of ``gaussian_blur_plane``: ``ceil(3 * sigma)``, at least 1."""
+    return max(1, int(np.ceil(3.0 * sigma)))
+
+
 def gaussian_blur_plane(plane: FloatArray, sigma: float) -> FloatArray:
     """Exact Gaussian blur of a 2-D float32 plane by separable convolution (small sigmas).
 
-    Kernel radius ``ceil(3 * sigma)``; edges repeat the border pixel. Memory: two planes.
+    Kernel radius ``gaussian_radius(sigma)``; edges repeat the border pixel. Memory: two
+    planes.
     """
-    radius = max(1, int(np.ceil(3.0 * sigma)))
+    radius = gaussian_radius(sigma)
     taps = np.exp(-0.5 * (np.arange(-radius, radius + 1) / sigma) ** 2)
     taps = (taps / taps.sum()).astype(np.float32)
     out = plane

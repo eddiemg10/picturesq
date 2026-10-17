@@ -24,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 
-from picturesq import __version__
+from picturesq import __version__, parallel
 from picturesq.config import OutputConfig, ProjectConfig
 from picturesq.decode import DecodeError, decode_original, find_originals
 from picturesq.decode.embedded import camera_jpeg
@@ -60,6 +60,7 @@ def table(photos: list[PhotoComparison]) -> str:
 
 
 def main() -> int:
+    parallel.use(parallel.auto())
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter
     )

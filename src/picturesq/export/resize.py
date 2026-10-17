@@ -1,8 +1,12 @@
 """Resize an image to a long-edge size, in float32 (no 8-bit quantisation)."""
 
+from functools import partial
+
 import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
+
+from picturesq import parallel
 
 FloatArray = NDArray[np.float32]
 
@@ -33,7 +37,8 @@ def resize_to_long_edge(image: FloatArray, long_edge: int | None) -> FloatArray:
     scale = long_edge / long_side
     size = (max(1, round(width * scale)), max(1, round(height * scale)))
     out = np.empty((size[1], size[0], image.shape[2]), dtype=np.float32)
-    for channel in range(image.shape[2]):
+
+    def resize_channel(channel: int) -> None:  # Pillow releases the GIL while resizing
         plane = Image.fromarray(np.ascontiguousarray(image[..., channel]))
         sharp = np.asarray(plane.resize(size, Image.Resampling.LANCZOS))
         area = np.asarray(plane.resize(size, Image.Resampling.BOX))
@@ -43,6 +48,8 @@ def resize_to_long_edge(image: FloatArray, long_edge: int | None) -> FloatArray:
             _neighbourhood(area, np.maximum),
             out=out[..., channel],
         )
+
+    parallel.run(partial(resize_channel, channel) for channel in range(image.shape[2]))
     return out
 
 

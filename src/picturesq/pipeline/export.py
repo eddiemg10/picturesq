@@ -3,13 +3,15 @@
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
 
-from picturesq import __version__
-from picturesq.colour.display import display_transform
+from picturesq import __version__, parallel
+from picturesq.colour.agx import AgxCurve, agx
+from picturesq.colour.filters import gaussian_radius
 from picturesq.colour.transfer import srgb_encode
 from picturesq.config import DisplayTransformConfig, OutputConfig, ProjectConfig
 from picturesq.decode import DecodeError, decode_original, read_capture_exif
@@ -23,12 +25,15 @@ from picturesq.export import (
     write_jpeg,
     write_sidecar,
 )
-from picturesq.export.sharpen import sharpen
+from picturesq.export.sharpen import sharpened_rows
 from picturesq.grade import grade
 from picturesq.normalise import normalise
 
 EXPORTS_DIRNAME = "exports"
 SOFTWARE = f"picturesq {__version__}"
+SHARPEN_BAND_RADII = 8
+"""Sharpening bands are at least this many blur radii tall (measured in #68: 8-row bands
+on a 7680 px wide image were 2.5x slower than 32-row ones)."""
 
 # Scene-linear stages that run after decode, as (name, fn(image, config) -> image). Stages
 # may modify the image in place. Grade's look operations (M3) are added here; render_scene
@@ -51,15 +56,34 @@ def render_output(
 ) -> NDArray[np.uint8]:
     """Resize, display transform, sRGB encode, sharpen and quantise ``image`` for one output.
 
-    ``image`` is never modified.
+    ``image`` is never modified. Works in blocks on several cores (``picturesq.parallel``):
+    the display transform and sRGB encoding a block of pixels at a time, then sharpening
+    and quantising a block of rows at a time, straight into the 8-bit result. Only one
+    full-size float copy exists besides ``image``.
     """
     sized = resize_to_long_edge(image, output.long_edge)
     # The same object back means `image` is still needed by the caller, so the transform
     # gets a new array. A resized array is ours to overwrite.
-    result = display_transform(sized, display, out=None if sized is image else sized)
-    srgb_encode(result, out=result)
-    sharpen(result, output.sharpen)
-    return to_8bit(result)
+    encoded = sized if sized is not image else np.empty_like(sized)
+    curve = AgxCurve.from_config(display)
+    source, target = sized.reshape(-1, 3), encoded.reshape(-1, 3)
+
+    def encode(block: slice) -> None:
+        agx(source[block], curve, out=target[block])
+        srgb_encode(target[block], out=target[block])
+
+    parallel.run(partial(encode, block) for block in parallel.pixel_blocks(len(source)))
+    height, width = encoded.shape[:2]
+    pixels = np.empty(encoded.shape, dtype=np.uint8)
+
+    def finish(top: int, bottom: int) -> None:
+        pixels[top:bottom] = to_8bit(sharpened_rows(encoded, output.sharpen, top, bottom))
+
+    # Each band also blurs its sharpening radius above and below; tall bands keep that small.
+    min_rows = SHARPEN_BAND_RADII * gaussian_radius(output.sharpen.radius)
+    bands = parallel.row_blocks(height, width, min_rows=min_rows)
+    parallel.run(partial(finish, *rows) for rows in bands)
+    return pixels
 
 
 class StemCollisionError(Exception):

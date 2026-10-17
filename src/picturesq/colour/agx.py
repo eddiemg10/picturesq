@@ -33,10 +33,12 @@ scene 0.18 maps to display 0.18.
 """
 
 from dataclasses import dataclass, replace
+from functools import partial
 
 import numpy as np
 from numpy.typing import NDArray
 
+from picturesq import parallel
 from picturesq.colour.blue_rendering import blue_rendering
 from picturesq.colour.spaces import (
     REC709,
@@ -67,8 +69,6 @@ Linear interpolation between 4096 samples of this smooth curve is within ~2e-6 o
 exact maths (tested), far below an 8-bit step, and ~20x faster than evaluating the powers
 per pixel (about 1 s instead of 21 s on a 32 MP image).
 """
-BLOCK_PIXELS = 1 << 18
-"""``agx`` works through the image in blocks this size, so its temporaries stay small."""
 
 _REC2020_LUMINANCE = REC2020_TO_XYZ[1].astype(np.float32)
 _REC709_LUMINANCE = REC709_TO_XYZ[1].astype(np.float32)
@@ -203,10 +203,12 @@ def agx(image: FloatArray, curve: AgxCurve, out: FloatArray | None = None) -> Fl
     if not (image.flags.c_contiguous and out.flags.c_contiguous):
         _agx_block(image, curve, out)
         return out
+    # Blocks (``picturesq.parallel``) keep the temporaries in cache and run on several cores.
     pixels, results = image.reshape(-1, 3), out.reshape(-1, 3)  # views, not copies
-    for start in range(0, len(pixels), BLOCK_PIXELS):
-        block = slice(start, start + BLOCK_PIXELS)
-        _agx_block(pixels[block], curve, results[block])
+    parallel.run(
+        partial(_agx_block, pixels[block], curve, results[block])
+        for block in parallel.pixel_blocks(len(pixels))
+    )
     return out
 
 
