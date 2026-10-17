@@ -169,6 +169,14 @@
           "description": "Apply the DNG BaselineExposure tag (brightening the camera's deliberate underexposure).",
           "title": "Baseline Exposure",
           "type": "boolean"
+        },
+        "proxy_long_edge": {
+          "default": 2048,
+          "description": "Long edge of the cached proxy (pixels) used by previews and the UI. Proxies are never upscaled. Changing it rebuilds the cache.",
+          "maximum": 8192,
+          "minimum": 256,
+          "title": "Proxy Long Edge",
+          "type": "integer"
         }
       },
       "title": "DecodeConfig",

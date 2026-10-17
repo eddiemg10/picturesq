@@ -6,8 +6,7 @@ from pathlib import Path
 
 import typer
 
-from picturesq.cli.config import EXIT_INVALID, load_config_or_exit
-from picturesq.config import CONFIG_FILENAME, ProjectConfig, save_project_config
+from picturesq.cli.config import EXIT_ERROR, EXIT_INVALID, fail, project_config
 from picturesq.decode import find_originals
 from picturesq.pipeline.export import (
     EXPORTS_DIRNAME,
@@ -16,25 +15,6 @@ from picturesq.pipeline.export import (
     StemCollisionError,
     export_originals,
 )
-
-EXIT_ERROR = 1
-
-
-def _fail(message: str, code: int) -> typer.Exit:
-    typer.echo(f"error: {message}", err=True)
-    return typer.Exit(code=code)
-
-
-def _load_config(project: Path, *, create: bool) -> ProjectConfig:
-    """Load the project config; if missing use defaults, writing them only when ``create``."""
-    path = project / CONFIG_FILENAME
-    if path.exists():
-        return load_config_or_exit(project)
-    config = ProjectConfig()
-    if create:
-        save_project_config(config, path)
-        typer.echo(f"created {CONFIG_FILENAME} with defaults", err=True)
-    return config
 
 
 def _photo_line(photo: PhotoResult) -> str:
@@ -75,16 +55,16 @@ def render_project(
     """Shared body of `export` and `run`. Progress lines go to stdout; none in JSON mode."""
     project = Path(project_arg)
     if not project.is_dir():
-        raise _fail(f"{project} is not a folder", EXIT_INVALID)
-    config = _load_config(project, create=create_config)
+        raise fail(f"{project} is not a folder", EXIT_INVALID)
+    config = project_config(project, create=create_config)
     if output_names:
         unknown = [name for name in output_names if name not in config.export.outputs]
         if unknown:
             defined = ", ".join(sorted(config.export.outputs))
-            raise _fail(f"unknown output(s) {unknown}; defined: {defined}", EXIT_INVALID)
+            raise fail(f"unknown output(s) {unknown}; defined: {defined}", EXIT_INVALID)
     originals = find_originals(project)
     if not originals:
-        raise _fail(f"no originals found in {project}", EXIT_ERROR)
+        raise fail(f"no originals found in {project}", EXIT_ERROR)
 
     def report(photo: PhotoResult) -> None:
         if not as_json:
@@ -96,7 +76,7 @@ def render_project(
             originals, config, exports_dir, outputs=output_names or None, on_photo=report
         )
     except StemCollisionError as error:
-        raise _fail(str(error), EXIT_ERROR) from None
+        raise fail(str(error), EXIT_ERROR) from None
 
     if as_json:
         sys.stdout.write(_json_document(result) + "\n")

@@ -61,6 +61,15 @@ class DecodeConfig(_Model):
             "underexposure)."
         ),
     )
+    proxy_long_edge: int = Field(
+        default=2048,
+        ge=256,
+        le=8192,
+        description=(
+            "Long edge of the cached proxy (pixels) used by previews and the UI. Proxies are "
+            "never upscaled. Changing it rebuilds the cache."
+        ),
+    )
 
 
 Fraction = Annotated[float, Field(ge=0.0, lt=1.0)]
