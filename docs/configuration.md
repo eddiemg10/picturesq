@@ -24,6 +24,7 @@ decode:
   highlight_mode: blend
   colour_matrix: dng
   lens_corrections: false
+  default_crop: true
   baseline_exposure: true
 normalise:
   enabled: true
@@ -163,6 +164,7 @@ Setting `outputs` replaces the default outputs entirely, so list every output yo
 | `highlight_mode` | `clip` \| `ignore` \| `blend` \| `reconstruct` | `blend` | What to do where the sensor clipped (blown highlights). `clip` cuts to white; `ignore` leaves channels unclipped (can turn magenta); `blend` fades smoothly to white; `reconstruct` rebuilds detail from unclipped channels (slower). |
 | `colour_matrix` | `dng` \| `libraw` | `dng` | How camera colour becomes real colour. `dng`: as the DNG specification says, blending the file's two colour matrices (tungsten and daylight) by the photo's white balance; a tungsten-lit room gets mostly the tungsten matrix ([ADR-0012](decisions/0012-sky-colour.md)). `libraw`: LibRaw's matrix, which is always the daylight one. RAWs that aren't DNGs always use LibRaw's. |
 | `lens_corrections` | `true` \| `false` | `false` | Apply the lens corrections a DNG carries: vignetting gain maps and distortion / colour-fringing warps (`OpcodeList3`). **Experimental**: written from the DNG specification but not yet checked against a reference render, so it is off by default. Only for DNGs that are not stored rotated. |
+| `default_crop` | `true` \| `false` | `true` | Crop to the photo's frame as the original specifies it: the DNG `DefaultCrop` or the maker's equivalent (LibRaw reads both). Drops a few pixels of sensor border on most cameras, and the strips outside the aspect ratio the camera was set to (a Pentax Q7 set to 3:2 records the whole 4:3 sensor; with this on you get the 3:2 photo, like the camera's JPEG). |
 | `baseline_exposure` | `true` \| `false` | `true` | Apply the DNG `BaselineExposure` tag (brightening the camera's deliberate underexposure). Some cameras record the raw 2 to 4 stops dark on purpose; with this off, their photos decode that much too dark. Has no effect on originals without the tag. |
 
 The defaults for the first two keys may change during M1 while they are tested on real photos.
