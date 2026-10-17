@@ -76,6 +76,7 @@
 | **gamut fit** | Bringing an out-of-gamut colour into the display gamut by reducing its chroma at constant Oklab hue and lightness. |
 | **chroma** | How colourful a pixel is, independent of its lightness: the distance from grey in Oklab a/b. |
 | **ringing** | Over- and undershoot that sharp resampling filters (Lanczos) leave beside edges; **anti-ringing** clamps each result to the range of the nearby source pixels. |
+| **phase correlation** | Finding the shift between two images of the same scene from their Fourier transforms; the colour gate uses it to line our export up with the camera JPEG (ADR-0013). |
 | **lens corrections** | Vignetting gain maps and distortion / colour-fringing warps a DNG carries for renderers (`OpcodeList3`). |
 | **sharpening** | An unsharp mask on lightness at each output's final size. |
 | **path to white** | How a colour behaves as it gets brighter: with a good display transform it desaturates smoothly toward white instead of clipping to a skewed hue. |

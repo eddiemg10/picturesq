@@ -68,7 +68,7 @@ Photoshop-style GUI, local retouching, lens correction, cataloguing/DAM, ML trai
 | D14 | Distribution | **Public** GitHub repo from day one, MIT; PyPI via `uv tool install picturesq` | Build in public; free branch protection + CI; standard Python install path. |
 | D15 | Process | GitHub Issues + Project board as the only tracker; PR-only changes, CI-gated | Treat it as a product; small tasks the user can pick up. |
 | D16 | Vocabulary | [`glossary.md`](glossary.md) is binding; British spelling everywhere | Consistent, intentional language across code, CLI, config, docs and UI. |
-| D17 | Neutral render acceptance | The real export against the camera JPEG: brightness, chroma per lightness band, clipping (`scripts/compare.py`). [ADR-0010](decisions/0010-camera-matched-neutral-render.md) (supersedes 0009) | Judging an exposure-matched image hid that real exports were 2 stops dark. |
+| D17 | Neutral render acceptance | The real export against the camera JPEG: brightness, chroma per lightness band at the same pixels, clipping (`scripts/compare.py`). [ADR-0010](decisions/0010-camera-matched-neutral-render.md) (supersedes 0009), colour measure [ADR-0013](decisions/0013-pixel-aligned-colour-gate.md) | Judging an exposure-matched image hid that real exports were 2 stops dark. |
 | D18 | Camera colour | DNG-specification colour matrices (blended by white balance), and a camera-matched blue rendering that is on by default and can be turned off. [ADR-0012](decisions/0012-sky-colour.md) | LibRaw ignored half the DNG colour data; camera JPEGs render skies deeper and slightly cyan, and DJI's are the target. |
 
 ---
@@ -288,7 +288,7 @@ Project plan, glossary, ADRs, learning log, scaffold, CI, public repo with prote
 ### M1 — Decode & export (neutral render)
 Decode via rawpy into the working space; proxies + cache; AgX display transform fitted to camera JPEGs; exposure offset and chroma NR (pulled forward from M2, ADR-0010); output sharpening; sRGB JPEG export with ICC/EXIF; `decode`, `export`, `run`; `scripts/compare.py` contact sheet and gate: ours vs in-camera JPEG.
 **Concepts:** RAW/demosaic, linear vs display-referred, colour spaces and gamuts, display transforms.
-**Exit:** `scripts/compare.py` passes its gate on the CC0 samples and on the reference set (real export vs camera JPEG: median |ΔEV| ≤ 0.5, chroma per lightness band within 0.8–1.25, no extra clipping; [ADR-0010](decisions/0010-camera-matched-neutral-render.md)), the user judges the sheet comparable or better; memory budget test passes.
+**Exit:** `scripts/compare.py` passes its gate on the CC0 samples and on the reference set (real export vs camera JPEG: median |ΔEV| ≤ 0.5, chroma per lightness band (at the same pixels, ADR-0013) within 0.8–1.25, no extra clipping; [ADR-0010](decisions/0010-camera-matched-neutral-render.md)), the user judges the sheet comparable or better; memory budget test passes.
 
 ### M2 — Normalise
 Stats JSON, WB disagreement flag, overrides, flags, outliers, `normalise` command + contact sheet (exposure and chroma NR landed in M1, ADR-0010).

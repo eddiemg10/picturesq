@@ -2,7 +2,8 @@
 
 For each original: decode, run every stage, render the web output (exactly what
 `picturesq export` writes), and compare it with the JPEG embedded in the original:
-brightness (EV), chroma per lightness band, and clipped highlights. Prints a table and the
+brightness (EV), chroma per band of the camera's lightness at the same pixels (ADR-0013),
+and clipped highlights. Prints a table and the
 gate verdict, and writes one contact sheet (camera | ours per photo).
 
 By default it runs on the CC0 samples (reference/samples/). ``--reference`` runs on the
@@ -36,6 +37,7 @@ from picturesq.preview.compare import (
     PhotoComparison,
     compare_photo,
     gate,
+    pooled_ratio,
 )
 from picturesq.preview.stage_sheet import Panel, compose_sheet
 
@@ -118,6 +120,12 @@ def main() -> int:
     bands = " ".join("-" if np.isnan(r) else f"{r:.2f}" for r in verdict.band_chroma_ratio)
     colour = "PASS" if verdict.colour_ok else "FAIL"
     print(f"colour: chroma ratio per band {bands} (each {low} to {high}) {colour}")
+    gated = [p for p in photos if p.same_frame]
+    own = pooled_ratio(
+        [p.own_band_chroma for p in gated], [p.camera_own_band_chroma for p in gated]
+    )
+    own_bands = " ".join("-" if np.isnan(r) else f"{r:.2f}" for r in own)
+    print(f"  (each image banded by its own lightness, not gated: {own_bands})")
     print(
         f"highlights: clipped more than camera + {MAX_EXTRA_CLIPPED:.1%}: "
         f"{', '.join(verdict.over_clipped) or 'none'} {'PASS' if verdict.highlights_ok else 'FAIL'}"
