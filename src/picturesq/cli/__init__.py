@@ -9,8 +9,9 @@ import typer
 
 from picturesq import __version__, parallel
 from picturesq.cli.decode import decode_project
-from picturesq.cli.export import render_project
+from picturesq.cli.export import MachineOptions, render_project
 from picturesq.config import dump_schema, project_schema
+from picturesq.pipeline.workers import parse_memory_budget
 
 app = typer.Typer(
     name="picturesq",
@@ -39,8 +40,18 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+def _memory_budget(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        return parse_memory_budget(value)
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from None
+
+
 @app.callback()
 def main(
+    ctx: typer.Context,
     version: Annotated[
         bool,
         typer.Option("--version", callback=_version_callback, is_eager=True, help="Show version."),
@@ -63,19 +74,45 @@ def main(
             help="Pixels per block of work (default: from the CPU cache size).",
         ),
     ] = None,
+    workers: Annotated[
+        int | None,
+        typer.Option(
+            "--workers",
+            min=1,
+            envvar="PICTURESQ_WORKERS",
+            help="Photos exported at once, each in its own process "
+            "(default: as many as the memory budget and the cores allow).",
+        ),
+    ] = None,
+    memory_budget: Annotated[
+        str | None,
+        typer.Option(
+            "--memory-budget",
+            envvar="PICTURESQ_MEMORY_BUDGET",
+            help="Memory all workers together may use, e.g. 3GB or 2.5GiB "
+            "(default: 60% of the memory available at the start).",
+        ),
+    ] = None,
 ) -> None:
     """picturesq: decode, normalise, grade, export."""
     # Machine settings, not project config: they never change the output (bit-identical).
     parallel.use(parallel.auto(threads=threads, block_pixels=block_pixels))
+    ctx.obj = MachineOptions(
+        threads=threads, workers=workers, memory_budget=_memory_budget(memory_budget)
+    )
 
 
 @app.command()
-def run(project: ProjectArg, out: OutOption = None, as_json: JsonOption = False) -> None:
+def run(
+    ctx: typer.Context, project: ProjectArg, out: OutOption = None, as_json: JsonOption = False
+) -> None:
     """Run the whole pipeline: decode, normalise, grade, export.
 
     Creates picturesq.yaml with defaults if missing. For now this is decode + export.
     """
-    render_project(project, create_config=True, output_names=None, out=out, as_json=as_json)
+    render_project(
+        project, create_config=True, output_names=None, out=out, as_json=as_json, machine=ctx.obj
+    )
 
 
 @app.command()
@@ -113,6 +150,7 @@ def ui(project: ProjectArg) -> None:
 
 @app.command()
 def export(
+    ctx: typer.Context,
     project: ProjectArg,
     output: Annotated[
         list[str] | None,
@@ -125,7 +163,14 @@ def export(
 
     Uses default settings if picturesq.yaml is missing, without creating it.
     """
-    render_project(project, create_config=False, output_names=output, out=out, as_json=as_json)
+    render_project(
+        project,
+        create_config=False,
+        output_names=output,
+        out=out,
+        as_json=as_json,
+        machine=ctx.obj,
+    )
 
 
 class SchemaKind(StrEnum):

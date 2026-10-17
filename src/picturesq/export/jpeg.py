@@ -2,6 +2,7 @@
 
 import functools
 import io
+import struct
 from pathlib import Path
 
 import numpy as np
@@ -10,11 +11,23 @@ from PIL import Image, ImageCms
 
 from picturesq.atomic import atomic_write
 
+_ICC_DATE = slice(24, 36)
+"""The profile header's creation date and time: six big-endian 16-bit numbers."""
+_ICC_FIXED_DATE = struct.pack(">6H", 2000, 1, 1, 0, 0, 0)
+
 
 @functools.cache
 def srgb_icc_profile() -> bytes:
-    """Pillow's built-in sRGB profile (description "sRGB built-in"), built once."""
-    return ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+    """Pillow's built-in sRGB profile (description "sRGB built-in"), built once.
+
+    LittleCMS stamps the profile with the time it was built, so two runs (or two workers)
+    would embed different bytes; the date is fixed instead, so the same originals, config
+    and version give byte-identical JPEGs. The profile has no ID checksum over it (its
+    profile ID is zero).
+    """
+    profile = bytearray(ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes())
+    profile[_ICC_DATE] = _ICC_FIXED_DATE
+    return bytes(profile)
 
 
 def write_jpeg(

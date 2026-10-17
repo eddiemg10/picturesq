@@ -1,6 +1,8 @@
 """Tests for 8-bit quantisation and JPEG writing."""
 
 import io
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -8,7 +10,7 @@ import pytest
 from numpy.typing import NDArray
 from PIL import Image, ImageCms
 
-from picturesq.export import to_8bit, write_jpeg
+from picturesq.export import srgb_icc_profile, to_8bit, write_jpeg
 
 
 def test_to_8bit_values_and_dtype() -> None:
@@ -35,6 +37,17 @@ def test_round_trip_and_icc_profile(tmp_path: Path) -> None:
         icc = image.info["icc_profile"]
     profile = ImageCms.ImageCmsProfile(io.BytesIO(icc))
     assert "sRGB" in ImageCms.getProfileDescription(profile)
+
+
+def test_icc_profile_is_the_same_in_every_process() -> None:
+    """No build time inside: a fresh process (a worker, a later run) embeds the same bytes."""
+    script = "from picturesq.export import srgb_icc_profile; print(srgb_icc_profile().hex())"
+    fresh = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert bytes.fromhex(fresh) == srgb_icc_profile()
+    # The header's creation date (six 16-bit numbers at byte 24): fixed, not the build time.
+    assert srgb_icc_profile()[24:36] == bytes.fromhex("07d0 0001 0001 0000 0000 0000")
 
 
 def test_higher_quality_gives_larger_file(tmp_path: Path) -> None:

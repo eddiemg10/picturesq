@@ -34,6 +34,8 @@ def _synthetic(*_args: object, **_kwargs: object) -> np.ndarray:
 @pytest.fixture(autouse=True)
 def fake_decode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(pipeline_export, "decode_original", _synthetic)
+    # Worker processes start fresh, without this fake: export in this process.
+    monkeypatch.setenv("PICTURESQ_WORKERS", "1")
 
 
 def _project(
