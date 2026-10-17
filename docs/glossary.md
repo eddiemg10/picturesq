@@ -70,6 +70,7 @@
 | **chroma preservation** | The display transform's blend toward a luminance-only tone map that keeps each pixel's colour ratios, so bright colours stay colourful. |
 | **local contrast** | The grade step that keeps detail where the display transform's curve is flat: log luminance is split into a **base** (broad areas, smoothed without crossing strong edges) and **detail** (the rest); the curve still places the base, and the detail is amplified so it keeps at least `detail_floor` contrast (ADR-0011). |
 | **chroma** | How colourful a pixel is, independent of its lightness: the distance from grey in Oklab a/b. |
+| **ringing** | Over- and undershoot that sharp resampling filters (Lanczos) leave beside edges; **anti-ringing** clamps each result to the range of the nearby source pixels. |
 | **lens corrections** | Vignetting gain maps and distortion / colour-fringing warps a DNG carries for renderers (`OpcodeList3`). |
 | **sharpening** | An unsharp mask on lightness at each output's final size. |
 | **path to white** | How a colour behaves as it gets brighter: with a good display transform it desaturates smoothly toward white instead of clipping to a skewed hue. |
