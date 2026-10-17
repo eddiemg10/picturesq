@@ -8,6 +8,7 @@ from typing import Annotated
 import typer
 
 from picturesq import __version__
+from picturesq.cli.decode import decode_project
 from picturesq.cli.export import render_project
 from picturesq.config import dump_schema, project_schema
 
@@ -58,9 +59,12 @@ def run(project: ProjectArg, out: OutOption = None, as_json: JsonOption = False)
 
 
 @app.command()
-def decode(project: ProjectArg) -> None:
-    """Decode originals to scene-linear and build proxies."""
-    _not_implemented("decode", "M1")
+def decode(project: ProjectArg, as_json: JsonOption = False) -> None:
+    """Build the proxy cache: a small scene-linear copy of each photo for previews and the UI.
+
+    Proxies already current are reused. Doesn't create picturesq.yaml.
+    """
+    decode_project(project, as_json=as_json)
 
 
 @app.command()
