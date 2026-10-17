@@ -1,0 +1,552 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "BlueRenderingConfig": {
+      "additionalProperties": false,
+      "description": "Render blues (skies) the way camera JPEGs do: deeper, more colourful, a little cyan.\n\nA camera-matching adjustment in the display transform (ADR-0012), not a creative look.\nMeasured against the DJI Pocket 4's and DJI drone's JPEGs, an accurate render of a blue\nsky is paler, lighter and ~4 degrees more purple than the camera's; the defaults are fitted\nto those JPEGs (and checked on held-out photos). Other makers differ (Fujifilm's skies\nare close to accurate), so this is the one place the neutral render leans toward DJI's\nlook. Set ``enabled: false`` for a colorimetric sky.\n\nApplied in display-referred Oklab: a pixel's weight is a raised-cosine window in hue\naround ``hue`` (zero beyond ``hue_width``) times a ramp in chroma from ``chroma_start``\nto ``chroma_full``, so greys, whites and other hues are untouched.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Apply the camera-matched blue rendering; false leaves blues as the colour matrix and display transform give them (colorimetric).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "hue": {
+          "default": 250.0,
+          "description": "Centre of the affected hues (Oklab hue, degrees).",
+          "exclusiveMaximum": 360.0,
+          "minimum": 0.0,
+          "title": "Hue",
+          "type": "number"
+        },
+        "hue_width": {
+          "default": 70.0,
+          "description": "Hues this far (degrees) or further from the centre are untouched.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 120.0,
+          "title": "Hue Width",
+          "type": "number"
+        },
+        "hue_shift": {
+          "default": -4.0,
+          "description": "Hue rotation at the window's centre (degrees); negative turns blue to cyan.",
+          "maximum": 30.0,
+          "minimum": -30.0,
+          "title": "Hue Shift",
+          "type": "number"
+        },
+        "chroma": {
+          "default": 1.3,
+          "description": "Chroma (colourfulness) scale at the centre; 1 is none.",
+          "maximum": 2.0,
+          "minimum": 0.5,
+          "title": "Chroma",
+          "type": "number"
+        },
+        "lightness": {
+          "default": 0.94,
+          "description": "Lightness scale at the centre; below 1 darkens.",
+          "maximum": 1.5,
+          "minimum": 0.5,
+          "title": "Lightness",
+          "type": "number"
+        },
+        "chroma_start": {
+          "default": 0.01,
+          "description": "Oklab chroma below which pixels are untouched (greys and whites).",
+          "maximum": 0.2,
+          "minimum": 0.0,
+          "title": "Chroma Start",
+          "type": "number"
+        },
+        "chroma_full": {
+          "default": 0.05,
+          "description": "Oklab chroma at and above which the full adjustment applies.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 0.4,
+          "title": "Chroma Full",
+          "type": "number"
+        }
+      },
+      "title": "BlueRenderingConfig",
+      "type": "object"
+    },
+    "ChromaNoiseReductionConfig": {
+      "additionalProperties": false,
+      "description": "Colour noise reduction in the shadows (smooths chromaticity, keeps luminance).",
+      "properties": {
+        "amount": {
+          "default": 1.0,
+          "description": "Strength in the darkest tones; 0 turns it off.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Amount",
+          "type": "number"
+        },
+        "radius": {
+          "default": 0.004,
+          "description": "Blur radius as a fraction of the photo's long edge (0.004 = 31 px at 7680).",
+          "exclusiveMinimum": 0.0,
+          "maximum": 0.05,
+          "title": "Radius",
+          "type": "number"
+        },
+        "full_lightness": {
+          "default": 0.2,
+          "description": "Lightness (cube root of luminance, as Oklab L for greys) up to which the full amount applies; 0.2 is 4.5 EV below mid grey.",
+          "exclusiveMaximum": 1.0,
+          "minimum": 0.0,
+          "title": "Full Lightness",
+          "type": "number"
+        },
+        "fade_lightness": {
+          "default": 0.4,
+          "description": "Lightness at which it has faded out (0.4 is about 1.5 EV below mid grey).",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Fade Lightness",
+          "type": "number"
+        }
+      },
+      "title": "ChromaNoiseReductionConfig",
+      "type": "object"
+    },
+    "DecodeConfig": {
+      "additionalProperties": false,
+      "description": "Stage 1 settings, passed to LibRaw. The demosaic default is finalised in #15.",
+      "properties": {
+        "demosaic": {
+          "default": "ahd",
+          "description": "Demosaic algorithm (LibRaw).",
+          "enum": [
+            "linear",
+            "vng",
+            "ppg",
+            "ahd",
+            "dcb",
+            "dht",
+            "aahd"
+          ],
+          "title": "Demosaic",
+          "type": "string"
+        },
+        "highlight_mode": {
+          "default": "blend",
+          "description": "How LibRaw treats clipped sensor highlights.",
+          "enum": [
+            "clip",
+            "ignore",
+            "blend",
+            "reconstruct"
+          ],
+          "title": "Highlight Mode",
+          "type": "string"
+        },
+        "colour_matrix": {
+          "default": "dng",
+          "description": "Camera colour matrix. 'dng': as the DNG specification says, blending the file's two colour matrices by the photo's white balance (ADR-0012); 'libraw': LibRaw's matrix (always the daylight one). Non-DNG RAWs always use LibRaw's.",
+          "enum": [
+            "dng",
+            "libraw"
+          ],
+          "title": "Colour Matrix",
+          "type": "string"
+        },
+        "lens_corrections": {
+          "default": false,
+          "description": "Apply the lens corrections a DNG carries (OpcodeList3: vignetting gain maps, distortion and lateral chromatic aberration warps). Experimental: follows the DNG spec but is not yet verified against a reference render.",
+          "title": "Lens Corrections",
+          "type": "boolean"
+        },
+        "default_crop": {
+          "default": true,
+          "description": "Crop to the photo's frame as the original specifies it (the DNG DefaultCrop, or the maker's equivalent): drops sensor border pixels, and the strips outside the aspect ratio the camera was set to (e.g. 3:2 on a 4:3 sensor).",
+          "title": "Default Crop",
+          "type": "boolean"
+        },
+        "baseline_exposure": {
+          "default": true,
+          "description": "Apply the DNG BaselineExposure tag (brightening the camera's deliberate underexposure).",
+          "title": "Baseline Exposure",
+          "type": "boolean"
+        }
+      },
+      "title": "DecodeConfig",
+      "type": "object"
+    },
+    "DisplayTransformConfig": {
+      "additionalProperties": false,
+      "description": "The AgX-style display transform (ADR-0003): inset → log encode → sigmoid → outset.\n\nDefaults are our own (ADR-0007), not copied from another implementation: contrast 1.0 and\ntoe 1.5 keep shadows at least as bright as a plain sRGB view of the linear image (higher\ncontrast crushed the 2-6 EV below mid grey where most of an unnormalised photo sits);\ninset and outset by measuring Oklab hue drift on saturated exposure ramps\n(less inset drifts more, more inset desaturates).",
+      "properties": {
+        "min_ev": {
+          "default": -10.0,
+          "description": "Scene EV (relative to mid grey) that maps to black.",
+          "exclusiveMaximum": 0.0,
+          "title": "Min Ev",
+          "type": "number"
+        },
+        "max_ev": {
+          "default": 9.0,
+          "description": "Scene EV (relative to mid grey) that maps to white.",
+          "exclusiveMinimum": 0.0,
+          "title": "Max Ev",
+          "type": "number"
+        },
+        "contrast": {
+          "default": 1.3,
+          "description": "Midtone contrast; 1.0 matches the slope of the plain sRGB curve at mid grey.",
+          "exclusiveMinimum": 0.0,
+          "title": "Contrast",
+          "type": "number"
+        },
+        "toe": {
+          "default": 2.1,
+          "description": "Toe sharpness; higher keeps shadows linear longer.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 10.0,
+          "title": "Toe",
+          "type": "number"
+        },
+        "shoulder": {
+          "default": 2.1,
+          "description": "Shoulder sharpness; higher keeps highlights linear longer, then rolls off harder.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 10.0,
+          "title": "Shoulder",
+          "type": "number"
+        },
+        "inset": {
+          "default": [
+            0.25,
+            0.25,
+            0.25
+          ],
+          "description": "How far each primary (R, G, B) is pulled toward white before the curve.",
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "exclusiveMaximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "exclusiveMaximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "exclusiveMaximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            }
+          ],
+          "title": "Inset",
+          "type": "array"
+        },
+        "chroma_preservation": {
+          "default": 0.7,
+          "description": "Blend toward a render that keeps each pixel's colour ratios: 0 is pure per-channel AgX (bright colours wash out toward white), 1 keeps highlights fully saturated.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Chroma Preservation",
+          "type": "number"
+        },
+        "saturation": {
+          "default": 1.15,
+          "description": "Overall chroma scale after the curve; 1 is none.",
+          "maximum": 3.0,
+          "minimum": 0.0,
+          "title": "Saturation",
+          "type": "number"
+        },
+        "saturation_fade": {
+          "default": 0.7,
+          "description": "How much of the saturation change fades out toward white: 1 = none left at white, 0 = the same everywhere.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Saturation Fade",
+          "type": "number"
+        },
+        "outset": {
+          "default": [
+            0.35,
+            0.35,
+            0.35
+          ],
+          "description": "How much saturation each primary (R, G, B) gets back after the curve.",
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "exclusiveMaximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "exclusiveMaximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "exclusiveMaximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            }
+          ],
+          "title": "Outset",
+          "type": "array"
+        },
+        "blue_rendering": {
+          "$ref": "#/$defs/BlueRenderingConfig"
+        }
+      },
+      "title": "DisplayTransformConfig",
+      "type": "object"
+    },
+    "ExportConfig": {
+      "additionalProperties": false,
+      "description": "Stage 4 settings: the named outputs and which of them run.",
+      "properties": {
+        "outputs": {
+          "patternProperties": {
+            "^[a-z][a-z0-9_]*$": {
+              "$ref": "#/$defs/OutputConfig"
+            }
+          },
+          "title": "Outputs",
+          "type": "object"
+        },
+        "enabled": {
+          "description": "Outputs written by `picturesq export`, in order.",
+          "items": {
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Enabled",
+          "type": "array"
+        }
+      },
+      "title": "ExportConfig",
+      "type": "object"
+    },
+    "ExposureConfig": {
+      "additionalProperties": false,
+      "description": "One global exposure change per photo (ADR-0010).",
+      "properties": {
+        "offset_ev": {
+          "default": 2.0,
+          "description": "Brightening applied to every photo, in EV. Cameras render about 2 EV brighter than the raw's own exposure; fitted to camera JPEGs.",
+          "maximum": 6.0,
+          "minimum": -4.0,
+          "title": "Offset Ev",
+          "type": "number"
+        },
+        "correction": {
+          "default": 0.0,
+          "description": "How far each photo's median brightness is pulled toward target_ev (0 = off, 1 = all the way). Evens out a batch; cameras don't do it.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Correction",
+          "type": "number"
+        },
+        "target_ev": {
+          "default": -1.0,
+          "description": "Median brightness that correction pulls toward, in EV relative to mid grey.",
+          "maximum": 3.0,
+          "minimum": -6.0,
+          "title": "Target Ev",
+          "type": "number"
+        },
+        "max_correction_ev": {
+          "default": 2.0,
+          "description": "Largest change correction may make, in EV.",
+          "maximum": 6.0,
+          "minimum": 0.0,
+          "title": "Max Correction Ev",
+          "type": "number"
+        }
+      },
+      "title": "ExposureConfig",
+      "type": "object"
+    },
+    "GradeConfig": {
+      "additionalProperties": false,
+      "description": "Stage 3 settings. v0: local contrast and the display transform; looks come in M3.",
+      "properties": {
+        "local_contrast": {
+          "$ref": "#/$defs/LocalContrastConfig"
+        },
+        "display_transform": {
+          "$ref": "#/$defs/DisplayTransformConfig"
+        }
+      },
+      "title": "GradeConfig",
+      "type": "object"
+    },
+    "LocalContrastConfig": {
+      "additionalProperties": false,
+      "description": "Keep detail where the display transform's curve flattens it (ADR-0011).\n\nDefaults fitted to camera JPEGs: detail keeps at least ``detail_floor`` display stops per\nscene stop, and gets ``amount`` more contrast everywhere.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Run local contrast.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "detail_floor": {
+          "default": 0.8,
+          "description": "Least contrast detail above mid grey keeps after the display transform, in display stops per scene stop (the curve's shoulder alone gives ~0.2 in a bright sky).",
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Detail Floor",
+          "type": "number"
+        },
+        "amount": {
+          "default": 1.15,
+          "description": "Extra detail contrast everywhere; 1 adds none.",
+          "maximum": 3.0,
+          "minimum": 0.0,
+          "title": "Amount",
+          "type": "number"
+        },
+        "radius": {
+          "default": 0.05,
+          "description": "Size of the broad areas whose brightness the curve sets, as a fraction of the long edge; smaller detail than this counts as detail.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 0.25,
+          "title": "Radius",
+          "type": "number"
+        },
+        "edge_ev": {
+          "default": 1.0,
+          "description": "Steps in brightness much larger than this (in EV), like a horizon, are kept as edges and not amplified (no halos); smaller ones count as detail.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 6.0,
+          "title": "Edge Ev",
+          "type": "number"
+        },
+        "detail_limit_ev": {
+          "default": 0.25,
+          "description": "Detail larger than about this many EV (a sun glint, a lamp) is amplified less: what gets added levels off at (gain - 1) times this.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 3.0,
+          "title": "Detail Limit Ev",
+          "type": "number"
+        },
+        "max_gain": {
+          "default": 4.0,
+          "description": "Most detail is ever amplified, as a factor.",
+          "maximum": 10.0,
+          "minimum": 1.0,
+          "title": "Max Gain",
+          "type": "number"
+        }
+      },
+      "title": "LocalContrastConfig",
+      "type": "object"
+    },
+    "NormaliseConfig": {
+      "additionalProperties": false,
+      "description": "Stage 2 settings: per-photo exposure and noise reduction.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Run the normalise stage.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "exposure": {
+          "$ref": "#/$defs/ExposureConfig"
+        },
+        "chroma_nr": {
+          "$ref": "#/$defs/ChromaNoiseReductionConfig"
+        }
+      },
+      "title": "NormaliseConfig",
+      "type": "object"
+    },
+    "OutputConfig": {
+      "additionalProperties": false,
+      "description": "One export target, e.g. ``web`` or ``archive``.",
+      "properties": {
+        "long_edge": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Long edge in pixels; null keeps the full resolution.",
+          "title": "Long Edge"
+        },
+        "quality": {
+          "default": 90,
+          "description": "JPEG quality.",
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Quality",
+          "type": "integer"
+        },
+        "sharpen": {
+          "$ref": "#/$defs/SharpenConfig"
+        }
+      },
+      "title": "OutputConfig",
+      "type": "object"
+    },
+    "SharpenConfig": {
+      "additionalProperties": false,
+      "description": "Unsharp mask on lightness, at the output's size (after resizing).",
+      "properties": {
+        "amount": {
+          "default": 0.5,
+          "description": "Strength; 0 turns sharpening off.",
+          "maximum": 3.0,
+          "minimum": 0.0,
+          "title": "Amount",
+          "type": "number"
+        },
+        "radius": {
+          "default": 0.8,
+          "description": "Blur radius in output pixels.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 5.0,
+          "title": "Radius",
+          "type": "number"
+        }
+      },
+      "title": "SharpenConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Everything in ``picturesq.yaml``. All sections have defaults, so ``{}`` is valid.",
+  "properties": {
+    "version": {
+      "const": 1,
+      "default": 1,
+      "description": "Config format version.",
+      "title": "Version",
+      "type": "integer"
+    },
+    "decode": {
+      "$ref": "#/$defs/DecodeConfig"
+    },
+    "normalise": {
+      "$ref": "#/$defs/NormaliseConfig"
+    },
+    "grade": {
+      "$ref": "#/$defs/GradeConfig"
+    },
+    "export": {
+      "$ref": "#/$defs/ExportConfig"
+    }
+  },
+  "title": "ProjectConfig",
+  "type": "object"
+}

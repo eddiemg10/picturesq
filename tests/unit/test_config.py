@@ -118,7 +118,7 @@ def test_failed_save_keeps_the_old_file(tmp_path: Path, monkeypatch: pytest.Monk
     def broken_replace(src: str, dst: str) -> None:
         raise OSError("disk full")
 
-    monkeypatch.setattr("picturesq.config.yaml_io.os.replace", broken_replace)
+    monkeypatch.setattr("picturesq.atomic.os.replace", broken_replace)
     changed = ProjectConfig.model_validate({"decode": {"demosaic": "vng"}})
     with pytest.raises(OSError, match="disk full"):
         save_project_config(changed, path)

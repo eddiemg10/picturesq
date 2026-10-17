@@ -1,6 +1,6 @@
 # picturesq — Project Plan
 
-> Status: **M0 setup (draft for sign-off)** · Last updated: 2026-10-11
+> Status: **M0 setup (draft for sign-off)** · Last updated: 2026-10-17
 > The single source of truth for scope, decisions and milestones.
 > Vocabulary: [`docs/glossary.md`](glossary.md) (binding). Decision rationale: [`docs/decisions/`](decisions/). Concepts: [`docs/learning-log.md`](learning-log.md). Tasks: [project board](https://github.com/users/eddiemg10/projects/1).
 
@@ -70,6 +70,7 @@ Photoshop-style GUI, local retouching, lens correction, cataloguing/DAM, ML trai
 | D16 | Vocabulary | [`glossary.md`](glossary.md) is binding; British spelling everywhere | Consistent, intentional language across code, CLI, config, docs and UI. |
 | D17 | Neutral render acceptance | The real export against the camera JPEG: brightness, chroma per lightness band at the same pixels, clipping (`scripts/compare.py`). [ADR-0010](decisions/0010-camera-matched-neutral-render.md) (supersedes 0009), colour measure [ADR-0013](decisions/0013-pixel-aligned-colour-gate.md) | Judging an exposure-matched image hid that real exports were 2 stops dark. |
 | D18 | Camera colour | DNG-specification colour matrices (blended by white balance), and a camera-matched blue rendering that is on by default and can be turned off. [ADR-0012](decisions/0012-sky-colour.md) | LibRaw ignored half the DNG colour data; camera JPEGs render skies deeper and slightly cyan, and DJI's are the target. |
+| D19 | Export metadata | Allowlisted capture EXIF written with specification types; a timestamp-free sidecar per export. [ADR-0014](decisions/0014-export-metadata.md) | Photo libraries need capture time/camera/lens; private and RAW-only tags must not leak; same inputs, same bytes. |
 
 ---
 
@@ -125,8 +126,8 @@ Dropped after measurement (ADR-0010): key detection with per-key targets and the
 
 ### 4.4 Export
 - **Outputs** in config, e.g. `web: {long_edge: 2048, quality: 90}`, `archive: {long_edge: null, quality: 95}`; each has its own sharpening.
-- sRGB ICC profile embedded; EXIF copied from the original where available.
-- Sidecar `exports/<output>/<photo>.picturesq.json`: resolved config for that photo, picturesq version, original hash.
+- sRGB ICC profile embedded; **capture EXIF** copied from the original by allowlist (time, camera, lens, exposure; no GPS, serials or MakerNote), [ADR-0014](decisions/0014-export-metadata.md).
+- Sidecar `exports/<output>/<photo>.picturesq.json`: resolved config for that photo, this output's settings, picturesq version, original SHA-256. No timestamps, so it is identical across runs.
 
 ---
 
@@ -153,7 +154,7 @@ Dropped after measurement (ADR-0010): key detection with per-key targets and the
 
 ## 6. Config specification (draft; finalised in M1–M3)
 
-YAML is written by the web UI and agents, never by hand. Pydantic models in `picturesq.config` are the source of truth; `picturesq schema` prints the JSON Schema.
+YAML is written by the web UI and agents, never by hand. Pydantic models in `picturesq.config` are the source of truth; `picturesq schema` prints the JSON Schema (a copy is committed at `docs/schema/picturesq.schema.json` and kept current by a test).
 
 ### 6.1 Project config: `<project>/picturesq.yaml`
 ```yaml
@@ -211,7 +212,7 @@ operations:
 | `picturesq looks [--category cold]` | List the look library |
 | `picturesq ui PROJECT` | Start the local web UI (opens the browser) |
 | `picturesq export PROJECT [--output web]` | Render originals and write enabled outputs |
-| `picturesq schema [project\|look]` | Print the JSON Schema |
+| `picturesq schema [project\|look]` | Print the JSON Schema (`look` in M3) |
 | `picturesq doctor` | Check environment: LibRaw version, terminal graphics, memory |
 
 Global flags: `--out PATH` (redirect generated files), `--json` (machine-readable output), `--workers N`, `--memory-budget 2.5GB`, `-v/-q`.

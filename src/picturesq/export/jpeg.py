@@ -1,13 +1,14 @@
 """Write an 8-bit sRGB JPEG with an embedded ICC profile, atomically."""
 
 import functools
-import os
-import tempfile
+import io
 from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
 from PIL import Image, ImageCms
+
+from picturesq.atomic import atomic_write
 
 
 @functools.cache
@@ -23,26 +24,17 @@ def write_jpeg(
 
     Chroma subsampling is off (4:4:4): outputs are archive-quality, so we keep full colour
     resolution and accept larger files. Huffman tables are optimised. The sRGB profile is
-    always embedded. Parent folders are created. The file is written to a temp file in the
-    same folder and renamed, so an interrupted export never leaves a truncated JPEG.
+    always embedded. ``exif`` is an EXIF block (``export_exif``). The file is written
+    atomically, so an interrupted export never leaves a truncated JPEG.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    image = Image.fromarray(pixels)
-    fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "wb") as file:
-            image.save(
-                file,
-                format="JPEG",
-                quality=quality,
-                subsampling=0,
-                optimize=True,
-                icc_profile=srgb_icc_profile(),
-                exif=exif if exif is not None else b"",
-            )
-            file.flush()
-            os.fsync(file.fileno())
-        os.replace(temp_name, path)
-    except BaseException:
-        Path(temp_name).unlink(missing_ok=True)
-        raise
+    buffer = io.BytesIO()
+    Image.fromarray(pixels).save(
+        buffer,
+        format="JPEG",
+        quality=quality,
+        subsampling=0,
+        optimize=True,
+        icc_profile=srgb_icc_profile(),
+        exif=exif if exif is not None else b"",
+    )
+    atomic_write(path, buffer.getvalue())

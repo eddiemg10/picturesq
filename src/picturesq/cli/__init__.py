@@ -1,5 +1,7 @@
 """Command-line interface. One module per verb as they are implemented."""
 
+import sys
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -7,6 +9,7 @@ import typer
 
 from picturesq import __version__
 from picturesq.cli.export import render_project
+from picturesq.config import dump_schema, project_schema
 
 app = typer.Typer(
     name="picturesq",
@@ -101,10 +104,20 @@ def export(
     render_project(project, create_config=False, output_names=output, out=out, as_json=as_json)
 
 
+class SchemaKind(StrEnum):
+    """Which file's schema `picturesq schema` prints (look files follow in M3)."""
+
+    project = "project"
+
+
 @app.command()
-def schema() -> None:
-    """Print the JSON schema for picturesq.yaml and look files."""
-    _not_implemented("schema", "M1")
+def schema(
+    kind: Annotated[
+        SchemaKind, typer.Argument(help="Which file: project (picturesq.yaml).")
+    ] = SchemaKind.project,
+) -> None:
+    """Print the JSON Schema for picturesq.yaml."""
+    sys.stdout.write(dump_schema(project_schema()))
 
 
 @app.command()
