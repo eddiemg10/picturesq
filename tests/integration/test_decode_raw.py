@@ -87,9 +87,13 @@ def test_baseline_exposure_decode_is_linear_gain(samples_dir: Path) -> None:
 
 @pytest.mark.parametrize("name", ["sony-ilme-fx3.arw", "dji-fc4382.dng"])
 def test_matches_libraw_rec2020_for_in_gamut_colours(samples_dir: Path, name: str) -> None:
-    """Our float camera → Rec.2020 conversion agrees with LibRaw's own where LibRaw can't clip."""
+    """Our float camera → Rec.2020 conversion agrees with LibRaw's own where LibRaw can't clip.
+
+    With LibRaw's matrix: the DNG-specification matrix (the default) differs on purpose.
+    """
     path = _sample(samples_dir, name)
-    ours = decode_original(path, DecodeConfig(baseline_exposure=False), half_size=True)
+    config = DecodeConfig(baseline_exposure=False, colour_matrix="libraw")
+    ours = decode_original(path, config, half_size=True)
     with rawpy.imread(str(path)) as raw:
         libraw = raw.postprocess(
             half_size=True,
@@ -112,3 +116,18 @@ def test_out_of_gamut_colours_survive(samples_dir: Path) -> None:
     )
     assert (image.min(axis=-1) == 0.0).mean() < 0.001
     assert (image.min(axis=-1) < 0.0).mean() > 0.05
+
+
+def test_dng_colour_tags_are_read(samples_dir: Path) -> None:
+    from picturesq.decode.dng_colour import dng_camera_to_working, read_dng_colour
+
+    dng = read_dng_colour(_sample(samples_dir, "pentax-k5iis.dng"))
+    assert dng is not None
+    assert len(dng.colour_matrices) == 2
+    assert dng.illuminant_kelvin == (2850.0, 6500.0)
+    matrix, white = dng_camera_to_working(dng)
+    assert np.allclose(matrix @ np.ones(3), 1.0)
+    # Tungsten-lit interior: mostly the tungsten matrix (LibRaw would use only the D65 one).
+    assert 3000 < white.kelvin < 3700
+    assert white.weight > 0.6
+    assert read_dng_colour(_sample(samples_dir, "sony-ilme-fx3.arw")) is None
