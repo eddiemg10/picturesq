@@ -46,6 +46,14 @@ class DecodeConfig(_Model):
             "DNG spec but is not yet verified against a reference render."
         ),
     )
+    default_crop: bool = Field(
+        default=True,
+        description=(
+            "Crop to the photo's frame as the original specifies it (the DNG DefaultCrop, "
+            "or the maker's equivalent): drops sensor border pixels, and the strips outside "
+            "the aspect ratio the camera was set to (e.g. 3:2 on a 4:3 sensor)."
+        ),
+    )
     baseline_exposure: bool = Field(
         default=True,
         description=(

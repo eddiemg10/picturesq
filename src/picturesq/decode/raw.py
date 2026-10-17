@@ -10,7 +10,7 @@ values above 1.0 are kept (scene-linear headroom). Exposure normalisation across
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import numpy as np
 import rawpy
@@ -46,6 +46,9 @@ HIGHLIGHT_MODES: Final[dict[str, HighlightMode]] = {
 }
 
 _UINT16_MAX: Final = 65535.0
+
+Box = tuple[int, int, int, int]
+"""``(top, left, height, width)`` in pixels."""
 
 
 class DecodeError(Exception):
@@ -94,6 +97,9 @@ def decode_original(
     maps (vignetting) and rectilinear warps (distortion, lateral chromatic aberration) are
     applied in camera RGB, before the colour matrix (``decode/opcodes.py``).
 
+    If ``config.default_crop`` is set, the image is cropped to the frame the original specifies
+    (:func:`default_crop_box`).
+
     If ``config.baseline_exposure`` is set, the DNG ``BaselineExposure`` (stops) is applied as a
     linear gain ``2**ev``: some cameras record the raw 2 to 4 stops dark on purpose, and without
     this every render comes out dark. The result is not clipped, so values can exceed 1.0. No
@@ -113,6 +119,7 @@ def decode_original(
                 # The opcodes are in sensor orientation; we have no sample to verify LibRaw's
                 # rotation codes against, so we don't guess.
                 corrections = NO_CORRECTIONS
+            sizes = raw.sizes
             rgb16 = raw.postprocess(
                 demosaic_algorithm=DEMOSAIC_ALGORITHMS[config.demosaic],
                 highlight_mode=HIGHLIGHT_MODES[config.highlight_mode],
@@ -126,13 +133,60 @@ def decode_original(
     except (LibRawError, OSError, ValueError) as err:
         raise DecodeError(f"cannot decode {path.name}: {err}") from err
 
+    box = default_crop_box(sizes, rgb16.shape[:2]) if config.default_crop else None
     if corrections:
+        # The warps are defined on the whole image, so they run before the crop.
         image = apply_lens_corrections(rgb16, corrections, gain / _UINT16_MAX)
+        if box is not None:
+            image = np.ascontiguousarray(_crop(image, box))
     else:
+        if box is not None:
+            rgb16 = _crop(rgb16, box)  # a view: the conversion below writes only the crop
         image = np.empty(rgb16.shape, dtype=np.float32)
         np.multiply(rgb16, np.float32(gain / _UINT16_MAX), out=image, dtype=np.float32)
     del rgb16
     return apply_matrix_in_blocks(image, matrix)
+
+
+def default_crop_box(sizes: Any, shape: tuple[int, int]) -> Box | None:
+    """The frame the original specifies, in LibRaw's output (``shape``, upright), or None.
+
+    LibRaw reads it (the DNG ``DefaultCropOrigin``/``DefaultCropSize``, or a maker's
+    equivalent) into ``sizes.crop_*`` in raw coordinates, which include the masked
+    ``left_margin``/``top_margin`` its output leaves out. Its output is upright: ``flip`` 3
+    is 180°, 5 is 90° counter-clockwise, 6 is 90° clockwise (checked with ``user_flip``).
+    A half-size output is scaled down by the same factor. Returns None when there is no
+    crop or it doesn't fit.
+    """
+    top = sizes.crop_top_margin - sizes.top_margin
+    left = sizes.crop_left_margin - sizes.left_margin
+    height, width = sizes.crop_height, sizes.crop_width
+    if height <= 0 or width <= 0:
+        return None
+    full_height, full_width = sizes.height, sizes.width
+    rotated = sizes.flip in (5, 6)
+    out_height, out_width = (shape[1], shape[0]) if rotated else shape  # sensor orientation
+    scale = out_width / full_width
+    if abs(out_height / full_height - scale) > 1e-3:
+        return None
+    top, left = int(top * scale), int(left * scale)
+    height, width = int(height * scale), int(width * scale)
+    if top < 0 or left < 0 or top + height > out_height or left + width > out_width:
+        return None
+    if (top, left, height, width) == (0, 0, out_height, out_width):
+        return None
+    if sizes.flip == 3:
+        return out_height - top - height, out_width - left - width, height, width
+    if sizes.flip == 5:
+        return out_width - left - width, top, width, height
+    if sizes.flip == 6:
+        return left, out_height - top - height, width, height
+    return top, left, height, width
+
+
+def _crop(image: NDArray[Any], box: Box) -> NDArray[Any]:
+    top, left, height, width = box
+    return image[top : top + height, left : left + width]
 
 
 def apply_matrix_in_blocks(image: NDArray[np.float32], matrix: Matrix) -> NDArray[np.float32]:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -92,7 +93,7 @@ def test_matches_libraw_rec2020_for_in_gamut_colours(samples_dir: Path, name: st
     With LibRaw's matrix: the DNG-specification matrix (the default) differs on purpose.
     """
     path = _sample(samples_dir, name)
-    config = DecodeConfig(baseline_exposure=False, colour_matrix="libraw")
+    config = DecodeConfig(baseline_exposure=False, colour_matrix="libraw", default_crop=False)
     ours = decode_original(path, config, half_size=True)
     with rawpy.imread(str(path)) as raw:
         libraw = raw.postprocess(
@@ -131,3 +132,49 @@ def test_dng_colour_tags_are_read(samples_dir: Path) -> None:
     assert 3000 < white.kelvin < 3700
     assert white.weight > 0.6
     assert read_dng_colour(_sample(samples_dir, "sony-ilme-fx3.arw")) is None
+
+
+def test_default_crop_matches_the_camera_frame(samples_dir: Path) -> None:
+    # The Pentax Q7 sample was shot at 3:2 on a 4:3 sensor; its DNG says so (#61).
+    path = _sample(samples_dir, "pentax-q7.dng")
+    full = decode_original(path, DecodeConfig())
+    assert full.shape[:2] == (2664, 4000)
+    assert full.flags.c_contiguous
+    assert decode_original(path, DecodeConfig(), half_size=True).shape[:2] == (1332, 2000)
+    uncropped = decode_original(path, DecodeConfig(default_crop=False), half_size=True)
+    assert uncropped.shape[:2] == (1500, 2000)
+
+
+@pytest.mark.parametrize(("flip", "turns"), [(3, 2), (5, 1), (6, -1)])
+def test_default_crop_box_on_rotated_libraw_output(
+    samples_dir: Path, flip: int, turns: int
+) -> None:
+    # No sample is stored rotated, so force LibRaw's rotation and check the crop rotates with it.
+    from types import SimpleNamespace
+
+    from picturesq.decode.raw import default_crop_box
+
+    path = _sample(samples_dir, "pentax-k5iis.dng")
+
+    def render(user_flip: int) -> tuple[Any, np.ndarray]:
+        with rawpy.imread(str(path)) as raw:
+            sizes = raw.sizes
+            image = raw.postprocess(
+                half_size=True, user_flip=user_flip, output_color=ColorSpace.raw, output_bps=16
+            )
+        return sizes, image
+
+    sizes, upright = render(0)
+    _, rotated = render(flip)
+    box = default_crop_box(sizes, upright.shape[:2])
+    assert box is not None
+    top, left, height, width = box
+    expected = np.rot90(upright[top : top + height, left : left + width], turns)
+    rotated_sizes = SimpleNamespace(
+        **{k: getattr(sizes, k) for k in sizes._fields},
+    )
+    rotated_sizes.flip = flip
+    box = default_crop_box(rotated_sizes, rotated.shape[:2])
+    assert box is not None
+    top, left, height, width = box
+    np.testing.assert_array_equal(rotated[top : top + height, left : left + width], expected)
