@@ -17,6 +17,7 @@
 | **original** | The RAW file on disk. Never written. | source, input file |
 | **proxy** | A small cached scene-linear version of a photo (2048 px, float16) used for all interactive work. | thumbnail, preview (that's the rendered result) |
 | **preview** | A display-ready render of a proxy, shown in the terminal or UI. | proxy, thumbnail |
+| **terminal graphics** | A terminal's ability to draw images (the kitty protocol or sixel), used for previews in the terminal; `picturesq doctor` guesses it from environment variables. | inline images, terminal images |
 | **contact sheet** | A grid of previews (photos × looks, or photos only). | gallery, mosaic |
 | **stage sheet** | A contact sheet of one CC0 sample after each pipeline stage, beside the camera JPEG; shown in PR descriptions. | PR preview, screenshot |
 | **look** | A named, reusable creative grade, e.g. *cold/nordic*. Defined by a **look file**. | style, preset, filter, recipe, profile |
@@ -62,6 +63,10 @@
 ## Colour science
 | Term | Meaning |
 |---|---|
+| **photosite** | One light-measuring element of the sensor; it records a single number. "Pixel" once demosaiced. |
+| **Bayer mosaic** | The repeating 2×2 pattern of red, green and blue filters over the photosites (the Pocket 4's is `RGGB`). Fujifilm's X-Trans is a 6×6 variant. |
+| **demosaic** | Estimating the two missing colours at every photosite from its neighbours (`decode.demosaic`, default AHD). Artefacts: **zipper** patterns along edges and **false colour** in fine stripes. |
+| **neutral render** | The output with no look applied (intensity 0 %): decode, normalise, local contrast and the display transform, with defaults fitted to the camera JPEG (ADR-0010). |
 | **scene-linear** | Pixel values proportional to light in the scene. All maths before the display transform happens here. |
 | **working space** | The colour space of scene-linear images inside picturesq: linear Rec.2020 primaries, float32. |
 | **primaries** | The exact red, green and blue a colour space's channels mean, given as xy chromaticities. |
