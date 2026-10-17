@@ -104,3 +104,24 @@ def test_gamut_fit_leaves_in_gamut_pixels_alone() -> None:
 
     rgb = np.array([[0.2, 0.4, 0.6], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]], dtype=np.float32)
     np.testing.assert_allclose(fit_gamut_oklab(rec709_to_oklab(rgb)), rgb, atol=1e-5)
+
+
+def test_gamut_fit_is_continuous_at_the_tolerance_edge() -> None:
+    # A pixel just inside the tolerance is clipped; one just outside is fitted. Both must
+    # land in the same place, or float rounding (memory layout, platform) flips the result.
+    from picturesq.colour.oklab import GAMUT_TOLERANCE, fit_gamut_oklab, oklab_to_rec709
+
+    colour = np.array([[0.97, -0.1, 0.02]], dtype=np.float32)
+
+    def over(scale: float) -> float:
+        lab = colour * np.array([1.0, scale, scale], dtype=np.float32)
+        return float(np.abs(oklab_to_rec709(lab) - 0.5).max() - 0.5)
+
+    low, high = 0.0, 1.0
+    assert over(high) > GAMUT_TOLERANCE
+    for _ in range(60):
+        mid = 0.5 * (low + high)
+        low, high = (mid, high) if over(mid) <= GAMUT_TOLERANCE else (low, mid)
+    inside = colour * np.array([1.0, low * (1 - 1e-6), low * (1 - 1e-6)], dtype=np.float32)
+    outside = colour * np.array([1.0, high * (1 + 1e-6), high * (1 + 1e-6)], dtype=np.float32)
+    np.testing.assert_allclose(fit_gamut_oklab(inside), fit_gamut_oklab(outside), atol=1e-5)

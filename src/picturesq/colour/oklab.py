@@ -71,8 +71,8 @@ def oklab_to_rec709(image: FloatArray, out: FloatArray | None = None) -> FloatAr
     return apply_matrix(out, _LMS_TO_REC709, out=out)
 
 
-GAMUT_FIT_STEPS = 16
-"""Bisection steps of :func:`fit_gamut_oklab`: chroma is found to within 2⁻¹⁶ of its value."""
+GAMUT_FIT_STEPS = 20
+"""Bisection steps of :func:`fit_gamut_oklab`: chroma is found to within 2⁻²⁰ of its value."""
 GAMUT_TOLERANCE = 1e-4
 """How far outside [0, 1] a channel may be and still count as inside (float32 round trips)."""
 
@@ -100,7 +100,9 @@ def fit_gamut_oklab(lab: FloatArray) -> FloatArray:
         trial[:, 0] = pixels[:, 0]
         np.multiply(pixels[:, 1:], scale[:, None], out=trial[:, 1:])
         candidate = oklab_to_rec709(trial)
-        fits = ((candidate >= 0.0) & (candidate <= 1.0)).all(axis=-1)
+        # The same tolerance as the inside test: a pixel just outside it then fits to where
+        # one just inside is clipped (no jump that float rounding could flip).
+        fits = ((candidate >= -GAMUT_TOLERANCE) & (candidate <= 1.0 + GAMUT_TOLERANCE)).all(axis=-1)
         low = np.where(fits, scale, low)
         high = np.where(fits, high, scale)
     pixels[:, 1:] *= low[:, None]
