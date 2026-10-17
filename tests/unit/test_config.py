@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -191,3 +192,12 @@ def test_cli_invalid_config_exits_2(tmp_path: Path) -> None:
     result = CliRunner().invoke(_probe_app(), [str(tmp_path)])
     assert result.exit_code == EXIT_INVALID == 2
     assert "decode.demosaic" in result.output
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
+def test_saved_file_has_normal_permissions(tmp_path: Path) -> None:
+    path = tmp_path / CONFIG_FILENAME
+    save_project_config(ProjectConfig(), path)
+    mask = os.umask(0)
+    os.umask(mask)
+    assert path.stat().st_mode & 0o777 == 0o666 & ~mask

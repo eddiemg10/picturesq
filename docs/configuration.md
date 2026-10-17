@@ -30,6 +30,7 @@ decode:
   lens_corrections: false
   default_crop: true
   baseline_exposure: true
+  proxy_long_edge: 2048
 normalise:
   enabled: true
   exposure:
@@ -170,6 +171,7 @@ Setting `outputs` replaces the default outputs entirely, so list every output yo
 | `lens_corrections` | `true` \| `false` | `false` | Apply the lens corrections a DNG carries: vignetting gain maps and distortion / colour-fringing warps (`OpcodeList3`). **Experimental**: written from the DNG specification but not yet checked against a reference render, so it is off by default. Only for DNGs that are not stored rotated. |
 | `default_crop` | `true` \| `false` | `true` | Crop to the photo's frame as the original specifies it: the DNG `DefaultCrop` or the maker's equivalent (LibRaw reads both). Drops a few pixels of sensor border on most cameras, and the strips outside the aspect ratio the camera was set to (a Pentax Q7 set to 3:2 records the whole 4:3 sensor; with this on you get the 3:2 photo, like the camera's JPEG). |
 | `baseline_exposure` | `true` \| `false` | `true` | Apply the DNG `BaselineExposure` tag (brightening the camera's deliberate underexposure). Some cameras record the raw 2 to 4 stops dark on purpose; with this off, their photos decode that much too dark. Has no effect on originals without the tag. |
+| `proxy_long_edge` | integer, 256–8192 | `2048` | Long edge in pixels of the **proxy**, the small cached copy of each photo that previews and the UI work on (`.picturesq/proxies/`). Exports always use the full-resolution original. Proxies are never larger than the half-size decode they come from. Changing this, any other `decode` key, the original or the picturesq version rebuilds the proxy. |
 
 The defaults for the first two keys may change during M1 while they are tested on real photos.
 

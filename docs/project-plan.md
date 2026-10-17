@@ -101,8 +101,8 @@ Photoshop-style GUI, local retouching, lens correction, cataloguing/DAM, ML trai
 ### 4.1 Decode
 - `rawpy.imread(...).postprocess(...)` with gamma 1, no auto-bright, 16-bit output, camera WB, **camera RGB** output; we apply the camera → Rec.2020 matrix ourselves in float32 so out-of-gamut colours survive (#47). Exact parameters (demosaic algorithm, highlight mode) are fixed in M1 with tests.
 - **DNG lens corrections** (`OpcodeList3` gain maps and rectilinear warps), applied in camera RGB before the matrix. Implemented from the DNG spec, off by default until verified against a reference render (ADR-0010).
-- **Proxy:** `half_size=True` skips demosaicing (≈4× fewer pixels, near-instant), then downscale to 2048 px long edge.
-- The cache key is a hash of (original bytes, decode config, picturesq version), so a stale cache is impossible.
+- **Proxy:** `half_size=True` skips demosaicing (≈4× fewer pixels), then an anti-ringing downscale to `decode.proxy_long_edge` (2048 px), stored as float16 `.npy` at `.picturesq/proxies/<stem>.<key>.npy` (`pipeline/proxy.py`). Measured on the Pocket 4: ~2 s to build, ~0.3 s to load (mostly hashing the original), 14 MB each.
+- The cache key is a hash of (original bytes, decode config, proxy format, picturesq version), so a stale cache is impossible; the stale file is deleted when its replacement is written.
 
 ### 4.2 Normalise (algorithm v1)
 Implemented (ADR-0010):
@@ -206,7 +206,7 @@ operations:
 | Command | Purpose |
 |---|---|
 | `picturesq run PROJECT` | Whole pipeline: decode → normalise → grade → export (creates `picturesq.yaml` with defaults if missing) |
-| `picturesq decode PROJECT [--full-res]` | Decode originals, build proxies (+ optional 16-bit TIFFs) |
+| `picturesq decode PROJECT [--full-res]` | Decode originals, build proxies (+ optional 16-bit TIFFs; `--full-res` not yet implemented) |
 | `picturesq normalise PROJECT` | Compute stats, flags and normalisation; print a summary |
 | `picturesq preview PROJECT [--category cold] [--png FILE]` | Contact sheet of photos × looks: in the terminal, or as a PNG |
 | `picturesq looks [--category cold]` | List the look library |
