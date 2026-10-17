@@ -1,6 +1,6 @@
 # ADR-0010: The neutral render is fitted to camera JPEGs and gated on the real export
 
-**Status:** Accepted · 2026-10-14 · Supersedes [ADR-0009](0009-m1-matched-exposure.md) · Decision 2 amended by [ADR-0011](0011-local-contrast.md)
+**Status:** Accepted · 2026-10-14 · Supersedes [ADR-0009](0009-m1-matched-exposure.md) · Decision 2 amended by [ADR-0011](0011-local-contrast.md) · Saturation defaults amended by [ADR-0012](0012-sky-colour.md)
 
 ## Context
 ADR 0009 judged M1 at *matched exposure*: one EV offset per photo, chosen so our median equals the camera JPEG's. `picturesq run` never produces that image, so the real exports stayed 1.5–3 stops darker than the camera's while the matched panel looked fine, and nobody could tell whether we were getting closer. The plan also assumed the remaining gap needed per-photo exposure normalisation and local tone mapping.

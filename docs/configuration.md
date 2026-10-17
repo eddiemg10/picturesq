@@ -22,6 +22,7 @@ version: 1
 decode:
   demosaic: ahd
   highlight_mode: blend
+  colour_matrix: dng
   lens_corrections: false
   baseline_exposure: true
 normalise:
@@ -56,12 +57,21 @@ grade:
     - 0.25
     - 0.25
     chroma_preservation: 0.7
-    saturation: 1.25
-    saturation_fade: 1.0
+    saturation: 1.15
+    saturation_fade: 0.7
     outset:
     - 0.35
     - 0.35
     - 0.35
+    blue_rendering:
+      enabled: true
+      hue: 250.0
+      hue_width: 70.0
+      hue_shift: -4.0
+      chroma: 1.3
+      lightness: 0.94
+      chroma_start: 0.01
+      chroma_full: 0.05
 export:
   outputs:
     web:
@@ -98,6 +108,14 @@ export:
     web: {long_edge: 2048, quality: 90}
     instagram: {long_edge: 1080, quality: 85}
   enabled: [web, instagram]
+```
+
+Colorimetric skies: turn off the camera-matched blue rendering (blues stay as accurate as the colour matrix makes them, paler and a little more purple than a camera JPEG):
+
+```yaml
+grade:
+  display_transform:
+    blue_rendering: {enabled: false}
 ```
 
 A punchier, more saturated neutral render:
@@ -143,6 +161,7 @@ Setting `outputs` replaces the default outputs entirely, so list every output yo
 |---|---|---|---|
 | `demosaic` | `linear` \| `vng` \| `ppg` \| `ahd` \| `dcb` \| `dht` \| `aahd` | `ahd` | Algorithm that reconstructs full colour from the sensor's colour-filter mosaic. `linear` is fastest and softest. `ahd`, `dcb`, `dht` and `aahd` keep more fine detail. |
 | `highlight_mode` | `clip` \| `ignore` \| `blend` \| `reconstruct` | `blend` | What to do where the sensor clipped (blown highlights). `clip` cuts to white; `ignore` leaves channels unclipped (can turn magenta); `blend` fades smoothly to white; `reconstruct` rebuilds detail from unclipped channels (slower). |
+| `colour_matrix` | `dng` \| `libraw` | `dng` | How camera colour becomes real colour. `dng`: as the DNG specification says, blending the file's two colour matrices (tungsten and daylight) by the photo's white balance; a tungsten-lit room gets mostly the tungsten matrix ([ADR-0012](decisions/0012-sky-colour.md)). `libraw`: LibRaw's matrix, which is always the daylight one. RAWs that aren't DNGs always use LibRaw's. |
 | `lens_corrections` | `true` \| `false` | `false` | Apply the lens corrections a DNG carries: vignetting gain maps and distortion / colour-fringing warps (`OpcodeList3`). **Experimental**: written from the DNG specification but not yet checked against a reference render, so it is off by default. Only for DNGs that are not stored rotated. |
 | `baseline_exposure` | `true` \| `false` | `true` | Apply the DNG `BaselineExposure` tag (brightening the camera's deliberate underexposure). Some cameras record the raw 2 to 4 stops dark on purpose; with this off, their photos decode that much too dark. Has no effect on originals without the tag. |
 
@@ -210,11 +229,31 @@ Defaults were fitted to camera JPEGs ([ADR-0011](decisions/0011-local-contrast.m
 | `shoulder` | number, 0–10 | `2.1` | How highlights approach white: lower rolls off earlier and more gently, higher keeps them bright longer, then rolls off harder. |
 | `inset` | three numbers, 0–1 (R, G, B) | `[0.25, 0.25, 0.25]` | How much each primary is pulled toward white before the curve. More inset makes very bright, saturated colours fade to white with less hue shift, but desaturates. |
 | `chroma_preservation` | number, 0–1 | `0.7` | Blend toward a render that tone-maps brightness only and keeps each pixel's colour ratios. `0` is pure AgX, where bright colours (a blue sky) wash out toward white much faster than in camera JPEGs; `1` keeps them fully saturated. |
-| `saturation` | number, 0–3 | `1.25` | Overall colour strength after the curve. `1` changes nothing. |
-| `saturation_fade` | number, 0–1 | `1.0` | How much of the `saturation` change fades out toward white. `1`: none is left at white, so bright colours don't get pushed against the edge of the gamut; `0`: the same everywhere. |
+| `saturation` | number, 0–3 | `1.15` | Overall colour strength after the curve. `1` changes nothing. |
+| `saturation_fade` | number, 0–1 | `0.7` | How much of the `saturation` change fades out toward white. `1`: none is left at white, so bright colours don't get pushed against the edge of the gamut; `0`: the same everywhere. |
 | `outset` | three numbers, 0–1 (R, G, B) | `[0.35, 0.35, 0.35]` | How much saturation each primary gets back after the curve. Larger than `inset` gives a net saturation boost in the midtones. |
+| `blue_rendering` | mapping | see below | Camera-matched skies: blues rendered deeper, more colourful and slightly cyan, as camera JPEGs do. On by default; `enabled: false` turns it off. |
 
 Mid grey (scene `0.18`) always stays mid grey on screen, whatever these values are (`normalise.exposure.offset_ev` brightens the scene before it gets here). The defaults were fitted to camera JPEGs ([ADR-0010](decisions/0010-camera-matched-neutral-render.md)). `contrast` must be high enough for the curve to reach black at `min_ev` and white at `max_ev`; a config where it can't is rejected.
+
+#### `grade.display_transform.blue_rendering`
+
+Camera JPEGs don't render blue skies accurately: they make them deeper, more colourful and a few degrees more cyan, because that's how people remember a blue sky. Measured against the DJI Pocket 4's and a DJI drone's JPEGs, an accurate render is ~1.2–1.6× less colourful in the sky, a little lighter and ~4° more purple. This step reproduces the camera's sky. It touches only blues: greys, whites and every other hue are left exactly as they were. The defaults are fitted to DJI JPEGs ([ADR-0012](decisions/0012-sky-colour.md)); other makers do less of this (Fujifilm's skies are close to accurate), so it is the one place the neutral render leans toward DJI's look.
+
+**To turn it off**, set `enabled: false` (see the example above). Blues then come out exactly as the colour matrix and the display transform make them. Setting `hue_shift: 0`, `chroma: 1` and `lightness: 1` has the same effect.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `true` \| `false` | `true` | Apply the camera-matched blue rendering. `false`: colorimetric blues. |
+| `hue` | number, 0–360 | `250.0` | Centre of the affected hues, as an Oklab hue angle in degrees (sky blue is ~230–270). |
+| `hue_width` | number, 0–120 | `70.0` | Hues this many degrees or more from `hue` are untouched; the effect fades smoothly (raised cosine) between. |
+| `hue_shift` | number, −30–30 | `-4.0` | Hue rotation at the centre, in degrees. Negative turns blue toward cyan, positive toward purple. |
+| `chroma` | number, 0.5–2 | `1.3` | Colourfulness scale at the centre. `1` changes nothing. |
+| `lightness` | number, 0.5–1.5 | `0.94` | Lightness scale at the centre. Below `1` darkens (a deeper sky). |
+| `chroma_start` | number, 0–0.2 | `0.01` | Oklab chroma below which pixels are untouched, so greys and whites keep their exact colour. |
+| `chroma_full` | number, 0–0.4 | `0.05` | Oklab chroma from which the full adjustment applies. Must be greater than `chroma_start`. |
+
+Colours the step pushes outside what the display can show are brought back in at constant hue and lightness (Oklab gamut fit), so deep blues don't drift toward purple.
 
 ### `export`
 
