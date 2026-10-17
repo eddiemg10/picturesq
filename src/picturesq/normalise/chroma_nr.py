@@ -11,8 +11,11 @@ bright, clean areas keep their colour edges. Measured on the CC0 samples and the
 set, our darkest tones had ~1.3x the camera JPEG's chroma before this step (ADR-0010).
 """
 
+from functools import partial
+
 import numpy as np
 
+from picturesq import parallel
 from picturesq.colour.filters import gaussian_blur, upsample_rows
 from picturesq.colour.spaces import REC2020_TO_XYZ
 from picturesq.colour.transfer import FloatArray
@@ -21,7 +24,6 @@ from picturesq.export.resize import resize_to_long_edge
 
 SMALL_SIGMA = 2.0
 """Blur sigma in pixels of the small copy; its size is set so this equals ``config.radius``."""
-BLOCK_ROWS_PIXELS = 1 << 18
 _LUMINANCE = REC2020_TO_XYZ[1].astype(np.float32)
 _FLOOR = np.float32(1e-6)
 
@@ -35,19 +37,20 @@ def chroma_noise_reduction(image: FloatArray, config: ChromaNoiseReductionConfig
     smooth = gaussian_blur(small, SMALL_SIGMA)
     smooth /= np.maximum(smooth @ _LUMINANCE, _FLOOR)[..., None]  # local chromaticity
     span = np.float32(config.fade_lightness - config.full_lightness)
-    rows = max(1, BLOCK_ROWS_PIXELS // width)
-    for top in range(0, height, rows):
-        bottom = min(height, top + rows)
+
+    def reduce_rows(top: int, bottom: int) -> None:
         block = image[top:bottom]
         luminance = block @ _LUMINANCE
         lightness = np.cbrt(np.maximum(luminance, 0.0))
         weight = np.clip((config.fade_lightness - lightness) / span, 0.0, 1.0)
         if not weight.any():
-            continue
+            return
         np.multiply(weight, np.float32(config.amount), out=weight)
         target = upsample_rows(smooth, height, width, top, bottom)
         np.multiply(target, luminance[..., None], out=target)
         np.subtract(target, block, out=target)
         np.multiply(target, weight[..., None], out=target)
         np.add(block, target, out=block)
+
+    parallel.run(partial(reduce_rows, *rows) for rows in parallel.row_blocks(height, width))
     return image

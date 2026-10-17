@@ -26,7 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
-from picturesq import __version__
+from picturesq import __version__, parallel
 from picturesq.config import OutputConfig, ProjectConfig
 from picturesq.decode import decode_original, read_baseline_exposure
 from picturesq.decode.embedded import camera_jpeg
@@ -158,6 +158,7 @@ def publish(sheet_path: Path, number: int, sha: str, section_for: Callable[[str]
 
 
 def main() -> int:
+    parallel.use(parallel.auto())
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )

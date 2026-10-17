@@ -11,7 +11,6 @@ from hypothesis import strategies as st
 from pydantic import ValidationError
 
 from picturesq.colour.agx import (
-    BLOCK_PIXELS,
     AgxCurve,
     _lookup,  # pyright: ignore[reportPrivateUsage]
     agx,
@@ -32,6 +31,7 @@ from picturesq.colour.transfer import (
     srgb_decode,
 )
 from picturesq.config import DisplayTransformConfig
+from picturesq.parallel import DEFAULT_BLOCK_PIXELS
 
 GOLDEN = Path(__file__).parents[1] / "golden" / "agx_ramp.npy"
 DEFAULT = AgxCurve.from_config(DisplayTransformConfig())
@@ -241,7 +241,7 @@ def test_table_matches_exact_curve() -> None:
 
 def test_blocks_match_whole_image() -> None:
     rng = np.random.default_rng(2)
-    image = (rng.random((3, BLOCK_PIXELS // 2 + 7, 3)) * 8.0).astype(np.float32)
+    image = (rng.random((3, DEFAULT_BLOCK_PIXELS // 2 + 7, 3)) * 8.0).astype(np.float32)
     strided = np.asfortranarray(image)  # not C-contiguous: processed in one go
     # The two memory layouts round float32 sums differently on some platforms (Windows
     # numpy: up to 1.3e-6); 1e-5 is still ~400x below one 8-bit step.

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Final
 
@@ -24,10 +25,11 @@ import numpy as np
 import tifffile
 from numpy.typing import NDArray
 
+from picturesq import parallel
+
 OPCODE_LIST_3_TAG: Final = 51022
 WARP_RECTILINEAR: Final = 1
 GAIN_MAP: Final = 9
-BLOCK_PIXELS: Final = 1 << 18
 
 
 @dataclass(frozen=True)
@@ -241,9 +243,8 @@ def apply_lens_corrections(
     before = [op for op in corrections.opcodes[:warp_index] if isinstance(op, GainMap)]
     after = [op for op in corrections.opcodes[warp_index + 1 :] if isinstance(op, GainMap)]
     out = np.empty((height, width, 3), dtype=np.float32)
-    rows_per_block = max(1, BLOCK_PIXELS // width)
-    for top in range(0, height, rows_per_block):
-        bottom = min(height, top + rows_per_block)
+
+    def correct_rows(top: int, bottom: int) -> None:
         ys, xs = np.meshgrid(
             np.arange(top, bottom, dtype=np.float64),
             np.arange(width, dtype=np.float64),
@@ -264,4 +265,6 @@ def apply_lens_corrections(
                 if gain is not None:
                     block[..., channel] *= gain
         np.multiply(block, np.float32(scale), out=block)
+
+    parallel.run(partial(correct_rows, *rows) for rows in parallel.row_blocks(height, width))
     return out

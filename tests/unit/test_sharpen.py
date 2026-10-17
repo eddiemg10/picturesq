@@ -1,7 +1,7 @@
 import numpy as np
 
 from picturesq.config import SharpenConfig
-from picturesq.export.sharpen import sharpen
+from picturesq.export.sharpen import sharpen, sharpened_rows
 
 
 def _edge() -> np.ndarray:
@@ -26,3 +26,14 @@ def test_flat_areas_and_zero_amount_unchanged() -> None:
     untouched = _edge()
     sharpen(untouched, SharpenConfig(amount=0.0))
     np.testing.assert_array_equal(untouched, _edge())
+
+
+def test_bands_match_the_whole_image() -> None:
+    rng = np.random.default_rng(3)
+    image = rng.random((41, 30, 3), dtype=np.float32)
+    config = SharpenConfig(amount=0.7, radius=1.2)
+    whole = sharpened_rows(image, config, 0, 41)
+    bands = np.concatenate(
+        [sharpened_rows(image, config, top, min(41, top + 6)) for top in range(0, 41, 6)]
+    )
+    np.testing.assert_array_equal(bands, whole)

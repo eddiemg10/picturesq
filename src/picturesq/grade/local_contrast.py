@@ -26,9 +26,12 @@ distance *and* by how close their brightness is to its own, so a pixel just abov
 horizon never takes the base of the ground below it. This runs a block of rows at a time.
 """
 
+from functools import partial
+
 import numpy as np
 from PIL import Image
 
+from picturesq import parallel
 from picturesq.colour.agx import AgxCurve, _log_encode, _lookup
 from picturesq.colour.filters import edge_aware_blur
 from picturesq.colour.spaces import REC2020_TO_XYZ
@@ -37,7 +40,6 @@ from picturesq.config import DisplayTransformConfig, LocalContrastConfig
 
 SMALL_LONG_EDGE = 512
 """Long edge of the copy the base is computed on (the base is smooth; more is wasted)."""
-BLOCK_ROWS_PIXELS = 1 << 18
 _LUMINANCE = REC2020_TO_XYZ[1].astype(np.float32)
 _SLOPE_GRID = np.linspace(-14.0, 14.0, 561)
 """Scene EVs at which the curve's slope is tabulated (0.05 EV apart)."""
@@ -133,9 +135,8 @@ def local_contrast(
     floor, amount = np.float32(config.detail_floor), np.float32(config.amount)
     limit = np.float32(config.detail_limit_ev)
     limit_inverse = np.float32(1.0 / config.detail_limit_ev)
-    rows = max(1, BLOCK_ROWS_PIXELS // width)
-    for top in range(0, height, rows):
-        bottom = min(height, top + rows)
+
+    def amplify_rows(top: int, bottom: int) -> None:
         block = image[top:bottom]
         lum = _log_luminance(block)
         base = upsampler.rows(lum, top)
@@ -153,13 +154,17 @@ def local_contrast(
         np.multiply(lum, (gain - 1.0) * limit, out=lum)
         np.exp2(lum, out=lum)
         np.multiply(block, lum[..., None], out=block)
+
+    parallel.run(partial(amplify_rows, *rows) for rows in parallel.row_blocks(height, width))
     return image
 
 
 def _log_luminance_in_blocks(image: FloatArray) -> FloatArray:
     height, width = image.shape[:2]
     out = np.empty((height, width), dtype=np.float32)
-    rows = max(1, BLOCK_ROWS_PIXELS // width)
-    for top in range(0, height, rows):
-        out[top : top + rows] = _log_luminance(image[top : top + rows])
+
+    def rows(top: int, bottom: int) -> None:
+        out[top:bottom] = _log_luminance(image[top:bottom])
+
+    parallel.run(partial(rows, *block) for block in parallel.row_blocks(height, width))
     return out

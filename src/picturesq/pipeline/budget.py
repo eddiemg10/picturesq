@@ -10,20 +10,23 @@ real originals in a fresh process and fails if the measured peak exceeds this mo
 them when a change makes the pipeline leaner; a change that needs them raised has added a
 full-resolution array (12 bytes per pixel) and should say why.
 
-Measured on Linux, default config, ``web`` + ``archive`` outputs (2026-10-17):
+Measured on Linux, default config, ``web`` + ``archive`` outputs, 4 threads (2026-10-17):
 
-- DJI FC4382 sample, 12.1 MP: 737 MiB in 33 s
-- Pocket 4, 33.2 MP: 1776 MiB in 63 s
+- DJI FC4382 sample, 12.1 MP: 571 MiB in 13 s
+- Pocket 4, 33.2 MP: 1206 MiB in 28 s
 
-That is ~52 bytes per pixel (about four float32 RGB images) over ~140 MiB of overhead; the
-constants below leave ~10 % headroom, less than one extra full-resolution array.
+That is ~32 bytes per pixel (the scene image, the output's encoded copy and the 8-bit
+result) over ~205 MiB of overhead; the constants below leave ~10 % headroom, less than
+one extra full-resolution array. Per-thread temporaries are block-sized, so the thread
+count barely moves the peak (glibc's per-thread memory pools would; see
+``parallel.limit_allocator_arenas``).
 """
 
 from typing import Final
 
 PROCESS_OVERHEAD_BYTES: Final = 256 * 2**20
 """Python, numpy, rawpy and friends, plus what doesn't scale with the photo."""
-PEAK_BYTES_PER_PIXEL: Final = 56
+PEAK_BYTES_PER_PIXEL: Final = 34
 """Full-resolution arrays alive at the peak (a float32 RGB image is 12 bytes per pixel)."""
 
 

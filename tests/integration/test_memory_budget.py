@@ -23,9 +23,11 @@ _CHILD = """
 import json, resource, sys, time
 from pathlib import Path
 from PIL import Image
+from picturesq import parallel
 from picturesq.config import ProjectConfig
 from picturesq.pipeline.export import export_originals
 
+parallel.use(parallel.auto())  # as the CLI does: threads and blocks for this machine
 original, exports = Path(sys.argv[1]), Path(sys.argv[2])
 started = time.perf_counter()
 result = export_originals([original], ProjectConfig(), exports)
@@ -37,7 +39,8 @@ with Image.open(photo.outputs["archive"]) as archive:  # full resolution
     width, height = archive.size
 peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 peak *= 1 if sys.platform == "darwin" else 1024  # bytes on macOS, KiB on Linux
-print(json.dumps({"peak": peak, "pixels": width * height, "seconds": seconds}))
+print(json.dumps({"peak": peak, "pixels": width * height, "seconds": seconds,
+                  "threads": parallel.current().threads}))
 """
 
 
@@ -60,7 +63,8 @@ def _check(original: Path, exports: Path) -> None:
     budget = photo_peak_bytes(pixels)
     print(
         f"{original.name}: {pixels / 1e6:.1f} MP, peak {peak / 2**20:.0f} MiB "
-        f"(model {budget / 2**20:.0f} MiB), {measured['seconds']:.1f} s"
+        f"(model {budget / 2**20:.0f} MiB), {measured['seconds']:.1f} s "
+        f"on {measured['threads']} threads"
     )
     assert peak <= budget, (
         f"{original.name} peaked at {peak / 2**20:.0f} MiB, over the photo peak model "

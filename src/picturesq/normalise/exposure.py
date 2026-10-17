@@ -9,8 +9,11 @@ brightening was nearly constant (+2.3 ± 0.6 EV) and did not depend on the scene
 off by default because cameras don't do it.
 """
 
+from functools import partial
+
 import numpy as np
 
+from picturesq import parallel
 from picturesq.colour.spaces import REC2020_TO_XYZ
 from picturesq.colour.transfer import EV_FLOOR, MIDDLE_GREY, FloatArray
 from picturesq.config import ExposureConfig
@@ -38,4 +41,13 @@ def exposure_ev(image: FloatArray, config: ExposureConfig) -> float:
 
 def apply_exposure(image: FloatArray, ev: float, out: FloatArray | None = None) -> FloatArray:
     """Multiply ``image`` by ``2**ev``. ``out`` may be ``image``."""
-    return np.multiply(image, np.float32(2.0**ev), out=out)
+    out = np.empty_like(image) if out is None else out
+    gain = np.float32(2.0**ev)
+    if not (image.flags.c_contiguous and out.flags.c_contiguous):
+        return np.multiply(image, gain, out=out)
+    source, target = image.reshape(-1), out.reshape(-1)
+    parallel.run(
+        partial(np.multiply, source[block], gain, out=target[block])
+        for block in parallel.pixel_blocks(len(source))
+    )
+    return out
