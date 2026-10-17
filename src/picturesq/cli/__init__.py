@@ -9,6 +9,7 @@ import typer
 
 from picturesq import __version__, parallel
 from picturesq.cli.decode import decode_project
+from picturesq.cli.doctor import run_doctor
 from picturesq.cli.export import render_project
 from picturesq.config import dump_schema, project_schema
 
@@ -145,6 +146,14 @@ def schema(
 
 
 @app.command()
-def doctor() -> None:
-    """Check the environment (LibRaw, terminal graphics, memory)."""
-    _not_implemented("doctor", "M1")
+def doctor(ctx: typer.Context, as_json: JsonOption = False) -> None:
+    """Check the environment: libraries, CPU, parallelism and terminal graphics.
+
+    Each check is ok, warning or error; exits 1 if any is an error. Terminal graphics is a
+    guess from environment variables. With --json, one document:
+    {"checks": [{"check": id, "status": "ok"|"warning"|"error", "value": str,
+    "message": str, "data": {...}}], "summary": {"ok": n, "warning": n, "error": n}}.
+    Check ids: picturesq, python, platform, libraw, libraw_features, rawpy, numpy, pillow,
+    tifffile, pydantic, pillow_features, cpus, cache, threads, block_size, terminal_graphics.
+    """
+    run_doctor(ctx, as_json=as_json)
