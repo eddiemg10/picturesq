@@ -61,6 +61,10 @@
 ## Colour science
 | Term | Meaning |
 |---|---|
+| **photosite** | One light-measuring element of the sensor; it records a single number. "Pixel" once demosaiced. |
+| **Bayer mosaic** | The repeating 2×2 pattern of red, green and blue filters over the photosites (the Pocket 4's is `RGGB`). Fujifilm's X-Trans is a 6×6 variant. |
+| **demosaic** | Estimating the two missing colours at every photosite from its neighbours (`decode.demosaic`, default AHD). Artefacts: **zipper** patterns along edges and **false colour** in fine stripes. |
+| **neutral render** | The output with no look applied (intensity 0 %): decode, normalise, local contrast and the display transform, with defaults fitted to the camera JPEG (ADR-0010). |
 | **scene-linear** | Pixel values proportional to light in the scene. All maths before the display transform happens here. |
 | **working space** | The colour space of scene-linear images inside picturesq: linear Rec.2020 primaries, float32. |
 | **primaries** | The exact red, green and blue a colour space's channels mean, given as xy chromaticities. |
