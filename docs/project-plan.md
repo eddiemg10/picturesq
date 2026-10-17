@@ -136,17 +136,33 @@ Dropped after measurement (ADR-0010): key detection with per-key targets and the
 | Item (33 MP Pocket 4 photo) | Size / cost |
 |---|---|
 | RAW in memory | ~66 MB (uint16 mosaic) |
-| Full-resolution float32 RGB image | ~400 MB per array |
-| Naive numpy operation chain | 1–2 GB peak (temporaries) |
+| Full-resolution float32 RGB image | ~380 MiB per array |
 | Full-resolution 16-bit TIFF on disk | ~200 MB |
 | 2048 px float16 proxy on disk | ~14 MB |
-| Demosaic (LibRaw, CPU) | ~2–6 s |
-| Per-pixel operation at full resolution | ~0.5–3 s |
+| **Photo peak** (measured, `web` + `archive`) | **1776 MiB** (12.1 MP DJI sample: 737 MiB) |
+| Whole export, one thread (measured) | **63 s** (12.1 MP DJI sample: 33 s) |
 | Per-pixel operation on a 1000 px proxy | ~5–30 ms |
+
+Measured per stage on the Pocket 4 photo (2026-10-17, Linux, one core; memory is the
+process's high-water mark during the stage, above the ~55 MiB the interpreter starts at):
+
+| Stage | Time | Peak |
+|---|---|---|
+| decode | 3.1 s | 570 MiB |
+| normalise | 8.5 s | 772 MiB |
+| grade | 7.3 s | 643 MiB |
+| output `web` (resize, display transform, sharpen, 8-bit) | 5.6 s | 815 MiB |
+| output `archive` (same at full resolution) | 40.8 s | 1724 MiB |
+
+The display transform is 35 s of the `archive` output, 21 s of it blue rendering; everything
+runs on one core because numpy's element-wise operations are single-threaded. The photo peak
+is modelled as ~140 MiB + ~52 bytes per pixel (about four float32 images alive at once);
+`picturesq.pipeline.budget` holds the model and `tests/integration/test_memory_budget.py`
+(`pytest -m slow`) fails if a real export exceeds it.
 
 **Rules**
 - Full-resolution stages operate in place where possible (`np.multiply(a, b, out=a)`), process neighbourhood operations in row tiles, and free arrays eagerly.
-- Worker count = `min(cores, floor(memory_budget / per_photo_peak))`. The default budget of 2.5 GB gives ~2–3 workers on the reference laptop. `per_photo_peak` is measured by a test, not guessed.
+- Worker count = `min(cores, floor(memory_budget / photo_peak))`. `photo_peak` is measured by a test, not guessed: at the measured 1.78 GiB, the default budget of 2.5 GB gives 1 worker for a 33 MP photo, so each photo must also use several cores (threads over row blocks) and the output path's temporaries need trimming before 2 workers fit.
 - Interactive paths never touch full-resolution data.
 - Budgets are enforced by tests (§8).
 
