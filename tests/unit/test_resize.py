@@ -41,3 +41,40 @@ def test_gradient_keeps_its_mean() -> None:
     image = np.tile(ramp[None, :, None], (60, 1, 3))
     out = resize_to_long_edge(image, 30)
     assert abs(float(out.mean()) - float(image.mean())) < 0.01
+
+
+def _glints_on_water() -> np.ndarray:
+    """Dark water (0.4) with a grid of tiny glints 100x brighter, as after normalise + grade."""
+    image = np.full((240, 360, 3), 0.4, dtype=np.float32)
+    image[3::9, 5::11] = 40.0
+    image[4::9, 5::11] = 40.0
+    return image
+
+
+def test_glints_do_not_ring_below_the_darkest_source_pixel() -> None:
+    # Plain Lanczos takes pixels next to such glints far below 0 (black speckle, #55).
+    out = resize_to_long_edge(_glints_on_water(), 96)
+    assert out.min() >= 0.4 - 1e-4
+
+
+def test_output_stays_within_the_local_source_range() -> None:
+    rng = np.random.default_rng(0)
+    image = rng.uniform(0.0, 1.0, (200, 300, 3)).astype(np.float32)
+    image[rng.uniform(size=(200, 300)) < 0.01] = 50.0
+    out = resize_to_long_edge(image, 75)
+    assert out.min() >= 0.0
+    assert out.max() <= 50.0 + 1e-3
+
+
+def test_ordinary_edges_keep_lanczos_sharpness() -> None:
+    # A modest step: the clamp must not soften it to a box filter's ramp.
+    from PIL import Image
+
+    image = np.zeros((60, 600, 3), dtype=np.float32)
+    image[:, 300:] = 1.0
+    image[:, 150:300] = 0.5
+    out = resize_to_long_edge(image, 200)
+    plane = Image.fromarray(np.ascontiguousarray(image[..., 0]))
+    lanczos = np.asarray(plane.resize((200, 20), Image.Resampling.LANCZOS))
+    inside = (lanczos >= 0.0) & (lanczos <= 1.0)
+    assert np.allclose(out[..., 0][inside], lanczos[inside], atol=0.02)
