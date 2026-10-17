@@ -233,7 +233,7 @@ operations:
 | `picturesq ui PROJECT` | Start the local web UI (opens the browser) |
 | `picturesq export PROJECT [--output web]` | Render originals and write enabled outputs |
 | `picturesq schema [project\|look]` | Print the JSON Schema (`look` in M3) |
-| `picturesq doctor` | Check environment: LibRaw version, terminal graphics, memory |
+| `picturesq doctor` | Check the environment: versions (LibRaw and its features, Python libraries), CPU, the threads and block size chosen and why, terminal graphics (a guess), memory (after #22); exits 1 on any error |
 
 Global flags: `--out PATH` (redirect generated files), `--json` (machine-readable output), `--threads N` and `--block-pixels N` (default: detected from the CPU; env `PICTURESQ_THREADS`, `PICTURESQ_BLOCK_PIXELS`), `--workers N`, `--memory-budget 2.5GB`, `-v/-q`.
 Exit codes: 0 ok, 1 error, 2 invalid config/usage, 3 completed with flags (only with `--strict`).

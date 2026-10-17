@@ -17,6 +17,7 @@
 | **original** | The RAW file on disk. Never written. | source, input file |
 | **proxy** | A small cached scene-linear version of a photo (2048 px, float16) used for all interactive work. | thumbnail, preview (that's the rendered result) |
 | **preview** | A display-ready render of a proxy, shown in the terminal or UI. | proxy, thumbnail |
+| **terminal graphics** | A terminal's ability to draw images (the kitty protocol or sixel), used for previews in the terminal; `picturesq doctor` guesses it from environment variables. | inline images, terminal images |
 | **contact sheet** | A grid of previews (photos × looks, or photos only). | gallery, mosaic |
 | **stage sheet** | A contact sheet of one CC0 sample after each pipeline stage, beside the camera JPEG; shown in PR descriptions. | PR preview, screenshot |
 | **look** | A named, reusable creative grade, e.g. *cold/nordic*. Defined by a **look file**. | style, preset, filter, recipe, profile |
