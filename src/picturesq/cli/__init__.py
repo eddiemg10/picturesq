@@ -11,6 +11,7 @@ from picturesq import __version__, parallel
 from picturesq.cli.decode import decode_project
 from picturesq.cli.doctor import run_doctor
 from picturesq.cli.export import MachineOptions, render_project
+from picturesq.cli.looks import list_looks
 from picturesq.cli.normalise import normalise_project
 from picturesq.config import dump_schema, look_schema, project_schema
 from picturesq.pipeline.workers import parse_memory_budget
@@ -171,10 +172,29 @@ def preview(project: ProjectArg) -> None:
     _not_implemented("preview", "M3")
 
 
+class CategoryName(StrEnum):
+    """A look category, for `picturesq looks --category`."""
+
+    bw = "bw"
+    cold = "cold"
+    warm = "warm"
+    cinematic = "cinematic"
+
+
 @app.command()
-def looks() -> None:
-    """List the look library, by category."""
-    _not_implemented("looks", "M3")
+def looks(
+    category: Annotated[
+        CategoryName | None, typer.Option("--category", help="Only this category.")
+    ] = None,
+    as_json: JsonOption = False,
+) -> None:
+    """List the look library, by category, with each look's parameters.
+
+    With --json, one document: {"looks": [{"look": "category/name", "category": str,
+    "name": str, "description": str, "parameters": {name: {"default", "min", "max",
+    "label"}}, "operations": [op]}]}, in category then name order.
+    """
+    list_looks(None if category is None else category.value, as_json=as_json)
 
 
 @app.command()
