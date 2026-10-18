@@ -28,7 +28,7 @@ from numpy.typing import NDArray
 # rawpy re-exports these at runtime, but its type stubs only declare them in rawpy._rawpy.
 from rawpy._rawpy import LibRawError, RawPy
 
-from picturesq.colour.temperature import _ROBERTSON, xy_to_cct, xyz_to_xy
+from picturesq.colour.temperature import xy_to_kelvin_tint, xyz_to_xy
 from picturesq.config.project import DecodeConfig
 from picturesq.decode.dng_colour import DngColour, dng_camera_to_working, read_dng_colour
 from picturesq.decode.exposure import read_baseline_exposure
@@ -92,10 +92,11 @@ def read_photo_info(path: Path, config: DecodeConfig) -> PhotoInfo:
     except (LibRawError, OSError, ValueError) as err:
         raise DecodeError(f"cannot read {path.name}: {err}") from err
     gain = 2.0**ev if config.baseline_exposure else 1.0
+    kelvin, tint = (None, None) if xy is None else xy_to_kelvin_tint(xy)
     return PhotoInfo(
         as_shot_xy=xy,
-        as_shot_kelvin=None if xy is None else xy_to_cct(xy),
-        as_shot_tint=None if xy is None else -1000.0 * _duv(xy),
+        as_shot_kelvin=kelvin,
+        as_shot_tint=tint,
         baseline_exposure_ev=ev,
         clip_level=clip_level(multipliers, config.highlight_mode, gain),
     )
@@ -192,29 +193,3 @@ def clip_level(multipliers: NDArray[np.floating], highlight_mode: str, gain: flo
     else:
         raise ValueError(f"unknown highlight mode {highlight_mode!r}")
     return gain * fraction
-
-
-def _duv(xy: tuple[float, float]) -> float:
-    """Signed distance of ``xy`` from the black-body (Planckian) line in CIE 1960 uv.
-
-    Positive above the line (greener), negative below (magenta). The line is approximated by
-    Robertson's table points, joined by straight segments; the white's distance is taken
-    along the isotemperature line it lies on. A shared ``xy_to_kelvin_tint`` (#80) is the
-    place for this in ``colour/temperature.py``.
-    """
-    x, y = xy
-    denominator = -2.0 * x + 12.0 * y + 3.0
-    u, v = 4.0 * x / denominator, 6.0 * y / denominator
-    _mired, line_u, line_v, slope = _ROBERTSON.T
-    distance = ((v - line_v) - slope * (u - line_u)) / np.sqrt(1.0 + slope**2)
-    flips = np.nonzero(distance[1:] * distance[:-1] <= 0.0)[0]
-    i = int(flips[0]) if len(flips) else (0 if distance[0] > 0.0 else len(distance) - 2)
-    fraction = float(np.clip(distance[i] / (distance[i] - distance[i + 1]), 0.0, 1.0))
-    locus_u = line_u[i] + fraction * (line_u[i + 1] - line_u[i])
-    locus_v = line_v[i] + fraction * (line_v[i + 1] - line_v[i])
-    du, dv = u - locus_u, v - locus_v
-    # Along the black-body line v rises with u (at these temperatures), so "above" is the
-    # side to the left of the direction of increasing u.
-    tangent_u, tangent_v = line_u[i + 1] - line_u[i], line_v[i + 1] - line_v[i]
-    side = tangent_u * dv - tangent_v * du
-    return float(np.copysign(np.hypot(du, dv), side))

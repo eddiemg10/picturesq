@@ -2,9 +2,17 @@ import numpy as np
 import pytest
 
 from picturesq.colour.oklab import rec2020_to_oklab
-from picturesq.colour.spaces import REC2020_TO_XYZ
+from picturesq.colour.spaces import D65, REC2020_TO_XYZ, XYZ_TO_REC2020
+from picturesq.colour.temperature import bradford_matrix, kelvin_tint_to_xy, xy_to_xyz
 from picturesq.config import ChromaNoiseReductionConfig, ExposureConfig, ProjectConfig
-from picturesq.normalise import chroma_noise_reduction, exposure_ev, median_ev, normalise
+from picturesq.decode import PhotoInfo
+from picturesq.normalise import (
+    WhiteBalanceOverrideError,
+    chroma_noise_reduction,
+    exposure_ev,
+    median_ev,
+    normalise,
+)
 from picturesq.photo import PhotoContext
 
 
@@ -93,3 +101,51 @@ def test_exposure_override_replaces_the_computed_exposure() -> None:
     other = _grey(0.1)
     normalise(other, config, PhotoContext(name="B.DNG"))  # no override: offset_ev 2.0
     np.testing.assert_allclose(other, 0.1 * 4.0, rtol=1e-5)
+
+
+def _info(as_shot_xy: tuple[float, float] | None) -> PhotoInfo:
+    return PhotoInfo(as_shot_xy, None, None, 0.0, 1.0)
+
+
+def test_enabled_override_skips_normalise_for_that_photo_only() -> None:
+    config = ProjectConfig.model_validate({"photos": {"a.dng": {"normalise": {"enabled": False}}}})
+    image = _grey(0.1)
+    normalise(image, config, PhotoContext(name="A.DNG"))
+    np.testing.assert_array_equal(image, np.float32(0.1))
+    other = _grey(0.1)
+    normalise(other, config, PhotoContext(name="b.dng"))
+    np.testing.assert_allclose(other, 0.4, rtol=1e-5)
+
+
+def test_enabled_override_replaces_the_project_setting() -> None:
+    config = ProjectConfig.model_validate(
+        {"normalise": {"enabled": False}, "photos": {"a.dng": {"normalise": {"enabled": True}}}}
+    )
+    image = _grey(0.1)
+    normalise(image, config, PhotoContext(name="a.dng"))
+    np.testing.assert_allclose(image, 0.4, rtol=1e-5)
+
+
+def test_white_balance_override_rebalances_before_exposure() -> None:
+    as_shot = kelvin_tint_to_xy(5500.0, 0.0)
+    light = kelvin_tint_to_xy(3200.0, 0.0)
+    config = ProjectConfig.model_validate(
+        {"photos": {"a.dng": {"normalise": {"wb_kelvin": 3200.0, "exposure_ev": 1.0}}}}
+    )
+    grey = XYZ_TO_REC2020 @ (0.1 * (bradford_matrix(as_shot, D65) @ xy_to_xyz(light)))
+    image = np.tile(grey.astype(np.float32), (40, 60, 1))
+    normalise(image, config, PhotoContext(name="a.dng", info=_info(as_shot)))
+    np.testing.assert_allclose(image, 0.2, rtol=1e-4)  # neutral, then +1 EV
+
+
+def test_white_balance_override_without_the_as_shot_white_is_an_error() -> None:
+    config = ProjectConfig.model_validate({"photos": {"a.dng": {"normalise": {"tint": 10.0}}}})
+    for photo in (PhotoContext(name="a.dng"), PhotoContext(name="a.dng", info=_info(None))):
+        with pytest.raises(WhiteBalanceOverrideError):
+            normalise(_grey(0.1), config, photo)
+
+
+def test_photo_info_is_ignored_without_a_white_balance_override() -> None:
+    image = _grey(0.1)
+    normalise(image, ProjectConfig(), PhotoContext(name="a.dng", info=_info((0.45, 0.41))))
+    np.testing.assert_allclose(image, 0.4, rtol=1e-5)
