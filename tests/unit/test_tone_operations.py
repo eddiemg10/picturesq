@@ -29,18 +29,24 @@ def test_curve_passes_through_its_points() -> None:
     np.testing.assert_allclose(_stops(image), [y for _, y in SOFT_HIGHLIGHTS.points], atol=1e-4)
 
 
-def test_curve_has_slope_one_beyond_its_points() -> None:
+def test_curve_continues_straight_beyond_its_points() -> None:
+    """Past the ends: the end secants (1 below, (2.6 - 1.4) / 2 = 0.6 above)."""
     image = apply_operation(_greys(np.array([-8.0, -6.0, 6.0, 8.0])), SOFT_HIGHLIGHTS)
     stops = _stops(image)
     np.testing.assert_allclose(stops[:2], [-8.0, -6.0], atol=1e-4)
-    np.testing.assert_allclose(stops[2:], [4.6, 6.6], atol=1e-4)  # 6 and 8, shifted by -1.4
+    np.testing.assert_allclose(stops[2:], [3.8, 5.0], atol=1e-4)
 
 
 def test_curve_is_smooth_at_its_ends() -> None:
-    """The end slopes are 1 where that stays monotone, so the tails join without a kink."""
+    """The slope at an end point is its end secant, the tail's slope: no kink."""
     grid, shift = tone_curve_table(SOFT_HIGHLIGHTS.points)
-    slope = np.diff(shift + grid) / np.diff(grid)
+    curve = shift + grid
+    inside = (grid >= -2.0) & (grid <= 4.0)
+    slope = np.diff(curve[inside]) / np.diff(grid[inside])
     assert slope[0] == pytest.approx(1.0, abs=0.02)
+    assert slope[-1] == pytest.approx(0.6, abs=0.02)
+    # Never steeper again past the softened part: the highlights stay soft.
+    assert (slope[np.searchsorted(grid[inside], 2.0) :] < 0.85).all()
 
 
 @settings(max_examples=60, deadline=None)
