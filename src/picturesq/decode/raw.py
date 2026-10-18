@@ -103,8 +103,9 @@ def decode_original(
     If ``config.baseline_exposure`` is set, the DNG ``BaselineExposure`` (stops) is applied as a
     linear gain ``2**ev``: some cameras record the raw 2 to 4 stops dark on purpose, and without
     this every render comes out dark. The result is not clipped, so values can exceed 1.0. No
-    other brightness scaling happens here (no auto-brightness): matching exposure across photos
-    is the job of the normalise stage.
+    other brightness scaling happens here (no auto-brightness, and by default no white level
+    taken from the frame's brightest pixel: ``config.adjust_white_level``, ADR-0018): matching
+    exposure across photos is the job of the normalise stage.
     """
     try:
         gain = 2.0 ** read_baseline_exposure(path) if config.baseline_exposure else 1.0
@@ -126,6 +127,7 @@ def decode_original(
                 half_size=half_size,
                 use_camera_wb=True,
                 no_auto_bright=True,
+                adjust_maximum_thr=config.adjust_white_level,
                 gamma=(1, 1),
                 output_bps=16,
                 output_color=ColorSpace.raw,

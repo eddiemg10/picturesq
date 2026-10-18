@@ -22,3 +22,4 @@ New ADRs get the next number; superseded ones are marked, not deleted.
 | [0015](0015-parallelism-policy.md) | Threads within a photo, photos scheduled by memory, and both as machine settings | Accepted |
 | [0016](0016-keep-as-shot-white-balance.md) | Keep the as-shot white balance; flag disagreement, never correct it | Accepted |
 | [0017](0017-scene-contrast.md) | Scene contrast for flat scenes, off by default | Accepted |
+| [0018](0018-white-level-from-the-original.md) | The white level comes from the original, not from the frame's brightest pixel | Accepted |
