@@ -8,10 +8,20 @@ white lies between a camera's two calibration illuminants, so we do too.
 **Chromatic adaptation** (Bradford) maps colours seen under one white to the colours that
 look the same under another, by scaling cone-like responses: how our eyes adapt to the
 colour of the light. ICC and the DNG specification both use Bradford.
+
+**White balance** is described by two numbers: **temperature** (kelvin, warm ↔ cool, along
+the Planckian locus) and **tint** (green ↔ magenta, across it). Tint is measured along
+Robertson's isotemperature lines in the CIE 1960 uv diagram, as ``tint = -1000 * Duv``:
+Duv is the signed uv distance from the Planckian locus (positive above it, towards green),
+so a **positive tint is magenta** (below the locus) and a negative tint is green. That is
+Lightroom's direction but not its scale: the Adobe DNG SDK scales tint as -3000 * Duv,
+about three times ours (Lightroom's slider presumably follows the SDK; unverified).
 """
 
 import numpy as np
 from numpy.typing import NDArray
+
+from picturesq.colour.spaces import REC2020_TO_XYZ, XYZ_TO_REC2020
 
 Matrix = NDArray[np.float64]
 
@@ -74,26 +84,122 @@ def xyz_to_xy(xyz: NDArray[np.float64]) -> tuple[float, float]:
     return float(xyz[0]) / total, float(xyz[1]) / total
 
 
+def mired(kelvin: float) -> float:
+    """Kelvin → mired (micro reciprocal degrees): ``1e6 / kelvin``.
+
+    Compare white balances by their mired difference, not their kelvin difference: equal
+    mired steps look roughly equally different. 2000 → 2500 K is 100 mired, an obvious
+    shift; 10000 → 10500 K is under 5 mired, barely visible. Colour-correction filters are
+    rated in mired for the same reason.
+    """
+    if kelvin <= 0.0:
+        raise ValueError(f"kelvin must be positive, got {kelvin}")
+    return 1e6 / kelvin
+
+
+def _xy_to_uv(xy: tuple[float, float]) -> tuple[float, float]:
+    """CIE 1931 xy → CIE 1960 uv."""
+    x, y = xy
+    denominator = -2.0 * x + 12.0 * y + 3.0
+    return 4.0 * x / denominator, 6.0 * y / denominator
+
+
+def _uv_to_xy(u: float, v: float) -> tuple[float, float]:
+    """CIE 1960 uv → CIE 1931 xy."""
+    denominator = 2.0 * u - 8.0 * v + 4.0
+    return 3.0 * u / denominator, 2.0 * v / denominator
+
+
+def _isotemperature_line(i: int, fraction: float) -> tuple[float, float, float, float, float]:
+    """The isotemperature line ``fraction`` of the way from table row ``i`` to ``i + 1``.
+
+    Returns (reciprocal megakelvin, u, v on the Planckian locus, unit direction u, v). The
+    direction points below the locus (towards magenta); position and direction are both
+    interpolated linearly in mired, as Robertson, the DNG SDK and colour-science do.
+    """
+    reciprocal, line_u, line_v, slope = _ROBERTSON.T
+    length = np.sqrt(1.0 + slope**2)
+    direction_u, direction_v = 1.0 / length, slope / length
+
+    def lerp(values: NDArray[np.float64]) -> float:
+        return float(values[i] + fraction * (values[i + 1] - values[i]))
+
+    du, dv = lerp(direction_u), lerp(direction_v)
+    norm = float(np.hypot(du, dv))
+    return lerp(reciprocal), lerp(line_u), lerp(line_v), du / norm, dv / norm
+
+
+def _locate(u: float, v: float) -> tuple[int, float] | None:
+    """The pair of isotemperature lines a uv point lies between, and how far along.
+
+    ``None`` when it lies outside the table: bluer than infinite temperature, or redder
+    than 1667 K.
+    """
+    _, line_u, line_v, slope = _ROBERTSON.T
+    # Signed distance from each isotemperature line; the point lies between two lines
+    # where the sign flips.
+    distance = ((v - line_v) - slope * (u - line_u)) / np.sqrt(1.0 + slope**2)
+    flips = np.nonzero(distance[1:] * distance[:-1] <= 0.0)[0]
+    if len(flips) == 0:
+        return None
+    i = int(flips[0])
+    return i, float(distance[i] / (distance[i] - distance[i + 1]))
+
+
 def xy_to_cct(xy: tuple[float, float]) -> float:
     """Correlated colour temperature in kelvin (Robertson 1968), clamped to [1667, inf).
 
     Whites bluer than the first isotemperature line (infinite temperature) return a very
     large value; whites redder than the last (1667 K) return 1667.
     """
-    x, y = xy
-    denominator = -2.0 * x + 12.0 * y + 3.0
-    u, v = 4.0 * x / denominator, 6.0 * y / denominator
-    mired, line_u, line_v, slope = _ROBERTSON.T
-    # Signed distance from each isotemperature line; the white lies between two lines
-    # where the sign flips.
-    distance = ((v - line_v) - slope * (u - line_u)) / np.sqrt(1.0 + slope**2)
-    flips = np.nonzero(distance[1:] * distance[:-1] <= 0.0)[0]
-    if len(flips) == 0:
-        return 1e6 / mired[-1] if distance[-1] > 0.0 else 1e9
-    i = int(flips[0])
-    fraction = distance[i] / (distance[i] - distance[i + 1])
-    reciprocal = mired[i] + fraction * (mired[i + 1] - mired[i])
+    u, v = _xy_to_uv(xy)
+    located = _locate(u, v)
+    if located is None:
+        _, line_u, line_v, slope = _ROBERTSON[-1]
+        redder = (v - line_v) - slope * (u - line_u) > 0.0
+        return 1e6 / _ROBERTSON[-1, 0] if redder else 1e9
+    reciprocal = _isotemperature_line(*located)[0]
     return 1e6 / reciprocal if reciprocal > 0.0 else 1e9
+
+
+def kelvin_tint_to_xy(kelvin: float, tint: float) -> tuple[float, float]:
+    """White balance as temperature and tint → chromaticity xy (Robertson 1968).
+
+    Finds the Planckian locus point at ``kelvin`` and moves ``tint / 1000`` along its
+    isotemperature line in CIE 1960 uv: positive tint is magenta (below the locus),
+    negative is green. ``kelvin`` must be at least 1667 (the table's last line).
+    """
+    reciprocal = mired(kelvin)
+    last = float(_ROBERTSON[-1, 0])
+    if reciprocal > last:
+        raise ValueError(f"kelvin must be at least {1e6 / last:.0f}, got {kelvin}")
+    i = min(
+        int(np.searchsorted(_ROBERTSON[:, 0], reciprocal, side="right")) - 1, len(_ROBERTSON) - 2
+    )
+    fraction = (reciprocal - _ROBERTSON[i, 0]) / (_ROBERTSON[i + 1, 0] - _ROBERTSON[i, 0])
+    _, u, v, du, dv = _isotemperature_line(i, float(fraction))
+    offset = tint / 1000.0
+    return _uv_to_xy(u + offset * du, v + offset * dv)
+
+
+def xy_to_kelvin_tint(xy: tuple[float, float]) -> tuple[float, float]:
+    """Chromaticity xy → white balance as (kelvin, tint); the inverse of
+    :func:`kelvin_tint_to_xy`.
+
+    Kelvin is :func:`xy_to_cct`'s. Tint is ``-1000 * Duv``, the distance from the
+    Planckian locus along the isotemperature line through ``xy`` (positive is magenta).
+    Whites outside the table are measured from its end line (1667 K or infinite
+    temperature, returned as 1e9 K).
+    """
+    u, v = _xy_to_uv(xy)
+    located = _locate(u, v)
+    if located is None:
+        _, line_u, line_v, slope = _ROBERTSON[-1]
+        redder = (v - line_v) - slope * (u - line_u) > 0.0
+        located = (len(_ROBERTSON) - 2, 1.0) if redder else (0, 0.0)
+    reciprocal, locus_u, locus_v, du, dv = _isotemperature_line(*located)
+    tint = 1000.0 * ((u - locus_u) * du + (v - locus_v) * dv)
+    return (1e6 / reciprocal if reciprocal > 0.0 else 1e9), tint
 
 
 def bradford_matrix(source_white: tuple[float, float], target_white: tuple[float, float]) -> Matrix:
@@ -101,3 +207,13 @@ def bradford_matrix(source_white: tuple[float, float], target_white: tuple[float
     source = BRADFORD @ xy_to_xyz(source_white)
     target = BRADFORD @ xy_to_xyz(target_white)
     return np.linalg.inv(BRADFORD) @ np.diag(target / source) @ BRADFORD
+
+
+def white_balance_matrix(source_xy: tuple[float, float], target_xy: tuple[float, float]) -> Matrix:
+    """Linear Rec.2020 → linear Rec.2020, re-balancing from one white to another.
+
+    A colour that looked neutral under ``source_xy`` comes out neutral under
+    ``target_xy``: Bradford chromatic adaptation in XYZ, wrapped in the working space's
+    matrices. Identity when the whites are equal.
+    """
+    return XYZ_TO_REC2020 @ bradford_matrix(source_xy, target_xy) @ REC2020_TO_XYZ
