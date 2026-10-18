@@ -2,7 +2,7 @@
 
 Short entries: **concept**, a one-paragraph explanation, and **why it mattered in the code**.
 Agents append here as phases introduce new concepts.
-New to this? Start with the milestone primers, which tie these entries together: [M1: from sensor numbers to a neutral render](primers/m1-neutral-render.md).
+New to this? Start with the milestone primers, which tie these entries together: [M1: from sensor numbers to a neutral render](primers/m1-neutral-render.md), [M2: measuring a photo before touching it](primers/m2-normalise.md).
 
 ---
 
@@ -137,3 +137,11 @@ Clipping a scene-linear image to the display's 0–1 range works per channel, an
 ## 2026-10-18 · Amdahl's law: why a second photo helps and a fourth doesn't
 If a fraction of a job can't be split across cores, it limits the speed-up however many cores you add. That is **Amdahl's law**: with a serial fraction *s*, *n* cores give at most 1 / (s + (1 − s)/n). Within one photo, some parts are serial: LibRaw's decode, Pillow's JPEG encoding, the Python between numpy calls. Measured, 4 threads made an export ~2.2× faster, not 4×, which is about what a third of the time being serial predicts. Exporting a second photo at the same time fills those serial gaps, because the two photos don't wait on each other. More photos stop helping once the cores are busy, and they compete for the one connection to main memory and the shared cache. Every photo in flight also holds its own full-resolution arrays, so memory, not cores, usually sets the limit.
 **Why it mattered:** on the 4-core laptop, 2 photos × 2 threads exported a batch 5-17 % faster than 1 × 4, and 4 × 1 was no faster than 2 × 2 with ~50 % more memory (ADR-0015). So `picturesq.pipeline.workers` runs photos side by side only while their predicted photo peaks fit the memory budget, at most cores ÷ 2 at a time, and gives each photo the cores ÷ photos running when it starts.
+
+## 2026-10-18 · Grey-world: the average colour is not always grey
+The simplest way to estimate the colour of the light from a photo is **grey-world**: assume the scene, averaged over every pixel, is grey, so whatever colour the average has must come from the light. It works for varied scenes (a street, a landscape with sky and ground) and fails whenever one colour fills the frame: a wooden table, a beach, a forest, a sunset. Grey-world then mistakes a warm scene for warm light and neutralises the scene itself. Restricting the average to well-exposed, low-chroma pixels (likely neutral surfaces) helps, but no estimate from pixels alone is always right, because a white card under orange light and an orange card under white light can produce the same numbers.
+**Why it mattered:** on the tungsten-lit Pentax K-5 II s sample, plain grey-world estimates 2686 K against the camera's recorded 3332 K (72 mired apart), turning the table grey and the white card blue ([M2 primer](primers/m2-normalise.md)). So normalise's white balance check (#83) only **flags** disagreement (`wb_disagreement`), and the user decides, with `wb_kelvin`/`tint` overrides if needed.
+
+## 2026-10-18 · Judge noise at the size people will see
+Noise is random, so averaging neighbouring pixels partly cancels it: the average of *n* independent noisy values has 1/√*n* of the noise. Shrinking a photo averages pixels, so a 4240 px wide photo shown 1080 px wide (about 15 pixels into each) has roughly a quarter of the noise it shows at 100 %. Detail is not random and survives the averaging much better. That's also why luma (brightness) noise reduction is hard: noise and fine detail are both small, high-contrast variations, and a filter that removes one softens the other, while colour noise can be smoothed freely because our eyes resolve colour coarsely.
+**Why it mattered:** picturesq does chroma NR only (`normalise.chroma_nr`) and defers luma NR until night photos at output size show they need it (project plan §11). The [M2 primer](primers/m2-normalise.md) shows an ISO 20000 crop at 100 % next to the whole photo at output size, where the same noise has nearly vanished.
