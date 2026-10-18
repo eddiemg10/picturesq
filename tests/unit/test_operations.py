@@ -20,6 +20,7 @@ from picturesq.config.operations import (
     GrainOperation,
     HslOperation,
     HueBand,
+    LutOperation,
     Operation,
     SaturationOperation,
     SplitToneOperation,
@@ -72,6 +73,11 @@ def test_every_operation_has_a_function() -> None:
 
 @pytest.mark.parametrize("operation_type", OPERATION_TYPES)
 def test_defaults_are_neutral(operation_type: type[Operation]) -> None:
+    if operation_type is LutOperation:
+        # A LUT names its file, and by default applies as made (amount 1).
+        assert not LutOperation(file="look.cube").is_neutral()
+        assert LutOperation(file="look.cube", amount=0.0).is_neutral()
+        return
     assert operation_type().is_neutral()
 
 
@@ -116,7 +122,12 @@ def test_intensity_zero_is_bit_identical(operation: Operation) -> None:
 def test_neutral_values_are_bit_identical(operation_type: type[Operation]) -> None:
     image = _image()
     before = image.copy()
-    apply_operation(image, operation_type(), 1.0)
+    neutral = (
+        LutOperation(file="look.cube", amount=0.0)
+        if operation_type is LutOperation
+        else operation_type()
+    )
+    apply_operation(image, neutral, 1.0)
     assert np.array_equal(image, before)
 
 

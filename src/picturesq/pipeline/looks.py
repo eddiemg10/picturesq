@@ -16,7 +16,7 @@ def resolve_look(
     if choice is None:
         return None
     look = find_look(choice.name, library)
-    operations = tuple(look.file.resolve(choice.parameters))
+    operations = tuple(look.resolve(choice.parameters))
     parameters = {
         key: choice.parameters.get(key, parameter.default)
         for key, parameter in look.file.parameters.items()

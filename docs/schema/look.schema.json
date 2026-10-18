@@ -382,6 +382,57 @@
       "title": "HueBand",
       "type": "object"
     },
+    "LutOperation": {
+      "additionalProperties": false,
+      "description": "A ``.cube`` LUT, display-referred, in the colour space it was built for.\n\n``file`` is relative to the look file (no ``..``). ``input_space`` says what the LUT\nexpects and returns: ``srgb`` (sRGB primaries and curve, what most creative LUTs are\nmade for) or ``rec709`` (Rec.709 primaries, BT.1886 gamma 2.4). The display transform's\noutput is encoded into that space, looked up, and decoded back. ``amount`` blends the\nLUT's result with its input: intensity scales it like any strength value. The table is\nloaded with the look file (``picturesq.config.look``).",
+      "properties": {
+        "op": {
+          "const": "lut",
+          "default": "lut",
+          "title": "Op",
+          "type": "string"
+        },
+        "file": {
+          "description": "The .cube file, relative to the look file.",
+          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.cube$",
+          "title": "File",
+          "type": "string"
+        },
+        "input_space": {
+          "default": "srgb",
+          "description": "What the LUT expects: srgb or rec709 (gamma 2.4).",
+          "enum": [
+            "srgb",
+            "rec709"
+          ],
+          "title": "Input Space",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "default": 1.0,
+              "description": "Blend of the LUT's result with its input; 1 is the LUT as made.",
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "neutral": 0.0,
+              "title": "Amount",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "required": [
+        "file"
+      ],
+      "title": "LutOperation",
+      "type": "object"
+    },
     "SaturationOperation": {
       "additionalProperties": false,
       "description": "Scale every pixel's chroma (Oklab), keeping its lightness and hue.",
@@ -758,6 +809,7 @@
             "fade": "#/$defs/FadeOperation",
             "grain": "#/$defs/GrainOperation",
             "hsl": "#/$defs/HslOperation",
+            "lut": "#/$defs/LutOperation",
             "saturation": "#/$defs/SaturationOperation",
             "split_tone": "#/$defs/SplitToneOperation",
             "tone_curve": "#/$defs/ToneCurveOperation",
@@ -803,6 +855,9 @@
           },
           {
             "$ref": "#/$defs/GrainOperation"
+          },
+          {
+            "$ref": "#/$defs/LutOperation"
           }
         ]
       },

@@ -479,7 +479,7 @@ operations:
 
 **Intensity** (how strongly a look applies, 0–150 %) scales each operation's strength values between their **neutral value** (where the operation does nothing) and the look's value; values that say where or which (a pivot, a hue) are kept. So `exposure: {ev: 1}` at 50 % is +0.5 EV, and at 0 % every operation is skipped: exactly the neutral render ([ADR-0019](decisions/0019-grade-operations-and-intensity.md)). Below, the strength values are those with a neutral value.
 
-**Order:** the look's scene operations run on scene light, then adjustments, then local contrast and the display transform; the look's display operations run after the display transform, for each output (`fade`, `grain`).
+**Order:** the look's scene operations run on scene light, then adjustments, then local contrast and the display transform; the look's display operations run after the display transform, for each output (`fade`, `grain`, `lut`).
 
 ### Operations
 
@@ -585,6 +585,18 @@ Film-like grain, the same on every run and the same pattern in every output.
 |---|---|---|---|
 | `amount` | number, 0–0.1 | `0` | Strength in the mid tones, as an sRGB value; it fades out toward black and white. `0.02` is subtle. |
 | `size` | number, 0.0002–0.005 | — | Grain size as a fraction of the long edge. Default `0.0005` (1/2000). |
+
+#### `lut` (display)
+
+A 3D (or 1D) LUT in a `.cube` file, applied after the display transform. A LUT only means something in the colour space it was made for, so the operation says which. Ship the `.cube` next to the look file; its bytes are part of the look's hash in each sidecar.
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `file` | path ending `.cube` | — | Relative to the look file's folder, e.g. `luts/filmic.cube`; no `..`. Read when the look loads: a missing or malformed file is an error naming it (and the line). |
+| `input_space` | `srgb` \| `rec709` | — | What the LUT expects and returns: `srgb` (sRGB primaries and curve; most creative LUTs) or `rec709` (Rec.709 primaries, gamma 2.4). Default `srgb`. |
+| `amount` | number, 0–1 | `0` | Blend of the LUT's result with its input. Default `1` (the LUT as made); intensity scales it like any strength value. |
+
+Values between the LUT's grid points are interpolated **tetrahedrally**, which keeps greys grey if the LUT does ([learning log](learning-log.md)).
 
 ## Validation and errors
 
