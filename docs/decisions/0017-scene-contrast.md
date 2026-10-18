@@ -26,7 +26,7 @@ What we don't know: there is no photo with a range between 3.3 and 5.0 EV, so th
 5. **Revisit** with 3–5 more flat same-frame photos (overcast, fog, snow, a flat beach; one non-DJI if possible). They decide the default (on or off), the threshold within 3.3–5.0 EV, and the amount.
 
 ## Consequences
-- + Flat scenes can look like the camera's: on the two photos, the slope and detail gaps closed with the prototype's amount. The gentle default closes about half of the slope gap.
+- + Flat scenes can look like the camera's: on the two photos, the slope and detail gaps closed with the prototype's amount. With the gentle default turned on, the camera/ours slope ratios go from 1.52/1.38 to 1.15/1.12 (about two-thirds of the gap closed), detail ratios from 0.55–0.74 to 0.64–0.88, and the reference gate's median |ΔEV| from 0.24 to 0.17 with colour still passing (lowest band 0.85). The other 21 of 23 cached photos are unchanged.
 - + Wider scenes are bit-identical whether it's on or off. With it off (the default), every render is unchanged.
 - − Off by default means the neutral render still differs from the camera on flat scenes until someone turns it on.
 - − The fit rests on two photos from one camera. The threshold and pivot may not transfer to other makers.
