@@ -102,6 +102,7 @@
 | **key** | Overall brightness character of a scene: `low_key`, `normal`, `high_key`. (Not used by normalise since ADR-0010.) |
 | **EV / stop** | A doubling or halving of light. `exposure_ev: +1` = ×2 in scene-linear. |
 | **white balance (WB)** | Per-channel gains making neutral objects neutral; **as-shot** = camera's recorded values. |
+| **grey-world** | A white balance estimate: assume the photo averages to grey, so its average colour is the light's. Fails when one colour fills the frame. |
 | **chroma NR / luma NR** | Noise reduction on colour / brightness detail. |
 
 ## Project management
