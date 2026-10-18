@@ -121,15 +121,26 @@ def _warm(level: float) -> np.ndarray:
     return image
 
 
-def test_white_balance_disagreement_is_flagged() -> None:
+FLAG_DISAGREEMENT: dict[str, object] = {"normalise": {"white_balance": {"flag_disagreement": True}}}
+
+
+def test_white_balance_disagreement_is_recorded_but_not_flagged_by_default() -> None:
     result = normalise_proxy(_warm(BRIGHT), "a.dng", D65_INFO, _config())
+    assert result.white_balance is not None
+    assert result.white_balance.disagrees
+    assert "wb_disagreement" not in [flag.name for flag in result.flags]
+    assert result.to_dict()["white_balance"]["disagrees"] is True
+
+
+def test_white_balance_disagreement_is_flagged_when_enabled() -> None:
+    result = normalise_proxy(_warm(BRIGHT), "a.dng", D65_INFO, _config(FLAG_DISAGREEMENT))
     assert result.white_balance is not None
     assert result.white_balance.disagrees
     assert "wb_disagreement" in [flag.name for flag in result.flags]
 
 
 def test_white_balance_override_reports_the_check_but_does_not_flag() -> None:
-    config = _config({"photos": {"a.dng": {"normalise": {"wb_kelvin": 3000}}}})
+    config = _config({**FLAG_DISAGREEMENT, "photos": {"a.dng": {"normalise": {"wb_kelvin": 3000}}}})
     result = normalise_proxy(_warm(BRIGHT), "a.dng", D65_INFO, config)
     assert result.white_balance is not None
     assert result.white_balance.disagrees  # checked on the decoded proxy, before the override
