@@ -146,7 +146,7 @@ grade:
   display_transform: {contrast: 1.5, saturation: 1.4}
 ```
 
-Make every photo in a batch about equally bright (cameras don't do this; it is off by default):
+Pull every photo in a batch toward the same brightness (cameras don't do this; it is off by default, and it flattens the mood of dark and bright scenes). `target_ev: -1.0` puts the medians around `offset_ev + target_ev` = +1 stop:
 
 ```yaml
 normalise:
@@ -219,13 +219,13 @@ The defaults for the first two keys may change during M1 while they are tested o
 
 #### `normalise.exposure`
 
-The exposure change is `offset_ev + correction × (target_ev − the photo's median brightness)`, with the correction part limited to ±`max_correction_ev`.
+The exposure change is `offset_ev + correction × (target_ev − the photo's median brightness)`, with the correction part limited to ±`max_correction_ev`. The median is measured on the decoded photo, before `offset_ev`, so with `correction` 1 every photo's median ends at `offset_ev + target_ev` (+1 stop by default).
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `offset_ev` | number, −4 to 6 | `2.0` | Brightening applied to every photo, in stops. Cameras render about 2 stops brighter than the raw's own exposure; this value was fitted to camera JPEGs. |
 | `correction` | number, 0–1 | `0.0` | How far each photo's median brightness is pulled toward `target_ev`. `0` is off (like a camera), `1` makes every photo's median equal. |
-| `target_ev` | number, −6 to 3 | `-1.0` | The median brightness `correction` pulls toward, in stops relative to mid grey. |
+| `target_ev` | number, −6 to 3 | `-1.0` | The median brightness `correction` pulls toward, in stops relative to mid grey, measured before `offset_ev`: with `correction` 1 the median ends at `offset_ev + target_ev`. |
 | `max_correction_ev` | number, 0–6 | `2.0` | The largest change `correction` may make, in stops. |
 
 #### `normalise.chroma_nr`

@@ -102,7 +102,10 @@ class ExposureConfig(_Model):
         default=-1.0,
         ge=-6.0,
         le=3.0,
-        description="Median brightness that correction pulls toward, in EV relative to mid grey.",
+        description=(
+            "Median brightness that correction pulls toward, in EV relative to mid grey, measured "
+            "before offset_ev: with correction 1 the median ends at offset_ev + target_ev."
+        ),
     )
     max_correction_ev: float = Field(
         default=2.0, ge=0.0, le=6.0, description="Largest change correction may make, in EV."

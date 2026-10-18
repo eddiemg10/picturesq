@@ -24,7 +24,7 @@ You copy RAW originals into a project folder and run `picturesq run ./lisbon`. T
 ### Success criteria for v1 (v0.1.0)
 - One command turns a project's originals into exports using looks chosen in the web UI.
 - The neutral render looks at least as good as the camera's own JPEG on the reference set.
-- A contact sheet of the normalised reference set looks even; outliers are flagged, not forced.
+- On a contact sheet of the normalised reference set, outliers and too-dark photos are flagged, not forced, and per-photo overrides fix them.
 - An agent can make a described change ("softer highlights") by editing config, and the preview reflects it.
 - 100 full-resolution Pocket 4 photos export in < 15 min on the reference laptop with peak RAM ≤ 3 GB.
 
@@ -57,7 +57,7 @@ Photoshop-style GUI, local retouching, lens correction, cataloguing/DAM, ML trai
 | D3 | Camera LUT | None; use the DNG colour matrices. [ADR-0002](decisions/0002-no-camera-conversion-lut.md) | DJI's D-Log LUTs are for D-Log *video*; DNG is linear sensor data. |
 | D4 | Working space | Scene-linear float32, linear Rec.2020 primaries | Holds camera colours without clipping; linear makes exposure/WB physically correct. |
 | D5 | Display transform | AgX-style. [ADR-0003](decisions/0003-agx-display-transform.md) | Graceful highlight roll-off, no hue skews; open design. |
-| D6 | Normalise | Camera-fitted exposure offset (+2 EV); optional partial correction toward a target (off by default); chroma NR in the shadows; as-shot WB + disagreement flag (M2); scene contrast for flat scenes (off by default). [ADR-0010](decisions/0010-camera-matched-neutral-render.md), [ADR-0017](decisions/0017-scene-contrast.md) | Measured: cameras brighten by a near-constant amount, not per scene, but give flat scenes extra contrast. Batch evening-out stays available. |
+| D6 | Normalise | Camera-fitted exposure offset (+2 EV); optional partial correction toward a target (off by default); chroma NR in the shadows; as-shot WB, never corrected, + disagreement flag; scene contrast for flat scenes (off by default). [ADR-0010](decisions/0010-camera-matched-neutral-render.md), [ADR-0016](decisions/0016-keep-as-shot-white-balance.md), [ADR-0017](decisions/0017-scene-contrast.md) | Measured: cameras brighten by a near-constant amount, not per scene, but give flat scenes extra contrast. Batch evening-out stays available but off: the user preferred per-photo fixes (review 2026-10-18). |
 | D7 | Looks | Every look is a look file (YAML operations, optionally a `lut` operation); four categories | One concept; editable by agents; LUTs give breadth. |
 | D8 | LUT maths | Our own numpy trilinear/tetrahedral; colour-science as **test oracle only** | ~30 lines, no heavy runtime dependency, verified against a reference. |
 | D9 | Config | YAML, machine-owned, pydantic models = schema. [ADR-0004](decisions/0004-yaml-machine-owned.md) | Diffable and readable for agents; humans use the UI. |
@@ -106,7 +106,7 @@ Photoshop-style GUI, local retouching, lens correction, cataloguing/DAM, ML trai
 
 ### 4.2 Normalise (algorithm v1)
 Implemented (ADR-0010):
-1. **Exposure:** `exposure_ev = offset_ev + clamp(correction × (target_ev − median_ev), ±max_correction_ev)`. `offset_ev` (+2.0) is fitted to camera JPEGs; `correction` defaults to 0 because cameras don't even out a batch. The median is measured on a ~100k-pixel grid.
+1. **Exposure:** `exposure_ev = offset_ev + clamp(correction × (target_ev − median_ev), ±max_correction_ev)`. `offset_ev` (+2.0) is fitted to camera JPEGs; `correction` defaults to 0 because cameras don't even out a batch, and evening out darkened most daylight photos and flattened the mood of low-light scenes (user review 2026-10-18); flagged photos are fixed per photo with overrides instead. `target_ev` is measured before `offset_ev`, so with `correction` 1 every median lands at `offset_ev + target_ev` (+1 EV by default). The median is measured on a ~100k-pixel grid.
 2. **Chroma NR:** each pixel keeps its luminance and moves toward the local average chromaticity, smoothed on a small copy (radius a fraction of the long edge); full strength in the shadows, faded out 1.5 EV below mid grey.
 
 Also implemented, **scene contrast** (off by default, ADR-0017): a flat scene (p5–p95 range under `target_range_ev`, 4.5 EV) gets extra contrast `amount × min(4.5/range − 1, max_contrast)`, pivoting on its p75 with a tanh soft limit, the same gain on R, G and B. After chroma NR (which keeps luminance, so the range and pivot are the same). Fitted on two flat DJI photos; the default waits for 3–5 more (#60).
@@ -316,13 +316,13 @@ Project plan, glossary, ADRs, learning log, scaffold, CI, public repo with prote
 ### M1 — Decode & export (neutral render) (done 2026-10-18)
 Decode via rawpy into the working space; proxies + cache; AgX display transform fitted to camera JPEGs; exposure offset and chroma NR (pulled forward from M2, ADR-0010); output sharpening; sRGB JPEG export with ICC/EXIF; `decode`, `export`, `run`; `scripts/compare.py` contact sheet and gate: ours vs in-camera JPEG.
 **Concepts:** RAW/demosaic, linear vs display-referred, colour spaces and gamuts, display transforms.
-**Exit:** `scripts/compare.py` passes its gate on the CC0 samples and on the reference set (real export vs camera JPEG: median |ΔEV| ≤ 0.5, chroma per lightness band (at the same pixels, ADR-0013) within 0.8–1.25, no extra clipping; [ADR-0010](decisions/0010-camera-matched-neutral-render.md)), the user judges the sheet comparable or better; memory budget test passes.
+**Exit:** `scripts/compare.py` passes its gate on the CC0 samples and on the reference set (real export vs camera JPEG: median |ΔEV| ≤ 0.5, chroma per lightness band (at the same pixels, ADR-0013) within 0.8–1.25 or within 0.015 absolute, no extra clipping; [ADR-0010](decisions/0010-camera-matched-neutral-render.md)), the user judges the sheet comparable or better; memory budget test passes.
 **Outcome (2026-10-18, #24):** accepted. The reference set passes the whole gate (median |ΔEV| 0.25; chroma 0.92 0.86 0.92 1.00 0.96 0.86; no extra clipping) and the memory budget test passes. The CC0 set passes brightness and highlights but not the near-white chroma band (1.44): the two Pentax JPEGs use a different white balance from the one their RAWs record. The user accepted M1 with that moved to M2 (#57), with low-light scenes rendering darker than the camera (exposure `correction` is off by default, also M2). Along the way M1 also gained threads per photo and memory-scheduled workers (ADR-0015), pulled forward from M5's performance pass.
 
 ### M2 — Normalise (current)
 Stats JSON, WB disagreement flag, overrides, flags, outliers, `normalise` command + contact sheet (exposure and chroma NR landed in M1, ADR-0010).
 **Concepts:** EV/stops and histograms, white balance (temperature/tint, mired), noise.
-**Exit:** outliers are flagged, not forced; with `correction` on, the reference-set contact sheet looks even; the CC0 near-white chroma band passes the M1 gate, or the decision to keep the recorded white balance is in an ADR (#57).
+**Exit:** outliers and too-dark photos are flagged, not forced, and per-photo overrides (`exposure_ev`, `wb_kelvin`, `tint`) fix them; batch `correction` stays off by default (user review 2026-10-18: it darkened most daylight photos and flattened the mood of sunset and club scenes); the CC0 near-white chroma band passes the M1 gate, or the decision to keep the recorded white balance is in an ADR (#57). Since 2026-10-18 the band passes on the absolute tolerance (ratio 1.44, mean difference +0.006 Oklab chroma; ADR-0013, amended).
 
 ### M3 — Grade: look engine, look library, previews
 Operations, look file schema + intensity, `lut` operation (oracle-tested), adjustments, 12–16 built-in looks, `preview` and `looks` commands (output sharpening landed in M1).
@@ -330,7 +330,7 @@ Operations, look file schema + intensity, `lut` operation (oracle-tested), adjus
 **Exit:** an agent makes a described change via config and the preview reflects it.
 
 ### M4 — UI
-Starlette app, photo × look grid, look panel (intensity / parameters / adjustments), per-photo normalisation review, YAML write-back, file watching, Playwright tests.
+Starlette app, photo × look grid, look panel (intensity / parameters / adjustments), per-photo normalisation review (flagged photos first, with exposure and white balance sliders that write the per-photo overrides `exposure_ev`, `wb_kelvin` and `tint`), YAML write-back, file watching, Playwright tests.
 **Exit:** the user grades a whole project without touching YAML; an agent edit live-reloads in the browser.
 
 ### M5 — v0.1 release
