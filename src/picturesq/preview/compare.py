@@ -10,8 +10,10 @@ The gate (ADR-0010) compares the *real* export, not an exposure-matched one:
   lightness would compare different parts of the picture whenever the brightness
   differs, so a brightness error would show up as a colour error (#58). Across a set,
   each band's chroma is summed over the photos for us and for the camera, and the ratio
-  must lie in ``CHROMA_RATIO_RANGE``. Pooling keeps near-white bands (chroma ≈ 0 in
-  both) from producing meaningless ratios of tiny numbers.
+  must lie in ``CHROMA_RATIO_RANGE``, or the mean difference (ours minus camera's) must be
+  within ``CHROMA_ABS_TOLERANCE``. Near-white bands are nearly colourless in both, so
+  their ratio is one of two tiny numbers and can be large for a difference nobody sees;
+  the absolute difference is what the eye judges there.
 - **highlights:** per photo, our clipped fraction may exceed the camera's by at most
   ``MAX_EXTRA_CLIPPED``.
 
@@ -37,6 +39,10 @@ Uint8Array = NDArray[np.uint8]
 
 MAX_MEDIAN_EV = 0.5
 CHROMA_RATIO_RANGE = (0.8, 1.25)
+CHROMA_ABS_TOLERANCE = 0.015
+"""Oklab chroma: a band also passes when ours and the camera's mean chroma differ by at
+most this. A tint becomes noticeable from about 0.02; near-whites (chroma ≈ 0.01 in
+both) can be a ratio of 2 or more apart while staying well below that."""
 MAX_EXTRA_CLIPPED = 0.005
 LIGHTNESS_BANDS = (0.0, 0.25, 0.4, 0.55, 0.7, 0.85, 1.01)
 """Oklab lightness band edges (0.18 grey is L ≈ 0.565)."""
@@ -86,16 +92,34 @@ class GateResult:
     median_abs_ev: float
     band_chroma_ratio: tuple[float, ...]
     over_clipped: tuple[str, ...]
+    band_chroma_difference: tuple[float, ...] = ()
+    """Per band: mean over photos of our chroma minus the camera's (NaN where no photo has it)."""
 
     @property
     def brightness_ok(self) -> bool:
         return self.median_abs_ev <= MAX_MEDIAN_EV
 
     @property
-    def colour_ok(self) -> bool:
+    def band_ratio_ok(self) -> tuple[bool, ...]:
+        """Per band: the chroma ratio is in ``CHROMA_RATIO_RANGE`` (or the band is empty)."""
         low, high = CHROMA_RATIO_RANGE
-        ratios = [r for r in self.band_chroma_ratio if not np.isnan(r)]
-        return all(low <= r <= high for r in ratios)
+        return tuple(bool(np.isnan(r) or low <= r <= high) for r in self.band_chroma_ratio)
+
+    @property
+    def band_on_tolerance(self) -> tuple[bool, ...]:
+        """Per band: passes only because the difference is within ``CHROMA_ABS_TOLERANCE``."""
+        differences = self.band_chroma_difference or (np.nan,) * len(self.band_chroma_ratio)
+        return tuple(
+            not ratio_ok and bool(abs(d) <= CHROMA_ABS_TOLERANCE)
+            for ratio_ok, d in zip(self.band_ratio_ok, differences, strict=True)
+        )
+
+    @property
+    def colour_ok(self) -> bool:
+        return all(
+            ok or tolerated
+            for ok, tolerated in zip(self.band_ratio_ok, self.band_on_tolerance, strict=True)
+        )
 
     @property
     def highlights_ok(self) -> bool:
@@ -272,13 +296,29 @@ def pooled_ratio(
     return tuple(float(r) for r in band)
 
 
+def pooled_difference(
+    ours: Sequence[Sequence[float]], camera: Sequence[Sequence[float]]
+) -> tuple[float, ...]:
+    """Per band: mean over photos of our chroma minus the camera's (photos missing the band
+    in either image are left out, as in ``pooled_ratio``)."""
+    if not ours:
+        return ()
+    a = np.array(ours, dtype=np.float64).reshape(len(ours), -1)
+    b = np.array(camera, dtype=np.float64).reshape(a.shape)
+    both = ~(np.isnan(a) | np.isnan(b))
+    with np.errstate(invalid="ignore", divide="ignore"):
+        band = np.where(both, a - b, 0.0).sum(axis=0) / both.sum(axis=0)
+    return tuple(float(d) for d in band)
+
+
 def gate(photos: Sequence[PhotoComparison]) -> GateResult:
     """Apply the ADR-0010 gate to the photos whose camera JPEG is the same frame."""
     photos = [p for p in photos if p.same_frame]
-    band = pooled_ratio([p.chroma for p in photos], [p.camera_chroma for p in photos])
+    chroma, camera_chroma = [p.chroma for p in photos], [p.camera_chroma for p in photos]
     over = tuple(p.name for p in photos if p.clipped > p.camera_clipped + MAX_EXTRA_CLIPPED)
     return GateResult(
         median_abs_ev=float(np.median([abs(p.ev_difference) for p in photos])) if photos else 0.0,
-        band_chroma_ratio=band,
+        band_chroma_ratio=pooled_ratio(chroma, camera_chroma),
         over_clipped=over,
+        band_chroma_difference=pooled_difference(chroma, camera_chroma),
     )

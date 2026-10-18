@@ -2,9 +2,9 @@
 
 For each original: decode, run every stage, render the web output (exactly what
 `picturesq export` writes), and compare it with the JPEG embedded in the original:
-brightness (EV), chroma per band of the camera's lightness at the same pixels (ADR-0013),
-and clipped highlights. Prints a table and the
-gate verdict, and writes one contact sheet (camera | ours per photo).
+brightness (EV), chroma per band of the camera's lightness at the same pixels (ADR-0013;
+ratio ours / camera's, and the difference ours minus camera's), and clipped highlights.
+Prints a table and the gate verdict, and writes one contact sheet (camera | ours per photo).
 
 By default it runs on the CC0 samples (reference/samples/). ``--reference`` runs on the
 private reference set (reference/raw/) and writes under reference/.picturesq/, which is
@@ -30,6 +30,7 @@ from picturesq.decode import DecodeError, decode_original, find_originals
 from picturesq.decode.embedded import camera_jpeg
 from picturesq.pipeline.export import render_output, render_scene
 from picturesq.preview.compare import (
+    CHROMA_ABS_TOLERANCE,
     CHROMA_RATIO_RANGE,
     LIGHTNESS_BANDS,
     MAX_EXTRA_CLIPPED,
@@ -47,10 +48,14 @@ PANEL_WIDTH = 480
 
 def table(photos: list[PhotoComparison]) -> str:
     bands = [f"{a:.2f}-{b:.2f}" for a, b in itertools.pairwise(LIGHTNESS_BANDS)]
-    head = ["photo", "ΔEV", "clipped (cam)", *[f"chroma L {b}" for b in bands]]
+    head = ["photo", "ΔEV", "clipped (cam)", *[f"chroma L {b} ratio (diff)" for b in bands]]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for p in photos:
-        ratios = ["-" if np.isnan(r) else f"{r:.2f}" for r in p.chroma_ratio]
+        differences = [a - b for a, b in zip(p.chroma, p.camera_chroma, strict=True)]
+        ratios = [
+            "-" if np.isnan(r) or np.isnan(d) else f"{r:.2f} ({d:+.3f})"
+            for r, d in zip(p.chroma_ratio, differences, strict=True)
+        ]
         lines.append(
             f"| {p.name} | {p.ev_difference:+.2f} | {p.clipped:.2%} ({p.camera_clipped:.2%}) | "
             + " | ".join(ratios)
@@ -119,8 +124,23 @@ def main() -> int:
         f"{'PASS' if verdict.brightness_ok else 'FAIL'}"
     )
     bands = " ".join("-" if np.isnan(r) else f"{r:.2f}" for r in verdict.band_chroma_ratio)
+    differences = " ".join(
+        "-" if np.isnan(d) else f"{d:+.3f}" for d in verdict.band_chroma_difference
+    )
     colour = "PASS" if verdict.colour_ok else "FAIL"
-    print(f"colour: chroma ratio per band {bands} (each {low} to {high}) {colour}")
+    print(
+        f"colour: chroma ratio per band {bands} (each {low} to {high}), "
+        f"difference {differences} (or within ±{CHROMA_ABS_TOLERANCE}) {colour}"
+    )
+    tolerated = [
+        f"L {a:.2f}-{b:.2f}"
+        for (a, b), on in zip(
+            itertools.pairwise(LIGHTNESS_BANDS), verdict.band_on_tolerance, strict=True
+        )
+        if on
+    ]
+    if tolerated:
+        print(f"  passed on the absolute difference: {', '.join(tolerated)}")
     gated = [p for p in photos if p.same_frame]
     own = pooled_ratio(
         [p.own_band_chroma for p in gated], [p.camera_own_band_chroma for p in gated]
