@@ -84,5 +84,5 @@ A beach photo is mostly bright sand, with a person in a dark top at the edge. Gr
 <details>
 <summary>Answer</summary>
 
-Sand is warm-coloured, so grey-world mistakes "warm scene" for "warm light" (the scene-full-of-one-colour failure). Correcting by 40 mired would cool the whole photo: the sand turns grey-beige and skin goes cold. picturesq instead raises a `wb_disagreement` flag (if 40 mired is above `flag_disagreement_mired`); the user looks, and either keeps the as-shot white balance or sets `wb_kelvin`/`tint` as an override for that photo.
+Sand is warm-coloured, so grey-world mistakes "warm scene" for "warm light" (the scene-full-of-one-colour failure). Correcting by 40 mired would cool the whole photo: the sand turns grey-beige and skin goes cold. picturesq instead keeps the as-shot white balance and records the check's numbers in the photo's stats; if you have turned on `flag_disagreement` (it is off by default, because coloured scenes like this one trip it) and both estimates are at least `flag_disagreement_mired` off the same way, it also raises a `wb_disagreement` flag. The user looks, and either keeps the as-shot white balance or sets `wb_kelvin`/`tint` as an override for that photo.
 </details>
