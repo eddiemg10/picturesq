@@ -111,7 +111,7 @@ Implemented (ADR-0010):
 
 Still to do (M2):
 3. Stats per photo (p1/p5/p50/p95/p99, clipped fraction, mean chroma) written as JSON, plus a project summary; stats outside configured ranges mark the photo as an **outlier**.
-4. **WB check:** two white balance estimates (`brightest`, a white-patch estimate, and `grey`, grey world on nearly neutral pixels) vs as-shot; when both differ by at least `flag_disagreement_mired` in the same direction, flag `wb_disagreement` (no automatic change).
+4. **WB check:** two white balance estimates (`brightest`, a white-patch estimate, and `grey`, grey world on nearly neutral pixels) vs as-shot; when both differ by at least `flag_disagreement_mired` in the same direction, flag `wb_disagreement` (no automatic change). The flag is opt-in (`flag_disagreement`, off by default): coloured scenes such as sunsets trip it while as-shot is right (ADR-0016).
 5. Overrides (`exposure_ev`, `wb_kelvin`, `tint`, and `enabled: false` to skip normalise for one photo) and flags (e.g. `exposure_clamped`). `wb_kelvin`/`tint` re-balance from the as-shot white (photo info) in scene-linear, before exposure; the sidecar records the photo's overrides.
 
 Dropped after measurement (ADR-0010): key detection with per-key targets and the highlight guard (the camera-fitted curve keeps highlights below the white point; cameras don't normalise per scene). Cameras showed no compression of broad areas beyond their global curve, but they keep *detail* steeper than it (clouds in a bright sky): `grade.local_contrast` does that (ADR-0011).
@@ -190,7 +190,7 @@ normalise:
   enabled: true
   exposure: {offset_ev: 2.0, correction: 0.0, target_ev: -1.0, max_correction_ev: 2.0}
   chroma_nr: {amount: 1.0, radius: 0.004, full_lightness: 0.2, fade_lightness: 0.4}
-  white_balance: {flag_disagreement_mired: 30}
+  white_balance: {flag_disagreement: false, flag_disagreement_mired: 30}
   outliers: {min_median_ev: -2.0, max_median_ev: 3.0, max_clipped: 0.02}
 grade:
   look: {name: cold/nordic, intensity: 0.8, parameters: {}}

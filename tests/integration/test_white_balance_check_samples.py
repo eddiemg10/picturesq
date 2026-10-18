@@ -29,7 +29,8 @@ def _check(samples_dir: Path, name: str) -> WhiteBalanceCheck:
 def test_sony_sample_is_flagged(samples_dir: Path) -> None:
     check = _check(samples_dir, "sony-ilme-fx3.arw")
     assert check.disagrees
-    (flag,) = white_balance_flags(check, WhiteBalanceConfig())
+    (flag,) = white_balance_flags(check, WhiteBalanceConfig(flag_disagreement=True))
+    assert white_balance_flags(check, WhiteBalanceConfig()) == []
     assert "warmer" in flag.message
 
 

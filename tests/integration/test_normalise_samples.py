@@ -1,8 +1,9 @@
 """`picturesq normalise` on two CC0 samples (needs reference/samples, see scripts/fetch_samples.py).
 
 Measured 2026-10-18 (default config, proxies): dji-fc4382 median -1.30 EV, no flag;
-sony-ilme-fx3 median -2.53 EV, flagged wb_disagreement (both estimates ~85 mired warmer than
-as-shot) and outlier (median below -2 EV: a dark scene the camera brightened more than we do).
+sony-ilme-fx3 median -2.53 EV, flagged outlier (median below -2 EV: a dark scene the camera
+brightened more than we do). Its white balance check disagrees (both estimates ~85 mired warmer
+than as-shot) and is recorded in the stats, but wb_disagreement is off by default.
 """
 
 import json
@@ -35,7 +36,7 @@ def test_normalise_two_samples(samples_dir: Path, tmp_path: Path) -> None:
     assert dji["error"] is None and sony["error"] is None
     assert dji["flags"] == []
     assert -2.0 < dji["stats"]["p50_ev"] < 0.0
-    assert {flag["flag"] for flag in sony["flags"]} == {"wb_disagreement", "outlier"}
+    assert {flag["flag"] for flag in sony["flags"]} == {"outlier"}
     assert sony["white_balance"]["disagrees"]
     assert document["summary"]["flagged_photos"] == ["sony-ilme-fx3.arw"]
 
@@ -45,4 +46,6 @@ def test_normalise_two_samples(samples_dir: Path, tmp_path: Path) -> None:
         "sony-ilme-fx3.json",
         "summary.json",
     ]
+    sony_stats = json.loads((stats / "sony-ilme-fx3.json").read_text())
+    assert sony_stats["white_balance"]["disagrees"]  # recorded even with the flag off
     assert not (project / "picturesq.yaml").exists()

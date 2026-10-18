@@ -6,7 +6,8 @@ A flag never alters the pixels (plan principle: outliers are flagged, not forced
 
 - ``exposure_clamped``: exposure correction wanted more than ``max_correction_ev``.
 - ``wb_disagreement``: both white balance estimates differ from the as-shot white by at
-  least ``flag_disagreement_mired``, the same way (:mod:`.white_balance_check`).
+  least ``flag_disagreement_mired``, the same way (:mod:`.white_balance_check`). Off unless
+  ``flag_disagreement`` is on.
 - ``outlier``: one of the photo's stats is outside its range in ``normalise.outliers``; one
   flag per stat.
 """
@@ -57,8 +58,13 @@ def exposure_flags(decision: ExposureDecision, config: ExposureConfig) -> list[F
 
 
 def white_balance_flags(check: WhiteBalanceCheck, config: WhiteBalanceConfig) -> list[Flag]:
-    """``wb_disagreement`` if the white balance check disagrees with the as-shot white."""
+    """``wb_disagreement`` if the white balance check disagrees with the as-shot white.
+
+    Only when ``config.flag_disagreement`` is on (it is off by default).
+    """
     brightest, grey = check.brightest, check.grey
+    if not config.flag_disagreement:
+        return []
     if not check.disagrees or brightest is None or grey is None or check.as_shot_kelvin is None:
         return []
     warmer = brightest.delta_mired > 0.0
