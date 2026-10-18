@@ -373,6 +373,7 @@ picturesq checks the whole file before doing any work:
 | `0` | Success |
 | `1` | Error while running |
 | `2` | Invalid config or usage |
+| `3` | Completed, but a photo has a flag (only `picturesq normalise --strict`) |
 
 ## Notes
 

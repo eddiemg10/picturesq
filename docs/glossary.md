@@ -34,7 +34,7 @@
 | **override** | A per-photo value that replaces the project default (look, intensity, normalisation values). | exception, manual edit |
 | **output** | A named export target in config, e.g. `web`, `archive` (size, quality, sharpening). | export profile, preset, recipe |
 | **ICC profile** | The colour profile embedded in an exported file. The only use of "profile". | — |
-| **stats** | Per-photo measurements (luminance percentiles, clipping, …), stored as JSON. | metrics, analysis |
+| **stats** | Per-photo measurements (luminance percentiles, clipping, …), stored as JSON by `picturesq normalise` in `.picturesq/stats/<stem>.json`, with the project's in `summary.json` (counts, flagged photos, the spread of the photos' medians). | metrics, analysis |
 | **photo info** | What an original's header says about a photo that later stages need: the **as-shot white**, the baseline exposure and the **clip level** (`read_photo_info`). | metadata, header info |
 | **flag** | A per-photo note from a stage that a photo needs a look; it never changes the photo. The names: `exposure_clamped` (exposure correction hit `max_correction_ev`), `wb_disagreement` (both **white balance estimates** differ from the as-shot white the same way, by at least `flag_disagreement_mired`; only with `flag_disagreement` on, off by default), `outlier` (one per stat outside its range). | warning, alert, issue |
 | **outlier** | A photo whose stats fall outside configured ranges; one kind of flag. | — |

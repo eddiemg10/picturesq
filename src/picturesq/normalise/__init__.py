@@ -41,20 +41,34 @@ def normalise(
     as-shot white (``photo.info``) before exposure, raising WhiteBalanceOverrideError
     when that is unknown; ``exposure_ev``, if set, replaces the computed exposure.
     """
+    normalise_with_decision(image, config, photo)
+    return image
+
+
+def normalise_with_decision(
+    image: FloatArray, config: ProjectConfig, photo: PhotoContext = UNNAMED
+) -> ExposureDecision | None:
+    """:func:`normalise`, returning how the exposure was chosen; None if normalise is off.
+
+    With an ``exposure_ev`` override the decision is that value, with no correction and
+    never clamped. ``image`` is changed in place, as by :func:`normalise`.
+    """
     settings = config.normalise
     overrides = config.photo(photo.name).normalise
     enabled = settings.enabled if overrides.enabled is None else overrides.enabled
     if not enabled:
-        return image
+        return None
     as_shot_xy = None if photo.info is None else photo.info.as_shot_xy
     target_xy = override_white(overrides, as_shot_xy)
     if target_xy is not None and as_shot_xy is not None:
         rebalance_white(image, as_shot_xy, target_xy, out=image)
-    ev = overrides.exposure_ev
-    if ev is None:
-        ev = exposure_ev(image, settings.exposure)
-    apply_exposure(image, ev, out=image)
-    return chroma_noise_reduction(image, settings.chroma_nr)
+    if overrides.exposure_ev is None:
+        decision = exposure_decision(image, settings.exposure)
+    else:
+        decision = ExposureDecision(ev=overrides.exposure_ev, correction_ev=0.0, clamped=False)
+    apply_exposure(image, decision.ev, out=image)
+    chroma_noise_reduction(image, settings.chroma_nr)
+    return decision
 
 
 __all__ = [
@@ -74,6 +88,7 @@ __all__ = [
     "exposure_flags",
     "median_ev",
     "normalise",
+    "normalise_with_decision",
     "outlier_flags",
     "override_white",
     "photo_stats",

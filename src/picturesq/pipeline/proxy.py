@@ -100,6 +100,8 @@ class Proxy:
     image: NDArray[np.float32]
     path: Path
     cached: bool
+    key: str
+    """The cache key (:func:`proxy_key`): changes whenever the proxy would."""
 
 
 def load_proxy(original: Path, decode: DecodeConfig, cache_dir: Path) -> Proxy:
@@ -107,7 +109,8 @@ def load_proxy(original: Path, decode: DecodeConfig, cache_dir: Path) -> Proxy:
 
     Raises DecodeError if the original can't be decoded.
     """
-    path = proxy_path(cache_dir, original, proxy_key(sha256_file(original), decode))
+    key = proxy_key(sha256_file(original), decode)
+    path = proxy_path(cache_dir, original, key)
     proxy = _read(path)
     cached = proxy is not None
     if proxy is None:
@@ -115,7 +118,7 @@ def load_proxy(original: Path, decode: DecodeConfig, cache_dir: Path) -> Proxy:
         _write(path, proxy)
         for stale in _other_proxies(cache_dir, original, keep=path):
             stale.unlink(missing_ok=True)
-    return Proxy(image=proxy.astype(np.float32), path=path, cached=cached)
+    return Proxy(image=proxy.astype(np.float32), path=path, cached=cached, key=key)
 
 
 @dataclass
