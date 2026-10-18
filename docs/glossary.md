@@ -84,6 +84,10 @@
 | **blue rendering** | The display transform's camera-matched treatment of blues (skies): deeper, more colourful and a few degrees more cyan than an accurate render, as camera JPEGs show them (ADR-0012). On by default; `grade.display_transform.blue_rendering.enabled: false` turns it off. |
 | **colour matrix** | A DNG's 3×3 matrix from XYZ to camera RGB, measured under one **calibration illuminant**; most DNGs carry two (tungsten and daylight), blended by the photo's white balance. |
 | **colour temperature (CCT)** | Where a white sits between warm and cool, in kelvin: tungsten ~2850 K, daylight ~5500–6500 K. Correlated colour temperature: the nearest black-body colour. |
+| **Planckian locus** | The curve of colours a glowing black body has as it heats up, from red through white to blue: the line colour temperatures sit on. |
+| **tint** | How far a white sits off the Planckian locus, green ↔ magenta: `tint = -1000 × Duv`, measured along Robertson's isotemperature lines; positive is magenta (Lightroom's direction, not its scale). With colour temperature, the two numbers of a white balance. |
+| **Duv** | The signed distance of a white from the Planckian locus in the CIE 1960 uv diagram; positive is above it (greener). Used only to define tint. |
+| **mired** | Micro reciprocal degrees, `1e6 / kelvin`. Compare white balances by their mired difference: equal mired steps look about equally different, equal kelvin steps don't. |
 | **chromatic adaptation** | Converting colours seen under one white to those that look the same under another (Bradford). |
 | **gamut fit** | Bringing an out-of-gamut colour into the display gamut by reducing its chroma at constant Oklab hue and lightness. |
 | **chroma** | How colourful a pixel is, independent of its lightness: the distance from grey in Oklab a/b. |
