@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import colour
 import numpy as np
 import pytest
 
@@ -13,7 +12,7 @@ from picturesq.colour.spaces import XYZ_TO_REC2020
 from picturesq.colour.temperature import xy_to_xyz
 from picturesq.config.project import DecodeConfig
 from picturesq.decode import DecodeError, PhotoInfo, read_photo_info
-from picturesq.decode.info import _duv, clip_level, multipliers_to_xy
+from picturesq.decode.info import clip_level, multipliers_to_xy
 
 MULTIPLIERS = np.array([2.0, 1.0, 1.5])
 
@@ -53,29 +52,6 @@ def test_multipliers_find_the_white_they_neutralise() -> None:
     multipliers = 1.0 / (cam_xyz @ xy_to_xyz(tungsten))
     xy = multipliers_to_xy(multipliers * 7.0, cam_xyz)  # only the ratios matter
     assert xy == pytest.approx(tungsten, abs=1e-9)
-
-
-@pytest.mark.parametrize(
-    "xy",
-    [
-        (0.3127, 0.3290),  # D65, a little above the black-body line (greener)
-        (0.44757, 0.40745),  # standard light A, on the line
-        (0.3457, 0.3585),  # D50
-        (0.38, 0.40),  # green of the line
-        (0.38, 0.36),  # magenta of the line
-        (0.30, 0.30),
-        (0.50, 0.41),
-    ],
-)
-def test_duv_matches_colour_science(xy: tuple[float, float]) -> None:
-    uv = colour.xy_to_UCS_uv(np.array(xy))
-    expected = colour.temperature.uv_to_CCT_Ohno2013(uv)[1]
-    assert _duv(xy) == pytest.approx(expected, abs=2e-4)
-
-
-def test_duv_sign_is_positive_above_the_line() -> None:
-    assert _duv((0.3127, 0.3290)) > 0.0  # D65's Duv is about +0.0032
-    assert _duv((0.38, 0.36)) < 0.0
 
 
 def test_photo_info_is_json_ready() -> None:

@@ -324,6 +324,10 @@ Per-photo **overrides**, written by the UI (or an agent) when one photo needs so
 photos:
   DJI_0042.DNG:
     normalise: {exposure_ev: 2.7}
+  DJI_0043.DNG:
+    normalise: {wb_kelvin: 3200}   # lit by tungsten; the camera balanced for daylight
+  DJI_0044.DNG:
+    normalise: {enabled: false}    # skip normalise for this photo
 ```
 
 Each photo:
@@ -336,7 +340,14 @@ Each photo:
 
 | Key | Type | Default | Description |
 |---|---|---|---|
+| `enabled` | `true` \| `false` \| `null` | `null` | Run the normalise stage for this photo; replaces `normalise.enabled`. `false` skips it (exposure, white balance and colour noise reduction), so the photo keeps the raw's own exposure; `null` follows the project. |
 | `exposure_ev` | number, −6 to 10, or `null` | `null` | This photo's exposure change, in stops. It *replaces* the computed change (`offset_ev` plus any `correction`), so `2.0` is the default brightness and `2.5` is half a stop brighter. `null` uses the computed one. |
+| `wb_kelvin` | number, 1667 to 25000, or `null` | `null` | Colour temperature of the light, in kelvin. The photo is re-balanced from its as-shot white to this one (in scene-linear, before exposure): a surface that was grey under this light comes out grey. Below the as-shot temperature the photo turns cooler (bluer), above it warmer. `null` keeps the as-shot temperature. |
+| `tint` | number, −150 to 150, or `null` | `null` | Tint of the light, `-1000 × Duv`: positive is magenta, negative green (Lightroom's direction; the Adobe DNG SDK's scale is three times ours). Re-balances like `wb_kelvin`: a positive tint turns the photo greener. `null` keeps the as-shot tint. |
+
+`wb_kelvin` and `tint` together describe one white; set either alone and the other keeps its as-shot value (`picturesq` reads the as-shot white from the original's header). A photo whose original records no usable as-shot white can't be re-balanced: with either set, its export fails with an error naming it, and the other photos carry on.
+
+Each export's sidecar records the photo's overrides under `config.photos`, so the sidecar alone says how the photo was rendered.
 
 ## Validation and errors
 

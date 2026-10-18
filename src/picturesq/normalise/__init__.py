@@ -1,4 +1,5 @@
-"""Stage 2, normalise: exposure, chroma noise reduction and stats, per photo.
+"""Stage 2, normalise: white balance overrides, exposure, chroma noise reduction and stats,
+per photo.
 
 Pure functions, no IO.
 """
@@ -8,6 +9,11 @@ from picturesq.config import ProjectConfig
 from picturesq.normalise.chroma_nr import chroma_noise_reduction
 from picturesq.normalise.exposure import apply_exposure, exposure_ev, median_ev
 from picturesq.normalise.stats import PhotoStats, photo_stats
+from picturesq.normalise.white_balance import (
+    WhiteBalanceOverrideError,
+    override_white,
+    rebalance_white,
+)
 from picturesq.photo import UNNAMED, PhotoContext
 
 
@@ -16,12 +22,21 @@ def normalise(
 ) -> FloatArray:
     """Run the normalise stage on ``image`` (linear Rec.2020), in place. Returns ``image``.
 
-    The photo's ``exposure_ev`` override, if set, replaces the computed exposure.
+    The photo's overrides (``config.photo(photo.name).normalise``) apply: ``enabled``
+    replaces ``normalise.enabled``; ``wb_kelvin`` / ``tint`` re-balance the image from the
+    as-shot white (``photo.info``) before exposure, raising WhiteBalanceOverrideError
+    when that is unknown; ``exposure_ev``, if set, replaces the computed exposure.
     """
     settings = config.normalise
-    if not settings.enabled:
+    overrides = config.photo(photo.name).normalise
+    enabled = settings.enabled if overrides.enabled is None else overrides.enabled
+    if not enabled:
         return image
-    ev = config.photo(photo.name).normalise.exposure_ev
+    as_shot_xy = None if photo.info is None else photo.info.as_shot_xy
+    target_xy = override_white(overrides, as_shot_xy)
+    if target_xy is not None and as_shot_xy is not None:
+        rebalance_white(image, as_shot_xy, target_xy, out=image)
+    ev = overrides.exposure_ev
     if ev is None:
         ev = exposure_ev(image, settings.exposure)
     apply_exposure(image, ev, out=image)
@@ -30,10 +45,12 @@ def normalise(
 
 __all__ = [
     "PhotoStats",
+    "WhiteBalanceOverrideError",
     "apply_exposure",
     "chroma_noise_reduction",
     "exposure_ev",
     "median_ev",
     "normalise",
     "photo_stats",
+    "rebalance_white",
 ]

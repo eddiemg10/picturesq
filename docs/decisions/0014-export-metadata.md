@@ -10,7 +10,7 @@ Exports had no metadata: a photo library sorted them by file date, showed no cam
 2. **Where it's read:** TIFF-based originals (DNG, ARW, NEF, CR2, PEF) directly; others (RAF, CR3, ORF, RW2) from the EXIF of the embedded camera JPEG. Unreadable metadata gives an export without capture EXIF, never a failed export.
 3. **The export describes itself:** orientation upright (decode already rotated the pixels), colour space sRGB, its own pixel dimensions, `Software: picturesq <version>`.
 4. **We write the EXIF block ourselves** (`export/exif.py`), with each tag's type from the EXIF 2.32 specification, because Pillow picks types from values (an exposure compensation of 0 became an unsigned rational) and ExifTool's validation flagged it.
-5. **Sidecar** `<output>/<stem>.picturesq.json` per export, written after the JPEG: sidecar format version, picturesq version, original name + SHA-256, this output's settings and the `decode`/`normalise`/`grade` config. No timestamps or paths, so two runs give identical bytes (tested, together with identical JPEGs).
+5. **Sidecar** `<output>/<stem>.picturesq.json` per export, written after the JPEG: sidecar format version, picturesq version, original name + SHA-256, this output's settings and the `decode`/`normalise`/`grade` config (from sidecar format 2, #87, also this photo's `photos` overrides). No timestamps or paths, so two runs give identical bytes (tested, together with identical JPEGs).
 
 ## Consequences
 - + Photo libraries sort and filter exports by capture time, camera, lens and exposure; ExifTool validates all six CC0 sample exports with no warnings.
