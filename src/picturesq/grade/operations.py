@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from picturesq import parallel
+from picturesq.colour.filters import gaussian_blur_plane, gaussian_radius
 from picturesq.colour.oklab import oklab_to_rec2020, rec2020_to_oklab
 from picturesq.colour.spaces import D65, REC2020_TO_XYZ, apply_matrix
 from picturesq.colour.temperature import (
@@ -29,10 +30,12 @@ from picturesq.config.operations import (
     SPLIT_TONE_CHROMA,
     SPLIT_TONE_WIDTH,
     VIBRANCE_FULL_CHROMA,
+    ChannelMixerOperation,
     ContrastOperation,
     CurvePoint,
     ExposureOperation,
     FadeOperation,
+    GrainOperation,
     HslOperation,
     Operation,
     SaturationOperation,
@@ -40,6 +43,7 @@ from picturesq.config.operations import (
     SplitToneOperation,
     ToneCurveOperation,
     VibranceOperation,
+    VignetteOperation,
     WhiteBalanceOperation,
 )
 
@@ -305,6 +309,132 @@ def split_tone(image: FloatArray, operation: SplitToneOperation) -> FloatArray:
     return each_block(image, change)
 
 
+def channel_mixer(image: FloatArray, operation: ChannelMixerOperation) -> FloatArray:
+    """Blend ``image`` toward the grey its normalised channel weights mix, in place."""
+    weights = np.array([operation.red, operation.green, operation.blue])
+    weights = (weights / weights.sum()).astype(np.float32)
+    amount = np.float32(min(operation.amount, 1.0))
+
+    def change(pixels: FloatArray) -> None:
+        grey = pixels @ weights
+        # pixels += amount * (grey - pixels)
+        np.multiply(pixels, 1.0 - amount, out=pixels)
+        pixels += (amount * grey)[:, None]
+
+    return each_block(image, change)
+
+
+def vignette_ev(
+    height: int, width: int, top: int, bottom: int, operation: VignetteOperation
+) -> FloatArray:
+    """The vignette's change in EV for rows ``top`` to ``bottom`` of a ``height`` x ``width``
+    image: 0 inside the midpoint, easing to ``amount`` at the corners."""
+    # Per-axis radius that puts the corners at distance 1: the half-diagonal for a circle,
+    # each half-side times sqrt(2) for an ellipse with the frame's shape.
+    half_diagonal = 0.5 * float(np.hypot(height, width))
+    round_ = operation.roundness
+    rx = round_ * half_diagonal + (1.0 - round_) * 0.5 * width * np.sqrt(2.0)
+    ry = round_ * half_diagonal + (1.0 - round_) * 0.5 * height * np.sqrt(2.0)
+    y = ((np.arange(top, bottom) + 0.5 - 0.5 * height) / ry).astype(np.float32)
+    x = ((np.arange(width) + 0.5 - 0.5 * width) / rx).astype(np.float32)
+    distance = np.hypot(y[:, None], x[None, :])
+    return np.float32(operation.amount) * _smoothstep(operation.midpoint, 1.0, distance)
+
+
+def vignette(image: FloatArray, operation: VignetteOperation) -> FloatArray:
+    """Multiply ``image`` by ``2**vignette_ev``, a block of rows at a time, in place."""
+    height, width = image.shape[:2]
+
+    def change(top: int, bottom: int) -> None:
+        gain = np.exp2(vignette_ev(height, width, top, bottom, operation))
+        np.multiply(image[top:bottom], gain[..., None], out=image[top:bottom])
+
+    parallel.run(partial(change, *rows) for rows in parallel.row_blocks(height, width))
+    return image
+
+
+GRAIN_SMOOTHING = 0.7
+"""Blur of the grain field, in cells: grain cells blend into each other instead of
+being hard squares."""
+
+
+def _neighbour_correlation(sigma: float) -> float:
+    """Correlation of white noise blurred by ``gaussian_blur_plane`` between neighbours."""
+    radius = gaussian_radius(sigma)
+    taps = np.exp(-0.5 * (np.arange(-radius, radius + 1) / sigma) ** 2)
+    return float(np.dot(taps[:-1], taps[1:]) / np.dot(taps, taps))
+
+
+GRAIN_CORRELATION = _neighbour_correlation(GRAIN_SMOOTHING)
+
+
+def _interpolated_std(t: FloatArray) -> FloatArray:
+    """Standard deviation, relative to the field's, of a linear blend ``(1 - t) a + t b`` of
+    two neighbouring field cells (correlation ``GRAIN_CORRELATION``)."""
+    variance = (1 - t) ** 2 + t**2 + 2 * t * (1 - t) * np.float32(GRAIN_CORRELATION)
+    return np.sqrt(variance)
+
+
+def grain_field(height: int, width: int, operation: GrainOperation, seed: int) -> FloatArray:
+    """The photo's grain: unit-variance noise on a grid of ``1 / size`` cells along the long
+    edge, the same for every image of the photo with this aspect ratio."""
+    long_cells = max(2, round(1.0 / operation.size))
+    if width >= height:
+        cells = (max(2, round(long_cells * height / width)), long_cells)
+    else:
+        cells = (long_cells, max(2, round(long_cells * width / height)))
+    rng = np.random.default_rng([seed, round(operation.size * 1e7)])
+    field = rng.standard_normal(cells, dtype=np.float32)
+    field = gaussian_blur_plane(field, GRAIN_SMOOTHING)
+    field /= max(float(field.std()), 1e-12)
+    return field
+
+
+def _sample(field: FloatArray, height: int, width: int, top: int, bottom: int) -> FloatArray:
+    """Bilinear samples of ``field`` at the centres of rows ``top`` to ``bottom`` of a
+    ``height`` x ``width`` image (normalised positions, so any size samples the same field),
+    scaled to the field's variance."""
+    fh, fw = field.shape
+    fy = (np.arange(top, bottom) + 0.5) * (fh / height) - 0.5
+    fx = (np.arange(width) + 0.5) * (fw / width) - 0.5
+    y0 = np.clip(np.floor(fy).astype(np.intp), 0, fh - 2)
+    x0 = np.clip(np.floor(fx).astype(np.intp), 0, fw - 2)
+    ty = np.clip(fy - y0, 0.0, 1.0).astype(np.float32)[:, None]
+    tx = np.clip(fx - x0, 0.0, 1.0).astype(np.float32)[None, :]
+    # Separable: the field's rows at these image rows first, then its columns. Blending
+    # lowers the variance between cells; dividing by the blend's standard deviation keeps
+    # the grain equally strong at every size (the field's correlation is separable too).
+    rows = field[y0] * (1 - ty) + field[y0 + 1] * ty
+    rows /= _interpolated_std(ty)
+    samples = rows[:, x0] * (1 - tx) + rows[:, x0 + 1] * tx
+    samples /= _interpolated_std(tx)
+    return samples
+
+
+def grain(image: FloatArray, operation: GrainOperation, seed: int = 0) -> FloatArray:
+    """Add grain to display-referred ``image`` (display-linear, 0 to 1), in place.
+
+    On sRGB-encoded values: each channel plus ``amount * noise * 4t(1 - t)``, ``t`` being
+    the pixel's mean encoded value (the same offset on R, G and B), then clipped to 0-1.
+    """
+    height, width = image.shape[:2]
+    field = grain_field(height, width, operation, seed)
+    amount = np.float32(operation.amount)
+
+    def change(top: int, bottom: int) -> None:
+        rows = image[top:bottom]
+        noise = _sample(field, height, width, top, bottom)
+        srgb_encode(rows, out=rows)
+        tone = rows.mean(axis=-1)
+        tone = 4.0 * tone * (1.0 - tone)
+        rows += (amount * noise * np.clip(tone, 0.0, 1.0))[..., None]
+        np.clip(rows, 0.0, 1.0, out=rows)
+        srgb_decode(rows, out=rows)
+
+    parallel.run(partial(change, *rows) for rows in parallel.row_blocks(height, width))
+    return image
+
+
 _FUNCTIONS: dict[type[Operation], Callable[[FloatArray, Any], FloatArray]] = {
     ExposureOperation: exposure,
     WhiteBalanceOperation: white_balance,
@@ -315,13 +445,19 @@ _FUNCTIONS: dict[type[Operation], Callable[[FloatArray, Any], FloatArray]] = {
     VibranceOperation: vibrance,
     HslOperation: hsl,
     SplitToneOperation: split_tone,
+    ChannelMixerOperation: channel_mixer,
+    VignetteOperation: vignette,
+    GrainOperation: grain,
 }
 
 
-def apply_operation(image: FloatArray, operation: Operation, intensity: float = 1.0) -> FloatArray:
+def apply_operation(
+    image: FloatArray, operation: Operation, intensity: float = 1.0, *, seed: int = 0
+) -> FloatArray:
     """Apply ``operation`` at ``intensity`` to ``image``, in place. Returns ``image``.
 
-    Neutral after scaling (intensity 0, or neutral values) means untouched.
+    Neutral after scaling (intensity 0, or neutral values) means untouched. ``seed`` is the
+    photo's, for operations with randomness (grain).
     """
     if intensity == 0.0:
         return image
@@ -329,14 +465,21 @@ def apply_operation(image: FloatArray, operation: Operation, intensity: float = 
         operation = operation.scaled(intensity)
     if operation.is_neutral():
         return image
+    if isinstance(operation, GrainOperation):
+        return grain(image, operation, seed)
     return _FUNCTIONS[type(operation)](image, operation)
 
 
 def apply_operations(
-    image: FloatArray, operations: Iterable[Operation], intensity: float, space: Space
+    image: FloatArray,
+    operations: Iterable[Operation],
+    intensity: float,
+    space: Space,
+    *,
+    seed: int = 0,
 ) -> FloatArray:
     """Apply the operations of ``space`` among ``operations``, in order, in place."""
     for operation in operations:
         if operation.space == space:
-            image = apply_operation(image, operation, intensity)
+            image = apply_operation(image, operation, intensity, seed=seed)
     return image

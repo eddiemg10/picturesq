@@ -13,9 +13,11 @@ from picturesq.colour.temperature import white_balance_matrix
 from picturesq.config.operations import (
     MAX_INTENSITY,
     OPERATION_TYPES,
+    ChannelMixerOperation,
     ContrastOperation,
     ExposureOperation,
     FadeOperation,
+    GrainOperation,
     HslOperation,
     HueBand,
     Operation,
@@ -24,6 +26,7 @@ from picturesq.config.operations import (
     ToneCurveOperation,
     ToneTint,
     VibranceOperation,
+    VignetteOperation,
     WhiteBalanceOperation,
 )
 from picturesq.grade.operations import (
@@ -45,6 +48,9 @@ LOOK_VALUES: list[Operation] = [
     SplitToneOperation(
         shadows=ToneTint(hue=220.0, amount=0.3), highlights=ToneTint(hue=60.0, amount=0.2)
     ),
+    ChannelMixerOperation(red=0.6, green=0.3, blue=0.1, amount=1.0),
+    VignetteOperation(amount=-0.7, midpoint=0.3, roundness=0.5),
+    GrainOperation(amount=0.03),
 ]
 
 
@@ -73,10 +79,15 @@ def test_defaults_are_neutral(operation_type: type[Operation]) -> None:
 def test_scaled_moves_from_neutral_to_value(operation: Operation) -> None:
     assert operation.scaled(0.0).is_neutral()
     assert operation.scaled(1.0) == operation
-    half, full = operation.scaled(0.5), operation
-    for name, value in full.model_dump().items():
-        if isinstance(value, float) and name != "pivot":
-            assert getattr(half, name) == pytest.approx(value / 2)
+    half = operation.scaled(0.5)
+    for name, info in type(operation).model_fields.items():
+        extra = info.json_schema_extra
+        if isinstance(extra, dict) and "neutral" in extra:
+            neutral = float(extra["neutral"])  # type: ignore[arg-type]
+            expected = neutral + 0.5 * (getattr(operation, name) - neutral)
+            assert getattr(half, name) == pytest.approx(expected)
+        elif isinstance(getattr(operation, name), float):
+            assert getattr(half, name) == getattr(operation, name)  # where/which: kept
 
 
 def test_scaled_keeps_unscaled_values() -> None:

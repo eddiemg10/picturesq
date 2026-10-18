@@ -10,8 +10,9 @@ hue) are kept. The functions that apply operations live in ``picturesq.grade.ope
 from itertools import pairwise
 from typing import Annotated, Any, ClassVar, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from picturesq.colour.spaces import REC2020_TO_XYZ
 from picturesq.colour.transfer import MIDDLE_GREY
 
 MAX_INTENSITY = 1.5
@@ -314,6 +315,82 @@ highlights (mid grey is 0.565; black 0, diffuse white 1)."""
 SPLIT_TONE_BALANCE = 0.2
 """How far ``balance: 1`` moves the crossover, in Oklab lightness."""
 
+_LUMINANCE_WEIGHTS = tuple(float(w) for w in REC2020_TO_XYZ[1])
+
+
+class ChannelMixerOperation(Operation):
+    """Black and white by mixing R, G and B into one grey (scene-linear, working space).
+
+    The weights are divided by their sum, so a grey stays the same grey and the overall
+    brightness is kept. The defaults are luminance (a neutral conversion); more red darkens
+    blue skies and lightens skin, as a red filter does on black and white film. ``amount``
+    blends from colour (0) to the mix (1).
+    """
+
+    op: Literal["channel_mixer"] = "channel_mixer"
+    red: float = Field(default=_LUMINANCE_WEIGHTS[0], ge=-1.0, le=2.0, description="Red weight.")
+    green: float = Field(
+        default=_LUMINANCE_WEIGHTS[1], ge=-1.0, le=2.0, description="Green weight."
+    )
+    blue: float = Field(default=_LUMINANCE_WEIGHTS[2], ge=-1.0, le=2.0, description="Blue weight.")
+    amount: float = scaled(
+        0.0, ge=0.0, le=1.0, description="How far toward black and white; 1 is fully grey."
+    )
+
+    @model_validator(mode="after")
+    def _weights_sum(self) -> Self:
+        if self.red + self.green + self.blue < 0.1:
+            raise ValueError("red + green + blue must be at least 0.1 (they are divided by it)")
+        return self
+
+
+class VignetteOperation(Operation):
+    """Darken (or lighten) toward the corners, by the same factor on R, G and B.
+
+    Distance is measured from the centre so the corners are at 1; ``roundness`` 1 is a
+    circle, 0 an ellipse with the frame's aspect ratio. Nothing changes inside
+    ``midpoint``; from there the change eases in to ``amount`` EV at the corners. The same
+    at any resolution.
+    """
+
+    op: Literal["vignette"] = "vignette"
+    amount: float = scaled(
+        0.0, ge=-3.0, le=1.0, description="Change at the corners in EV; negative darkens."
+    )
+    midpoint: float = Field(
+        default=0.5, ge=0.0, lt=1.0, description="Distance (corners = 1) where it starts."
+    )
+    roundness: float = Field(
+        default=1.0, ge=0.0, le=1.0, description="1 is a circle, 0 follows the frame's shape."
+    )
+
+
+class GrainOperation(Operation):
+    """Film-like grain, display-referred: the same offset on R, G and B (monochrome grain).
+
+    Noise is generated once per photo (seeded from the photo, so it's the same on every
+    run) on a grid of ``1 / size`` cells along the long edge, then sampled at each pixel's
+    position: proxies, ``web`` and ``archive`` show the same grain pattern at their own
+    size. It is strongest in the mid tones and fades out toward black and white, as on
+    film.
+    """
+
+    space: ClassVar[Space] = "display"
+    op: Literal["grain"] = "grain"
+    amount: float = scaled(
+        0.0,
+        ge=0.0,
+        le=0.1,
+        description="Strength: the noise's standard deviation in the mid tones, as an sRGB value.",
+    )
+    size: float = Field(
+        default=0.0005,
+        ge=0.0002,
+        le=0.005,
+        description="Grain size as a fraction of the long edge (0.0005 is 1/2000).",
+    )
+
+
 AnyOperation = Annotated[
     ExposureOperation
     | WhiteBalanceOperation
@@ -323,7 +400,10 @@ AnyOperation = Annotated[
     | FadeOperation
     | VibranceOperation
     | HslOperation
-    | SplitToneOperation,
+    | SplitToneOperation
+    | ChannelMixerOperation
+    | VignetteOperation
+    | GrainOperation,
     Field(discriminator="op"),
 ]
 """Any operation, chosen by its ``op`` name (for look files)."""
@@ -338,4 +418,7 @@ OPERATION_TYPES: tuple[type[Operation], ...] = (
     VibranceOperation,
     HslOperation,
     SplitToneOperation,
+    ChannelMixerOperation,
+    VignetteOperation,
+    GrainOperation,
 )
