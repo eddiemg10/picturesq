@@ -17,6 +17,8 @@ We measured it (#57; half-size decodes, 2048 px renders):
 ## Decision
 1. **Normalise keeps the as-shot white balance.** There is no automatic correction, not even a partial one that is off by default: the data shows it would move us away from the camera more often than toward it.
 2. **`wb_disagreement` is information only.** It is raised when *both* estimates (`brightest` and `grey`, #83) differ from the as-shot white by at least `flag_disagreement_mired` (30) **in the same direction**. On the 23 photos this flags 3: the Sony FX3 night shot (+88/+87 mired) and two reference photos under strongly coloured light. Requiring both keeps one estimator's failure (a stage light that pulls `brightest` 240 mired off) from raising a flag.
+
+   **Amended 2026-10-18: the flag is opt-in** (`normalise.white_balance.flag_disagreement`, default `false`). On the 17-photo reference set it flagged 3 photos (a sunset road, a tree-lined road under blue sky, a club with mixed light) and none were wrong: since the camera keeps its recorded white balance (point 1 above), the flag mostly fires on scenes that are genuinely coloured. The check still runs and its numbers are recorded in the stats.
 3. **The fix for a photo is an override** (`photos.<name>.normalise.wb_kelvin` / `tint`, #87), chosen by a person or an agent looking at the flag.
 4. **The CC0 near-white band stays failing** with these three causes recorded instead of white balance:
    - **Pentax K-5 IIs:** a ~15 mired extra adaptation under tungsten. One sample is not enough evidence for an "incomplete adaptation" setting; revisit with more warm-light same-frame photos.
@@ -26,7 +28,7 @@ We measured it (#57; half-size decodes, 2048 px renders):
 
 ## Consequences
 - + The neutral render stays as close to the camera as it can be: the camera's white matches as-shot on every same-frame photo we have.
-- + A wrong as-shot white balance (rare: mixed or coloured light) gets a flag and a one-line override, never a silent change.
+- + A wrong as-shot white balance (rare: mixed or coloured light) is visible in the stats (and flagged, with `flag_disagreement` on) and fixed with a one-line override, never a silent change.
 - − The CC0 gate keeps failing its near-white band until #98/#99; M2's exit criterion accepts this ADR in place of that band passing.
 - − The near-white band compares chroma around 0.007–0.02, close to the noise floor, so its ratio is sensitive to small absolute differences. Whether the gate should allow an absolute tolerance there is an open question for the user.
 - − Fujifilm and Sony as-shot whites are approximate (LibRaw's matrix; no DNG tags), and three camera-implied whites rest on few neutral pixels (327–2492).
