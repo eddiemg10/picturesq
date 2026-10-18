@@ -146,10 +146,10 @@ class ToneCurveOperation(Operation):
     Each point is ``[input, output]`` in EV of luminance relative to mid grey (0.18):
     ``[2, 1.5]`` puts what was 2 stops above mid grey 1.5 stops above it (softer
     highlights). The curve is monotone cubic (no overshoot between points); beyond the
-    first and last points it continues at slope 1, so it shifts the far tones but never
-    clips them. Intensity moves each point's output toward its input (the identity, the
-    neutral curve). Scene-linear, before the display transform, which still rolls
-    highlights off.
+    first and last points it continues straight, at the slope between the two end points,
+    so softened highlights stay soft. Intensity moves each point's output toward its input
+    (the identity, the neutral curve). Scene-linear, before the display transform, which
+    still rolls highlights off.
     """
 
     op: Literal["tone_curve"] = "tone_curve"
