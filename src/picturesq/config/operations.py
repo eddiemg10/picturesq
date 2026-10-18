@@ -7,9 +7,10 @@ and the look's (:meth:`Operation.scaled`); values that say *where* or *which* (a
 hue) are kept. The functions that apply operations live in ``picturesq.grade.operations``.
 """
 
+from itertools import pairwise
 from typing import Annotated, Any, ClassVar, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from picturesq.colour.transfer import MIDDLE_GREY
 
@@ -130,8 +131,78 @@ class SaturationOperation(Operation):
     )
 
 
+MAX_CURVE_EV = 12.0
+"""Furthest a tone curve point may be from mid grey, in EV."""
+
+CurvePoint = tuple[
+    Annotated[float, Field(ge=-MAX_CURVE_EV, le=MAX_CURVE_EV)],
+    Annotated[float, Field(ge=-MAX_CURVE_EV, le=MAX_CURVE_EV)],
+]
+
+
+class ToneCurveOperation(Operation):
+    """Bend brightness with a smooth curve through a few points, keeping colour ratios.
+
+    Each point is ``[input, output]`` in EV of luminance relative to mid grey (0.18):
+    ``[2, 1.5]`` puts what was 2 stops above mid grey 1.5 stops above it (softer
+    highlights). The curve is monotone cubic (no overshoot between points); beyond the
+    first and last points it continues at slope 1, so it shifts the far tones but never
+    clips them. Intensity moves each point's output toward its input (the identity, the
+    neutral curve). Scene-linear, before the display transform, which still rolls
+    highlights off.
+    """
+
+    op: Literal["tone_curve"] = "tone_curve"
+    points: tuple[CurvePoint, ...] = Field(
+        default=(),
+        max_length=16,
+        description=(
+            "[input, output] pairs in EV relative to mid grey, inputs increasing, outputs "
+            "not decreasing. Empty (or every output equal to its input) is the identity."
+        ),
+    )
+
+    @field_validator("points")
+    @classmethod
+    def _monotone(cls, points: tuple[CurvePoint, ...]) -> tuple[CurvePoint, ...]:
+        inputs = [x for x, _ in points]
+        outputs = [y for _, y in points]
+        if any(b <= a for a, b in pairwise(inputs)):
+            raise ValueError("point inputs must increase")
+        if any(b < a for a, b in pairwise(outputs)):
+            raise ValueError("point outputs must not decrease (tones would swap order)")
+        return points
+
+    def scaled(self, intensity: float) -> Self:
+        points = tuple((x, x + intensity * (y - x)) for x, y in self.points)
+        return self.model_copy(update={"points": points})
+
+    def is_neutral(self) -> bool:
+        return all(x == y for x, y in self.points)
+
+
+class FadeOperation(Operation):
+    """Lift the blacks toward grey, the matte look of faded film or prints.
+
+    Display-referred, a *lift* as in grading tools: on sRGB-encoded values ``e``,
+    ``e + amount * (1 - e)``. Black becomes ``amount`` (0.05 is 13 of 255), white stays
+    white, and the change fades out toward white: mid grey goes from 0.46 to 0.49 at 0.05.
+    """
+
+    space: ClassVar[Space] = "display"
+    op: Literal["fade"] = "fade"
+    amount: float = scaled(
+        0.0, ge=0.0, le=0.3, description="Where black ends up, as an sRGB value (0 to 1)."
+    )
+
+
 AnyOperation = Annotated[
-    ExposureOperation | WhiteBalanceOperation | ContrastOperation | SaturationOperation,
+    ExposureOperation
+    | WhiteBalanceOperation
+    | ContrastOperation
+    | SaturationOperation
+    | ToneCurveOperation
+    | FadeOperation,
     Field(discriminator="op"),
 ]
 """Any operation, chosen by its ``op`` name (for look files)."""
@@ -141,4 +212,6 @@ OPERATION_TYPES: tuple[type[Operation], ...] = (
     WhiteBalanceOperation,
     ContrastOperation,
     SaturationOperation,
+    ToneCurveOperation,
+    FadeOperation,
 )
