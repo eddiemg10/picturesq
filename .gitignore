@@ -16,8 +16,9 @@ htmlcov/
 exports/
 
 # RAW and large image files: reference RAWs stay local
-reference/raw/
-reference/samples/
+# No trailing slash: also matches the symlinks agent worktrees use to share them.
+reference/raw
+reference/samples
 *.DNG
 *.dng
 *.CR2
