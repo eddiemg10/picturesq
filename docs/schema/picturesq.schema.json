@@ -482,8 +482,51 @@
     },
     "NormaliseOverrides": {
       "additionalProperties": false,
-      "description": "One photo's normalise overrides; an unset value keeps the computed one.",
+      "description": "One photo's normalise overrides; an unset value keeps the project's or computed one.\n\n``wb_kelvin`` and ``tint`` re-balance the photo from its as-shot white to the white they\ndescribe (scene-linear, before exposure). Either alone keeps the as-shot value of the\nother.",
       "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Run the normalise stage for this photo; replaces normalise.enabled. false skips it (exposure, white balance and colour noise reduction).",
+          "title": "Enabled"
+        },
+        "wb_kelvin": {
+          "anyOf": [
+            {
+              "maximum": 25000.0,
+              "minimum": 1667.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Colour temperature of the light, in kelvin: the photo is re-balanced from its as-shot white to this one. Without tint, keeps the as-shot tint.",
+          "title": "Wb Kelvin"
+        },
+        "tint": {
+          "anyOf": [
+            {
+              "maximum": 150.0,
+              "minimum": -150.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tint of the light, -1000 x Duv: positive is magenta, negative green. Without wb_kelvin, keeps the as-shot colour temperature.",
+          "title": "Tint"
+        },
         "exposure_ev": {
           "anyOf": [
             {

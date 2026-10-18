@@ -42,7 +42,7 @@
 | **stand-in** | A reference set photo covering a scenario until a proper shot exists (`status: stand-in` in the manifest). | placeholder, substitute |
 | **samples** | CC0 RAWs from raw.pixls.us used in CI. | fixtures (fixture = pytest) |
 | **camera JPEG** | The JPEG the camera embedded in the original: the reference our neutral render is compared against (`scripts/compare.py`). Some cameras embed a neighbouring frame; those are left out. | in-camera JPEG, preview |
-| **sidecar** | The `<photo>.picturesq.json` file written next to each export: picturesq version, the original's SHA-256, the output's settings and the config that rendered it. Enough to reproduce the export. | manifest, metadata file |
+| **sidecar** | The `<photo>.picturesq.json` file written next to each export: picturesq version, the original's SHA-256, the output's settings and the config that rendered it, including the photo's overrides. Enough to reproduce the export. | manifest, metadata file |
 | **capture EXIF** | The original's EXIF that describes the moment of capture (time, camera, lens, exposure), copied into each export by allowlist (ADR-0014). | metadata (too broad) |
 | **golden** | A stored expected output used by a regression test. | snapshot (that's for text/JSON) |
 

@@ -468,8 +468,38 @@ class ExportConfig(_Model):
 
 
 class NormaliseOverrides(_Model):
-    """One photo's normalise overrides; an unset value keeps the computed one."""
+    """One photo's normalise overrides; an unset value keeps the project's or computed one.
 
+    ``wb_kelvin`` and ``tint`` re-balance the photo from its as-shot white to the white they
+    describe (scene-linear, before exposure). Either alone keeps the as-shot value of the
+    other.
+    """
+
+    enabled: bool | None = Field(
+        default=None,
+        description=(
+            "Run the normalise stage for this photo; replaces normalise.enabled. false skips "
+            "it (exposure, white balance and colour noise reduction)."
+        ),
+    )
+    wb_kelvin: float | None = Field(
+        default=None,
+        ge=1667.0,
+        le=25000.0,
+        description=(
+            "Colour temperature of the light, in kelvin: the photo is re-balanced from its "
+            "as-shot white to this one. Without tint, keeps the as-shot tint."
+        ),
+    )
+    tint: float | None = Field(
+        default=None,
+        ge=-150.0,
+        le=150.0,
+        description=(
+            "Tint of the light, -1000 x Duv: positive is magenta, negative green. Without "
+            "wb_kelvin, keeps the as-shot colour temperature."
+        ),
+    )
     exposure_ev: float | None = Field(
         default=None,
         ge=-6.0,
@@ -485,6 +515,11 @@ class PhotoOverrides(_Model):
     """Overrides for one photo, keyed in ``photos:`` by the original's file name."""
 
     normalise: NormaliseOverrides = Field(default_factory=NormaliseOverrides)
+
+    @property
+    def sets_white_balance(self) -> bool:
+        """Whether a white balance override is set: rendering then needs the as-shot white."""
+        return self.normalise.wb_kelvin is not None or self.normalise.tint is not None
 
 
 NO_OVERRIDES: Final = PhotoOverrides()
