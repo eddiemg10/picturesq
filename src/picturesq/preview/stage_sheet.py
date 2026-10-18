@@ -29,14 +29,23 @@ _BACKGROUND: Final = (32, 32, 32)
 _TEXT: Final = (235, 235, 235)
 _MARGIN: Final = 10
 _LABEL_HEIGHT: Final = 28
+_LINE_HEIGHT: Final = 20
+"""Height of each label line after the first (``label_lines``)."""
+_BORDER: Final = 4
+"""Width of a marked panel's border, drawn in the margin around its tile."""
 
 
 @dataclass(frozen=True)
 class Panel:
-    """One tile of the sheet: a label and an 8-bit sRGB image."""
+    """One tile of the sheet: a label and an 8-bit sRGB image.
+
+    ``label`` may hold several lines (``\\n``; see ``label_lines``). With ``mark``, the tile
+    gets a border and its label is drawn in that colour (a flagged photo, say).
+    """
 
     label: str
     pixels: Uint8Array
+    mark: tuple[int, int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -182,16 +191,35 @@ def replace_section(body: str, section: str) -> str:
     return f"{stripped}\n\n{section}\n" if stripped else f"{section}\n"
 
 
-def sheet_size(count: int, panel_size: tuple[int, int], columns: int = 3) -> tuple[int, int]:
-    """Pixel size of the sheet for ``count`` panels of ``panel_size`` (width, height) each."""
+def _label_height(label_lines: int) -> int:
+    return _LABEL_HEIGHT + (max(1, label_lines) - 1) * _LINE_HEIGHT
+
+
+def sheet_size(
+    count: int, panel_size: tuple[int, int], columns: int = 3, label_lines: int = 1
+) -> tuple[int, int]:
+    """Pixel size of the sheet for ``count`` panels of ``panel_size`` (width, height) each,
+    with labels of up to ``label_lines`` lines."""
     columns = max(1, min(columns, count))
     rows = -(-count // columns)
     width, height = panel_size
     title_height = _LABEL_HEIGHT + _MARGIN
     return (
         _MARGIN + columns * (width + _MARGIN),
-        title_height + rows * (_LABEL_HEIGHT + height + _MARGIN),
+        title_height + rows * (_label_height(label_lines) + height + _MARGIN),
     )
+
+
+def panel_origin(
+    index: int, panel_size: tuple[int, int], columns: int, label_lines: int = 1
+) -> tuple[int, int]:
+    """Top-left corner of panel ``index``'s tile (below its label) in the sheet."""
+    width, height = panel_size
+    label_height = _label_height(label_lines)
+    row, column = divmod(index, columns)
+    x = _MARGIN + column * (width + _MARGIN)
+    y = _LABEL_HEIGHT + _MARGIN + row * (label_height + height + _MARGIN)
+    return x, y + label_height
 
 
 def fit_panel(pixels: Uint8Array, size: tuple[int, int]) -> Image.Image:
@@ -208,19 +236,31 @@ def compose_sheet(
     panels: Sequence[Panel],
     panel_size: tuple[int, int] = (500, 375),
     columns: int = 3,
+    label_lines: int = 1,
 ) -> Image.Image:
-    """Lay ``panels`` out in a grid (at most ``columns`` wide) under a title line."""
+    """Lay ``panels`` out in a grid (at most ``columns`` wide) under a title line.
+
+    Labels may have up to ``label_lines`` lines; a panel with ``mark`` gets a border.
+    """
     width, height = panel_size
     columns = max(1, min(columns, len(panels)))
-    sheet = Image.new("RGB", sheet_size(len(panels), panel_size, columns), _BACKGROUND)
+    size = sheet_size(len(panels), panel_size, columns, label_lines)
+    sheet = Image.new("RGB", size, _BACKGROUND)
     draw = ImageDraw.Draw(sheet)
     draw.text((_MARGIN, _MARGIN // 2), title, fill=_TEXT, font=ImageFont.load_default(size=18))
-    top = _LABEL_HEIGHT + _MARGIN
     label_font = ImageFont.load_default(size=16)
+    label_height = _label_height(label_lines)
     for index, panel in enumerate(panels):
-        row, column = divmod(index, columns)
-        x = _MARGIN + column * (width + _MARGIN)
-        y = top + row * (_LABEL_HEIGHT + height + _MARGIN)
-        draw.text((x, y + 4), panel.label, fill=_TEXT, font=label_font)
-        sheet.paste(fit_panel(panel.pixels, panel_size), (x, y + _LABEL_HEIGHT))
+        x, y = panel_origin(index, panel_size, columns, label_lines)
+        colour = _TEXT if panel.mark is None else panel.mark
+        draw.multiline_text(
+            (x, y - label_height + 4), panel.label, fill=colour, font=label_font, spacing=4
+        )
+        sheet.paste(fit_panel(panel.pixels, panel_size), (x, y))
+        if panel.mark is not None:
+            draw.rectangle(
+                (x - _BORDER, y - _BORDER, x + width + _BORDER - 1, y + height + _BORDER - 1),
+                outline=panel.mark,
+                width=_BORDER,
+            )
     return sheet

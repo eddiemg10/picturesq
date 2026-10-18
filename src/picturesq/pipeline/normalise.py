@@ -137,10 +137,13 @@ def normalise_originals(
     cache_dir: Path,
     *,
     on_photo: Callable[[NormaliseResult], None] | None = None,
+    on_image: Callable[[NormaliseResult, FloatArray], None] | None = None,
 ) -> list[NormaliseResult]:
     """:func:`normalise_proxy` for each original, on its proxy (built if missing).
 
     One proxy in memory at a time. A photo that fails is recorded and the run continues.
+    ``on_image`` gets each photo's normalised proxy (not for failed photos) before it is
+    dropped, e.g. to render a contact sheet panel; ``on_photo`` then gets every result.
     """
     results: list[NormaliseResult] = []
     for original in originals:
@@ -155,6 +158,8 @@ def normalise_originals(
             info = read_photo_info(original, config.decode)
             result = normalise_proxy(proxy.image, original.name, info, config)
             result.proxy_key = proxy.key
+            if on_image is not None:
+                on_image(result, proxy.image)
             del proxy
         except (DecodeError, OSError, ValueError, WhiteBalanceOverrideError) as error:
             result.error = str(error)

@@ -1,5 +1,6 @@
 """`picturesq normalise`: how normalise sees the project, photo by photo, on proxies."""
 
+import io
 import json
 import sys
 import time
@@ -9,8 +10,11 @@ from typing import Any
 import typer
 
 from picturesq import __version__
+from picturesq.atomic import atomic_write
 from picturesq.cli.config import EXIT_ERROR, EXIT_FLAGGED, EXIT_INVALID, fail, project_config
+from picturesq.colour.transfer import FloatArray
 from picturesq.decode import find_originals
+from picturesq.photo import PhotoContext
 from picturesq.pipeline.export import StemCollisionError, check_stems
 from picturesq.pipeline.normalise import (
     NormaliseResult,
@@ -20,6 +24,12 @@ from picturesq.pipeline.normalise import (
     write_stats,
 )
 from picturesq.pipeline.proxy import CACHE_DIRNAME
+from picturesq.preview.normalise_sheet import (
+    normalise_panel,
+    normalise_sheet,
+    render_panel_pixels,
+)
+from picturesq.preview.stage_sheet import Uint8Array
 
 
 def photo_line(result: NormaliseResult, name_width: int = 0) -> str:
@@ -58,7 +68,20 @@ def summary_line(summary: dict[str, Any], seconds: float) -> str:
     )
 
 
-def normalise_project(project_arg: str, *, as_json: bool, strict: bool) -> None:
+def _write_sheet(
+    path: Path, project: Path, results: list[NormaliseResult], pixels: dict[str, Uint8Array]
+) -> None:
+    summary = f"{len(results)} photo(s), {sum(1 for r in results if r.flags)} flagged"
+    title = f"{project.resolve().name} · normalise · picturesq {__version__} · {summary}"
+    panels = [normalise_panel(result, pixels.get(result.name)) for result in results]
+    buffer = io.BytesIO()
+    normalise_sheet(title, panels).save(buffer, format="PNG")
+    atomic_write(path, buffer.getvalue())
+
+
+def normalise_project(
+    project_arg: str, *, as_json: bool, strict: bool, png: Path | None = None
+) -> None:
     """Body of `picturesq normalise`. Photo lines go to stdout as they finish; none in JSON."""
     project = Path(project_arg)
     if not project.is_dir():
@@ -83,9 +106,24 @@ def normalise_project(project_arg: str, *, as_json: bool, strict: bool) -> None:
 
     started = time.perf_counter()
     cache_dir = project / CACHE_DIRNAME
-    results = normalise_originals(originals, config, cache_dir, on_photo=report)
+    pixels: dict[str, Uint8Array] = {}
+
+    def render(result: NormaliseResult, image: FloatArray) -> None:
+        photo = PhotoContext(name=result.name, info=result.info)
+        pixels[result.name] = render_panel_pixels(image, config, photo)
+
+    results = normalise_originals(
+        originals, config, cache_dir, on_photo=report, on_image=render if png else None
+    )
     summary = summarise(results, unmatched)
     write_stats(results, summary, cache_dir)
+    if png is not None:
+        try:
+            _write_sheet(png, project, results, pixels)
+        except OSError as error:
+            raise fail(f"cannot write {png}: {error}", EXIT_ERROR) from None
+        if not as_json:
+            typer.echo(f"wrote {png}")
     seconds = time.perf_counter() - started
     if as_json:
         document = {

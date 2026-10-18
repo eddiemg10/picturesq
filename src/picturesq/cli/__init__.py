@@ -133,13 +133,21 @@ def normalise(
     strict: Annotated[
         bool, typer.Option("--strict", help="Exit 3 if any photo has a flag (after printing).")
     ] = False,
+    png: Annotated[
+        Path | None,
+        typer.Option(
+            "--png",
+            help="Also write a contact sheet of the normalised photos (neutral render) here.",
+        ),
+    ] = None,
 ) -> None:
     """Show how normalise sees each photo: exposure, stats, white balance check and flags.
 
     Works on proxies (built if missing), so it takes seconds; changes no photo. Writes
     .picturesq/stats/<stem>.json per photo and .picturesq/stats/summary.json. Doesn't create
     picturesq.yaml. Warns about photos: overrides naming no original. Exits 1 if a photo
-    failed, else 3 with --strict if any photo has a flag.
+    failed, else 3 with --strict if any photo has a flag. With --png, also writes a contact
+    sheet: one panel per photo, captioned with its exposure and flags, flagged photos in amber.
 
     With --json, one document: {"version": str, "photos": [{"photo": name, "proxy_key": str,
     "normalised": bool, "exposure_ev": EV|null, "correction_ev": EV|null, "overrides":
@@ -154,7 +162,7 @@ def normalise(
     white_balance. The stats files hold the same objects (each with "version"; the summary
     without "seconds").
     """
-    normalise_project(project, as_json=as_json, strict=strict)
+    normalise_project(project, as_json=as_json, strict=strict, png=png)
 
 
 @app.command()

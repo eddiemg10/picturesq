@@ -232,7 +232,7 @@ operations:
 |---|---|
 | `picturesq run PROJECT` | Whole pipeline: decode → normalise → grade → export (creates `picturesq.yaml` with defaults if missing) |
 | `picturesq decode PROJECT [--full-res]` | Decode originals, build proxies (+ optional 16-bit TIFFs; `--full-res` not yet implemented) |
-| `picturesq normalise PROJECT [--strict]` | On proxies: per photo the exposure, stats, white balance check and flags, one line each and a summary; writes `.picturesq/stats/<stem>.json` and `summary.json`; `--strict` exits 3 if any photo is flagged |
+| `picturesq normalise PROJECT [--strict] [--png FILE]` | On proxies: per photo the exposure, stats, white balance check and flags, one line each and a summary; writes `.picturesq/stats/<stem>.json` and `summary.json`; `--strict` exits 3 if any photo is flagged; `--png` also writes a contact sheet of the normalised photos (flagged ones in amber) |
 | `picturesq preview PROJECT [--category cold] [--png FILE]` | Contact sheet of photos × looks: in the terminal, or as a PNG |
 | `picturesq looks [--category cold]` | List the look library |
 | `picturesq ui PROJECT` | Start the local web UI (opens the browser) |
