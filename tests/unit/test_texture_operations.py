@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from PIL import Image
 from pydantic import ValidationError
 
 from picturesq.colour.spaces import REC2020_TO_XYZ
@@ -103,15 +104,26 @@ def test_grain_is_seeded() -> None:
     assert not np.array_equal(first, other)
 
 
-@pytest.mark.parametrize(("height", "width"), [(400, 800), (400, 2000), (400, 3000)])
+@pytest.mark.parametrize(("height", "width"), [(1200, 2000), (1500, 3000)])
 def test_grain_strength_and_mean_in_the_mid_tones(height: int, width: int) -> None:
-    """As strong at any size: fewer pixels than grain cells (2000 along the long edge),
-    about as many, or more."""
+    """At least as many pixels as grain cells (2000 along the long edge): ``amount``."""
     image = apply_operation(_mid_grey(height, width), GrainOperation(amount=0.03), seed=1)
     encoded = srgb_encode(image)
     assert encoded.mean() == pytest.approx(0.46, abs=0.002)
     assert encoded.std() == pytest.approx(0.03 * 4 * 0.46 * 0.54, rel=0.05)
     assert np.ptp(encoded, axis=-1).max() < 1e-5  # monochrome: the same on R, G and B
+
+
+def test_small_images_see_the_grain_averaged() -> None:
+    """A small render looks like the large one shrunk: its grain is as faint."""
+    operation = GrainOperation(amount=0.03)
+    large = srgb_encode(apply_operation(_mid_grey(1500, 3000), operation, seed=1))
+    shrunk = np.asarray(
+        Image.fromarray(large[..., 0], mode="F").resize((400, 200), Image.Resampling.BOX)
+    )
+    small = srgb_encode(apply_operation(_mid_grey(200, 400), operation, seed=1))
+    assert small[..., 0].std() == pytest.approx(shrunk.std(), rel=0.2)
+    assert small[..., 0].std() < 0.6 * large[..., 0].std()
 
 
 def test_grain_leaves_black_and_white() -> None:
@@ -124,6 +136,7 @@ def test_grain_leaves_black_and_white() -> None:
 
 def test_grain_is_the_same_pattern_at_any_size() -> None:
     operation = GrainOperation(amount=0.03, size=0.005)
-    small = srgb_encode(apply_operation(_mid_grey(60, 100), operation, seed=2))
-    large = srgb_encode(apply_operation(_mid_grey(180, 300), operation, seed=2))
+    # Both at least as large as the field (200 cells along the long edge).
+    small = srgb_encode(apply_operation(_mid_grey(120, 200), operation, seed=2))
+    large = srgb_encode(apply_operation(_mid_grey(360, 600), operation, seed=2))
     np.testing.assert_allclose(large[1::3, 1::3], small, atol=1e-5)
