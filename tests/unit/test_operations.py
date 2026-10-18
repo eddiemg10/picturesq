@@ -16,9 +16,14 @@ from picturesq.config.operations import (
     ContrastOperation,
     ExposureOperation,
     FadeOperation,
+    HslOperation,
+    HueBand,
     Operation,
     SaturationOperation,
+    SplitToneOperation,
     ToneCurveOperation,
+    ToneTint,
+    VibranceOperation,
     WhiteBalanceOperation,
 )
 from picturesq.grade.operations import (
@@ -35,6 +40,11 @@ LOOK_VALUES: list[Operation] = [
     SaturationOperation(amount=-0.4),
     ToneCurveOperation(points=((-3.0, -3.4), (0.0, 0.0), (2.0, 1.5))),
     FadeOperation(amount=0.06),
+    VibranceOperation(amount=0.4),
+    HslOperation(blue=HueBand(hue=-10.0, chroma=0.2, lightness=-0.5), orange=HueBand(chroma=-0.2)),
+    SplitToneOperation(
+        shadows=ToneTint(hue=220.0, amount=0.3), highlights=ToneTint(hue=60.0, amount=0.2)
+    ),
 ]
 
 
