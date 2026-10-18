@@ -51,6 +51,11 @@ def _environment(**changes: object) -> Environment:
         automatic=automatic,
         threads_source=None,
         block_source=None,
+        available_memory=8 << 30,
+        memory_budget=int(0.6 * (8 << 30)),
+        budget_source=None,
+        max_photos=None,
+        workers_source=None,
         terminal=detect_terminal_graphics({"TERM": "xterm-kitty"}),
     )
     return replace(env, **changes)  # type: ignore[arg-type]
@@ -199,3 +204,48 @@ def test_cli_real_environment_reports_overrides() -> None:
         "automatic": checks["block_size"]["data"]["automatic"],
         "source": "PICTURESQ_BLOCK_PIXELS",
     }
+
+
+def test_memory_budget_defaults_to_a_share_of_available() -> None:
+    check = _by_id(build_checks(_environment()))["memory"]
+    assert check.status is Status.ok
+    assert check.value == "8.0 GiB available"
+    assert "60 %" in check.message
+
+
+def test_unknown_memory_warns_and_runs_one_photo_at_a_time() -> None:
+    checks = _by_id(build_checks(_environment(available_memory=None, memory_budget=None)))
+    assert checks["memory"].status is Status.warning
+    assert "one at a time" in checks["memory"].message
+    assert checks["photos_at_once"].data["example_fits"] == 1
+
+
+def test_budget_over_available_warns() -> None:
+    env = _environment(memory_budget=12 << 30, budget_source="--memory-budget")
+    check = _by_id(build_checks(env))["memory"]
+    assert check.status is Status.warning
+    assert "--memory-budget" in check.message
+
+
+def test_photos_at_once_follows_cores_and_budget() -> None:
+    # 4 cores, at least 2 threads per photo: up to 2 photos; 4.8 GiB fits two 24 MP photos.
+    check = _by_id(build_checks(_environment()))["photos_at_once"]
+    assert check.value == "up to 2"
+    assert check.data["example_fits"] == 2
+    small = _by_id(build_checks(_environment(memory_budget=1 << 30)))["photos_at_once"]
+    assert small.data["example_fits"] == 1
+
+
+def test_workers_flag_sets_the_cap() -> None:
+    env = _environment(max_photos=3, workers_source="--workers")
+    check = _by_id(build_checks(env))["photos_at_once"]
+    assert check.value == "up to 3"
+    assert "set by --workers" in check.message
+
+
+def test_cli_reports_memory_options() -> None:
+    result = runner.invoke(app, ["--memory-budget", "2GB", "--workers", "3", "doctor", "--json"])
+    checks = {c["check"]: c for c in json.loads(result.stdout)["checks"]}
+    assert checks["memory"]["data"]["budget_bytes"] == 2 * 10**9
+    assert checks["memory"]["data"]["source"] == "--memory-budget"
+    assert checks["photos_at_once"]["data"]["max_photos"] == 3
