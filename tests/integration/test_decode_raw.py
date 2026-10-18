@@ -104,6 +104,7 @@ def test_matches_libraw_rec2020_for_in_gamut_colours(samples_dir: Path, name: st
             output_bps=16,
             output_color=ColorSpace.Rec2020,
             highlight_mode=HighlightMode.Blend,
+            adjust_maximum_thr=config.adjust_white_level,
         ).astype(np.float32) / np.float32(65535.0)
     in_gamut = ((ours > 0.002) & (ours < 0.9)).all(axis=-1)
     error = np.abs(ours[in_gamut] - libraw[in_gamut]).max(axis=-1) / libraw[in_gamut].max(axis=-1)
@@ -178,3 +179,49 @@ def test_default_crop_box_on_rotated_libraw_output(
     assert box is not None
     top, left, height, width = box
     np.testing.assert_array_equal(rotated[top : top + height, left : left + width], expected)
+
+
+def _with_bright_spot(monkeypatch: pytest.MonkeyPatch, level: float) -> None:
+    """Make every ``rawpy.imread`` in the decoder add a 16 px spot at ``level`` of the white
+    level (above black) to the raw data: a small lamp or reflection in the frame."""
+    imread = rawpy.imread
+
+    def imread_with_spot(path: str) -> Any:
+        raw = imread(path)
+        black = float(np.mean(raw.black_level_per_channel))
+        data = raw.raw_image_visible
+        height, width = data.shape
+        top, left = height // 10, width * 8 // 10
+        data[top : top + 16, left : left + 16] = black + level * (raw.white_level - black)
+        return raw
+
+    monkeypatch.setattr("picturesq.decode.raw.rawpy.imread", imread_with_spot)
+
+
+def test_a_bright_spot_does_not_change_the_rest_of_the_frame(
+    samples_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The FX3 sample peaks at 17 % of the white level; with LibRaw's default (adjust_maximum_thr
+    # 0.75) a spot at 80 % brightens the whole photo by 1.25x (#94, ADR-0018). A Bayer sensor:
+    # LibRaw's X-Trans half-size decode moves other pixels by ~1 % too (ADR-0018).
+    path = _sample(samples_dir, "sony-ilme-fx3.arw")
+    before = decode_original(path, DecodeConfig(), half_size=True)
+    _with_bright_spot(monkeypatch, 0.8)
+    after = decode_original(path, DecodeConfig(), half_size=True)
+    height = before.shape[0]
+    rest = np.s_[height // 4 :, :]  # below the spot
+    np.testing.assert_array_equal(after[rest], before[rest])
+
+
+def test_adjust_white_level_takes_the_white_level_from_the_frame(
+    samples_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The opt-in keeps LibRaw's behaviour: the spot becomes the white level.
+    path = _sample(samples_dir, "sony-ilme-fx3.arw")
+    config = DecodeConfig(adjust_white_level=0.75)
+    before = decode_original(path, config, half_size=True)
+    _with_bright_spot(monkeypatch, 0.8)
+    after = decode_original(path, config, half_size=True)
+    rest = np.s_[before.shape[0] // 4 :, :, 1]
+    ratio = float(np.median(after[rest]) / np.median(before[rest]))
+    assert ratio == pytest.approx(1 / 0.8, rel=0.02)

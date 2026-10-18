@@ -170,6 +170,14 @@
           "title": "Baseline Exposure",
           "type": "boolean"
         },
+        "adjust_white_level": {
+          "default": 0.0,
+          "description": "When a photo's brightest raw value is above this fraction of the white level, LibRaw takes that value as the white level instead, brightening the whole photo. 0 (default): never, so brightness doesn't depend on what's in the frame (ADR-0018). LibRaw's own default is 0.75.",
+          "exclusiveMaximum": 1.0,
+          "minimum": 0.0,
+          "title": "Adjust White Level",
+          "type": "number"
+        },
         "proxy_long_edge": {
           "default": 2048,
           "description": "Long edge of the cached proxy (pixels) used by previews and the UI. Proxies are never upscaled. Changing it rebuilds the cache.",

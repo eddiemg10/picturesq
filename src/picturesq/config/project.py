@@ -63,6 +63,17 @@ class DecodeConfig(_Model):
             "underexposure)."
         ),
     )
+    adjust_white_level: float = Field(
+        default=0.0,
+        ge=0.0,
+        lt=1.0,
+        description=(
+            "When a photo's brightest raw value is above this fraction of the white level, "
+            "LibRaw takes that value as the white level instead, brightening the whole photo. "
+            "0 (default): never, so brightness doesn't depend on what's in the frame "
+            "(ADR-0018). LibRaw's own default is 0.75."
+        ),
+    )
     proxy_long_edge: int = Field(
         default=2048,
         ge=256,
