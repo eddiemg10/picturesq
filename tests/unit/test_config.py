@@ -241,3 +241,28 @@ def test_photo_overrides_round_trip_through_yaml() -> None:
         {"photos": {"DJI_0042.DNG": {"normalise": {"exposure_ev": 2.5}}}}
     )
     assert ProjectConfig.model_validate(yaml.safe_load(dump_project_config(config))) == config
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [{"wb_kelvin": 1500}, {"wb_kelvin": 30000}, {"tint": 151}, {"tint": -151}, {"enabled": "x"}],
+)
+def test_white_balance_and_enabled_overrides_are_validated(overrides: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        ProjectConfig.model_validate({"photos": {"a.dng": {"normalise": overrides}}})
+
+
+def test_only_kelvin_or_tint_sets_white_balance() -> None:
+    config = ProjectConfig.model_validate(
+        {
+            "photos": {
+                "k.dng": {"normalise": {"wb_kelvin": 3200}},
+                "t.dng": {"normalise": {"tint": -8}},
+                "e.dng": {"normalise": {"exposure_ev": 1.0, "enabled": False}},
+            }
+        }
+    )
+    assert config.photo("k.dng").sets_white_balance
+    assert config.photo("t.dng").sets_white_balance
+    assert not config.photo("e.dng").sets_white_balance
+    assert not config.photo("none.dng").sets_white_balance

@@ -112,7 +112,7 @@ Implemented (ADR-0010):
 Still to do (M2):
 3. Stats per photo (p1/p5/p50/p95/p99, clipped fraction, mean chroma) written as JSON, plus a project summary; stats outside configured ranges mark the photo as an **outlier**.
 4. **WB check:** two white balance estimates (`brightest`, a white-patch estimate, and `grey`, grey world on nearly neutral pixels) vs as-shot; when both differ by at least `flag_disagreement_mired` in the same direction, flag `wb_disagreement` (no automatic change). The flag is opt-in (`flag_disagreement`, off by default): coloured scenes such as sunsets trip it while as-shot is right (ADR-0016).
-5. Overrides (`exposure_ev`, `wb_kelvin`, `tint`, `skip`) and flags (e.g. `exposure_clamped`).
+5. Overrides (`exposure_ev`, `wb_kelvin`, `tint`, and `enabled: false` to skip normalise for one photo) and flags (e.g. `exposure_clamped`). `wb_kelvin`/`tint` re-balance from the as-shot white (photo info) in scene-linear, before exposure; the sidecar records the photo's overrides.
 
 Dropped after measurement (ADR-0010): key detection with per-key targets and the highlight guard (the camera-fitted curve keeps highlights below the white point; cameras don't normalise per scene). Cameras showed no compression of broad areas beyond their global curve, but they keep *detail* steeper than it (clouds in a bright sky): `grade.local_contrast` does that (ADR-0011).
 
@@ -197,7 +197,7 @@ grade:
   adjustments: {exposure: 0.0, warmth: 0.0, tint: 0.0, contrast: 0.0, saturation: 0.0, vibrance: 0.0}
 photos:                          # overrides, written by the UI
   DJI_20261011_0042.DNG:
-    normalise: {exposure_ev: 2.3}  # replaces the computed exposure (offset_ev 2.0 + correction)
+    normalise: {exposure_ev: 2.3, wb_kelvin: 3200}  # exposure replaces offset_ev 2.0 + correction; wb_kelvin re-balances from the as-shot white
     grade:
       look: {name: bw/silver, intensity: 1.0}
 export:
