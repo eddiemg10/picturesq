@@ -37,7 +37,7 @@ def test_mixer_result_is_grey_and_weights_are_normalised() -> None:
 
 def test_default_weights_are_luminance() -> None:
     mixed = _mono(SKY, ChannelMixerOperation(amount=1.0))
-    np.testing.assert_allclose(mixed, SKY @ REC2020_TO_XYZ[1], rtol=1e-5)
+    np.testing.assert_allclose(mixed, SKY @ REC2020_TO_XYZ[1], rtol=1e-3)
 
 
 def test_red_filter_darkens_sky_and_lightens_skin() -> None:

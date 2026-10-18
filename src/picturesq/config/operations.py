@@ -12,7 +12,6 @@ from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from picturesq.colour.spaces import REC2020_TO_XYZ
 from picturesq.colour.transfer import MIDDLE_GREY
 
 MAX_INTENSITY = 1.5
@@ -315,7 +314,8 @@ highlights (mid grey is 0.565; black 0, diffuse white 1)."""
 SPLIT_TONE_BALANCE = 0.2
 """How far ``balance: 1`` moves the crossover, in Oklab lightness."""
 
-_LUMINANCE_WEIGHTS = tuple(float(w) for w in REC2020_TO_XYZ[1])
+_LUMINANCE_WEIGHTS = (0.2627, 0.6780, 0.0593)
+"""Rec.2020 luminance (ITU-R BT.2020's luma coefficients; the working space's Y row to 1e-4)."""
 
 
 class ChannelMixerOperation(Operation):

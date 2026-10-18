@@ -28,6 +28,7 @@
 | **Hald CLUT** | A **LUT** stored as a square image (PNG/TIFF) instead of a `.cube`; used by RawTherapee's Film Simulation Collection. Only ever a source format: convert to `.cube` before use, and keep the collection's licence and attribution with it. | HaldCLUT, preset image |
 | **operation (op)** | One step inside a look file, e.g. `contrast`, `split_tone`, `lut`. | module, node, tool, effect |
 | **parameter** | A named, adjustable value a look exposes to the UI (e.g. *shadow tint*). | knob, setting, control |
+| **parameter reference** | `$name` in place of a number in a look file's operation: the value comes from the look's parameter `name`. | variable, placeholder, binding |
 | **intensity** | How strongly a look applies: 0 % = neutral render, 100 % = as designed, up to 150 %. The only word for this. | strength, amount, opacity, mix |
 | **amount** | The magnitude parameter *inside* an operation (`contrast.amount`). Never used for looks. | strength |
 | **neutral value** | The value of an operation's parameter at which the operation does nothing (`contrast.amount: 0`); intensity scales each such value between its neutral value and the look's (ADR-0019). | default (a default needn't be neutral), identity |

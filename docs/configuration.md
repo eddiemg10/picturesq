@@ -15,7 +15,7 @@ The machine-readable version of this page is the JSON Schema: `picturesq schema`
 
 Every export records the config that rendered it in its **sidecar** (`exports/<output>/<photo>.picturesq.json`); the sidecar's `config` section is a valid `picturesq.yaml`.
 
-> **Status:** config format version `1`, pre-alpha. This page documents what exists today (`decode`, `normalise`, `grade.local_contrast`, `grade.display_transform`, `export`, `photos`). Sections for looks and adjustments are added as those stages ship.
+> **Status:** config format version `1`, pre-alpha. This page documents what exists today (`decode`, `normalise`, `grade.local_contrast`, `grade.display_transform`, `export`, `photos`) and the [look file](#look-files) format. Choosing a look and adjustments in `picturesq.yaml` is added in [#118](https://github.com/eddiemg10/picturesq/issues/118).
 
 ## Defaults
 
@@ -392,6 +392,146 @@ Each photo:
 
 Each export's sidecar records the photo's overrides under `config.photos`, so the sidecar alone says how the photo was rendered.
 
+## Look files
+
+A **look** (e.g. `cold/nordic`) is defined by a **look file**: YAML with the look's metadata, the **parameters** it shows in the UI, and the **operations** it applies, in order. The built-in ones are in `src/picturesq/grade/looks/<category>/<name>.yaml`. `picturesq schema look` prints the look file's JSON Schema; [`docs/schema/look.schema.json`](schema/look.schema.json) is a copy.
+
+```yaml
+version: 1
+name: nordic
+category: cold                   # bw | cold | warm | cinematic
+description: Muted, cool shadows, clean whites, lifted blacks
+parameters:
+  shadow_tint: {default: 0.3, min: 0.0, max: 0.8, label: Shadow tint}
+  fade: {default: 0.04, min: 0.0, max: 0.12, label: Fade}
+operations:
+  - {op: white_balance, warmth: -12}
+  - {op: contrast, amount: 0.12}
+  - {op: split_tone, shadows: {hue: 230, amount: $shadow_tint}, highlights: {hue: 70, amount: 0.1}}
+  - {op: saturation, amount: -0.15}
+  - {op: fade, amount: $fade}
+```
+
+| Key | Type | Description |
+|---|---|---|
+| `version` | `1` | Look file format version. |
+| `name` | name | The look's name within its category; must match the file name. |
+| `category` | `bw` \| `cold` \| `warm` \| `cinematic` | Must match the folder. Projects refer to the look as `category/name`. |
+| `description` | text, up to 200 characters | One line, for people. |
+| `parameters` | mapping of name to parameter | Values the UI shows as sliders. Each has `default`, `min`, `max` (`min ≤ default ≤ max`) and `label`. |
+| `operations` | list, 1–32 | The steps, in order. Any number in an operation can be a **parameter reference** `$name` instead. |
+
+**Validation:** every `$name` must be a parameter, every parameter must be used, and every operation must be valid with all its parameters at their default, at their `min` and at their `max`. Unknown keys and unknown `op` names are errors, as in `picturesq.yaml`.
+
+**Intensity** (how strongly a look applies, 0–150 %) scales each operation's strength values between their **neutral value** (where the operation does nothing) and the look's value; values that say where or which (a pivot, a hue) are kept. So `exposure: {ev: 1}` at 50 % is +0.5 EV, and at 0 % every operation is skipped: exactly the neutral render ([ADR-0019](decisions/0019-grade-operations-and-intensity.md)). Below, the strength values are those with a neutral value.
+
+**Order:** the look's scene operations run on scene light, then adjustments, then local contrast and the display transform; the look's display operations run after the display transform, for each output (`fade`, `grain`).
+
+### Operations
+
+#### `exposure` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `ev` | number, −4–4 | `0` | Exposure change in stops: `1` doubles the light. |
+
+#### `white_balance` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `warmth` | number, −100–100 | `0` | Warmth in mired; positive is warmer (yellower), negative cooler. 10–20 is a gentle change. |
+| `tint` | number, −50–50 | `0` | Tint on the same scale as `photos.<name>.normalise.tint`; positive is magenta, negative green. |
+
+#### `contrast` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, −0.9–1 | `0` | Extra contrast around `pivot`, in stops: `0.2` makes every stop away from it 1.2 stops. The same gain on R, G and B, so colours keep their hue and saturation. |
+| `pivot` | number, 0–1 | — | Scene luminance that stays put. Default `0.18` (mid grey). |
+
+#### `saturation` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, −1–1 | `0` | Chroma change for every colour, lightness and hue kept: `-1` is black and white, `0.2` is 20 % more colour. |
+
+#### `vibrance` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, −1–1 | `0` | Chroma change for muted colours, fading to none for colourful ones (Oklab chroma 0.25 and up), so skin and vivid colours change less than with `saturation`. |
+
+#### `tone_curve` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `points` | list of `[input, output]`, up to 16 | each output = its input | Brightness in stops relative to mid grey: `[2, 1.5]` moves what was 2 stops above mid grey to 1.5 stops (softer highlights). Inputs must increase, outputs must not decrease, all within ±12. The curve is smooth and never overshoots; beyond the first and last points it continues at slope 1. Colours keep their hue and saturation. Intensity moves each output toward its input. |
+
+#### `hsl` (scene)
+
+Changes colours by **hue band**: `red`, `orange` (skin), `yellow`, `green`, `aqua`, `blue` (sky), `purple`, `magenta`. Neighbouring bands blend smoothly, and greys aren't changed. Each band is a mapping:
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `hue` | number, −45–45 | `0` | Hue shift in degrees: positive turns red toward yellow, blue toward purple. |
+| `chroma` | number, −1–1 | `0` | Chroma change; `-1` removes the band's colour. |
+| `lightness` | number, −2–2 | `0` | Brightness change in stops (a darker sky: `-0.5`). |
+
+| Key | Type | Description |
+|---|---|---|
+| `red` | band | Reds (Oklab hue around 25°). |
+| `orange` | band | Oranges and skin (55°). |
+| `yellow` | band | Yellows (100°). |
+| `green` | band | Greens and foliage (140°). |
+| `aqua` | band | Cyans (195°). |
+| `blue` | band | Blues and sky (255°). |
+| `purple` | band | Purples (295°). |
+| `magenta` | band | Magentas (330°). |
+
+#### `split_tone` (scene)
+
+Tints the shadows toward one hue and the highlights toward another, lightness kept; black stays black.
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `shadows` | `{hue, amount}` | `amount: 0` | `hue`: 0–360 (Oklab hue: about 25 red, 55 orange, 100 yellow, 140 green, 195 cyan, 255 blue). `amount`: 0–1; `1` adds a strong tint (0.1 Oklab chroma at mid grey). |
+| `highlights` | `{hue, amount}` | `amount: 0` | The same, for the highlights. |
+| `balance` | number, −1–1 | — | Where shadows end and highlights start: positive gives the shadows' tint more of the tones. Default `0` (mid grey). |
+
+#### `channel_mixer` (scene)
+
+Black and white from a mix of R, G and B.
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `red` | number, −1–2 | — | Red weight. Default `0.2627`. More red darkens blue skies and lightens skin (a red filter). |
+| `green` | number, −1–2 | — | Green weight. Default `0.678`. |
+| `blue` | number, −1–2 | — | Blue weight. Default `0.0593`. The weights are divided by their sum (at least 0.1), so greys stay the same grey. |
+| `amount` | number, 0–1 | `0` | How far toward black and white; `1` is fully grey. |
+
+#### `vignette` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, −3–1 | `0` | Change at the corners in stops; negative darkens. |
+| `midpoint` | number, 0–1 | — | Where it starts, as a distance from the centre (corners are 1). Default `0.5`. |
+| `roundness` | number, 0–1 | — | `1` is a circle, `0` an ellipse with the frame's shape. Default `1`. |
+
+#### `fade` (display)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, 0–0.3 | `0` | Lifts black to this sRGB value (`0.05` is 13 of 255), white stays white: the matte look of faded film. |
+
+#### `grain` (display)
+
+Film-like grain, the same on every run and the same pattern in every output.
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, 0–0.1 | `0` | Strength in the mid tones, as an sRGB value; it fades out toward black and white. `0.02` is subtle. |
+| `size` | number, 0.0002–0.005 | — | Grain size as a fraction of the long edge. Default `0.0005` (1/2000). |
+
 ## Validation and errors
 
 picturesq checks the whole file before doing any work:
@@ -416,4 +556,4 @@ picturesq checks the whole file before doing any work:
 
 - **Writes are atomic.** picturesq writes to a temporary file and renames it over `picturesq.yaml`, so a crash never leaves a half-written file.
 - **Comments are not preserved.** The file is rewritten by the UI and CLI, so put notes elsewhere.
-- **JSON Schema:** `picturesq schema` will print a schema for editor autocompletion and agents (coming in [#13](https://github.com/eddiemg10/picturesq/issues/13)).
+- **JSON Schema:** `picturesq schema` prints the schema of `picturesq.yaml` and `picturesq schema look` that of a look file, for editor autocompletion and agents.
