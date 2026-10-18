@@ -13,6 +13,7 @@ from picturesq.preview.compare import (
     compare_photo,
     content_correlation,
     gate,
+    pooled_difference,
 )
 
 
@@ -62,6 +63,43 @@ def test_gate_thresholds() -> None:
     assert not gate([_photo(0.8), _photo(-0.9)]).brightness_ok
     assert not gate([_photo(0.0, chroma=0.15)]).colour_ok
     assert not gate([_photo(0.0, clipped=0.02)]).highlights_ok
+
+
+def _banded(ours: tuple[float, ...], camera: tuple[float, ...]) -> PhotoComparison:
+    return PhotoComparison("p", 0.0, 0.0, 0.0, ours, camera, 1.0)
+
+
+def test_near_white_passes_on_a_small_absolute_difference() -> None:
+    # Near-white: 0.0167 against 0.0067 is 2.5x but only 0.01 apart, below a visible tint.
+    result = gate([_banded((0.1,) * 5 + (0.0167,), (0.1,) * 5 + (0.0067,))])
+    assert result.band_chroma_ratio[-1] == pytest.approx(2.5, rel=0.01)
+    assert result.band_chroma_difference[-1] == pytest.approx(0.01)
+    assert result.colour_ok
+    assert result.band_on_tolerance == (False,) * 5 + (True,)
+
+
+def test_large_difference_out_of_range_fails() -> None:
+    result = gate([_banded((0.1,) * 5 + (0.06,), (0.1,) * 5 + (0.03,))])
+    assert result.band_chroma_difference[-1] == pytest.approx(0.03)
+    assert not result.colour_ok
+    assert not any(result.band_on_tolerance)
+
+
+def test_ratio_in_range_passes_whatever_the_difference() -> None:
+    # 1.2x of a strongly coloured band: 0.04 apart, but the ratio is within range.
+    result = gate([_banded((0.24,) * 6, (0.2,) * 6)])
+    assert result.band_chroma_difference[0] == pytest.approx(0.04)
+    assert result.colour_ok
+    assert not any(result.band_on_tolerance)
+
+
+def test_pooled_difference_leaves_out_missing_bands() -> None:
+    nan = float("nan")
+    ours = [(0.02, nan), (0.04, 0.1)]
+    camera = [(0.01, 0.2), (0.01, nan)]
+    difference = pooled_difference(ours, camera)
+    assert difference[0] == pytest.approx(0.02)
+    assert np.isnan(difference[1])
 
 
 def _scene(width: int = 400, height: int = 300) -> np.ndarray:
