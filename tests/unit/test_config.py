@@ -207,6 +207,7 @@ def test_saved_file_has_normal_permissions(tmp_path: Path) -> None:
 
 def test_white_balance_and_outlier_defaults() -> None:
     normalise = ProjectConfig().normalise
+    assert normalise.white_balance.flag_disagreement is False
     assert normalise.white_balance.flag_disagreement_mired == 30.0
     assert (normalise.outliers.min_median_ev, normalise.outliers.max_median_ev) == (-2.0, 3.0)
 

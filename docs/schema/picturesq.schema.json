@@ -605,8 +605,14 @@
     },
     "WhiteBalanceConfig": {
       "additionalProperties": false,
-      "description": "The white balance check: compare the as-shot white balance with an estimate.\n\nNormalise keeps the camera's as-shot white balance; when both estimates from the photo\nitself (``brightest`` and ``grey``) differ from it by at least ``flag_disagreement_mired``\nin the same direction, the photo gets the ``wb_disagreement`` flag. Nothing is changed\nautomatically (plan D6). See :mod:`picturesq.normalise.white_balance_check` for the\nmeasurements behind the default.",
+      "description": "The white balance check: compare the as-shot white balance with an estimate.\n\nNormalise keeps the camera's as-shot white balance and always runs the check (its numbers\ngo into the stats). With ``flag_disagreement`` on, when both estimates from the photo\nitself (``brightest`` and ``grey``) differ from it by at least ``flag_disagreement_mired``\nin the same direction, the photo gets the ``wb_disagreement`` flag. It is off by default:\ngenuinely coloured scenes (sunsets, blue sky over foliage) trip it while the as-shot white\nbalance is right (ADR-0016). Nothing is changed automatically (plan D6). See\n:mod:`picturesq.normalise.white_balance_check` for the measurements behind the default.",
       "properties": {
+        "flag_disagreement": {
+          "default": false,
+          "description": "Raise wb_disagreement when the estimates disagree with as-shot; off by default because coloured scenes such as sunsets trip it.",
+          "title": "Flag Disagreement",
+          "type": "boolean"
+        },
         "flag_disagreement_mired": {
           "default": 30.0,
           "description": "Flag a photo when both white balance estimates differ from the as-shot one by at least this, the same way, in mired (30 is about 600 K near 4500 K, 1100 K near 6500 K).",

@@ -3,7 +3,9 @@
 Normalise keeps the camera's as-shot white balance (plan D6). This module only *checks* it:
 it estimates the colour of the light from the photo itself and compares it with the as-shot
 white, in mired. Nothing is changed; a disagreement becomes the ``wb_disagreement`` flag
-(:func:`picturesq.normalise.flags.white_balance_flags`).
+(:func:`picturesq.normalise.flags.white_balance_flags`) only when
+``normalise.white_balance.flag_disagreement`` is on. It is off by default: genuinely
+coloured scenes (sunsets, blue sky over foliage) disagree while as-shot is right (ADR-0016).
 
 **Two estimators** (illuminant estimation), each guessing which pixels are neutral surfaces:
 
