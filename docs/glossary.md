@@ -105,6 +105,7 @@
 | **white balance (WB)** | Per-channel gains making neutral objects neutral; **as-shot** = camera's recorded values. |
 | **as-shot white** | The colour of light the camera balanced for, from its recorded white balance (DNG `AsShotNeutral`) through the colour matrix: an xy chromaticity, given as kelvin and tint (`-1000 × Duv`, positive is magenta). |
 | **clip level** | The scene-linear value a white the sensor clipped reaches in the decoded image: `2^BaselineExposure`, times a fraction set by `decode.highlight_mode` (not simply 1.0). |
+| **grey-world** | A white balance estimate: assume the photo averages to grey, so its average colour is the light's. Fails when one colour fills the frame. |
 | **chroma NR / luma NR** | Noise reduction on colour / brightness detail. |
 
 ## Project management

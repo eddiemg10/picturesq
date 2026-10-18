@@ -6,9 +6,10 @@ Built-in look files live in `looks/<category>/<name>.yaml`. v0 runs local contra
 from picturesq.colour.transfer import FloatArray
 from picturesq.config import ProjectConfig
 from picturesq.grade.local_contrast import local_contrast
+from picturesq.photo import UNNAMED, PhotoContext
 
 
-def grade(image: FloatArray, config: ProjectConfig) -> FloatArray:
+def grade(image: FloatArray, config: ProjectConfig, photo: PhotoContext = UNNAMED) -> FloatArray:
     """Run the grade stage on ``image`` (linear Rec.2020), in place. Returns ``image``."""
     settings = config.grade
     return local_contrast(image, settings.local_contrast, settings.display_transform)

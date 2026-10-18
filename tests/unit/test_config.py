@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 import typer
+import yaml
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
@@ -10,6 +11,7 @@ from picturesq.cli.config import EXIT_INVALID, load_config_or_exit
 from picturesq.config import (
     CONFIG_FILENAME,
     ConfigError,
+    OutliersConfig,
     OutputConfig,
     ProjectConfig,
     SharpenConfig,
@@ -201,3 +203,40 @@ def test_saved_file_has_normal_permissions(tmp_path: Path) -> None:
     mask = os.umask(0)
     os.umask(mask)
     assert path.stat().st_mode & 0o777 == 0o666 & ~mask
+
+
+def test_white_balance_and_outlier_defaults() -> None:
+    normalise = ProjectConfig().normalise
+    assert normalise.white_balance.flag_disagreement_mired == 30.0
+    assert (normalise.outliers.min_median_ev, normalise.outliers.max_median_ev) == (-2.0, 3.0)
+
+
+def test_outlier_median_range_must_be_ordered() -> None:
+    with pytest.raises(ValidationError, match="max_median_ev"):
+        OutliersConfig(min_median_ev=1.0, max_median_ev=1.0)
+
+
+def test_photo_overrides_lookup_ignores_case() -> None:
+    config = ProjectConfig.model_validate(
+        {"photos": {"DJI_0042.DNG": {"normalise": {"exposure_ev": 2.5}}}}
+    )
+    assert config.photo("DJI_0042.DNG").normalise.exposure_ev == 2.5
+    assert config.photo("dji_0042.dng").normalise.exposure_ev == 2.5
+    assert config.photo("DJI_0043.DNG").normalise.exposure_ev is None
+
+
+def test_photo_names_differing_only_in_case_are_rejected() -> None:
+    with pytest.raises(ValidationError, match="same file name"):
+        ProjectConfig.model_validate({"photos": {"a.dng": {}, "A.DNG": {}}})
+
+
+def test_photo_overrides_reject_unknown_keys() -> None:
+    with pytest.raises(ValidationError):
+        ProjectConfig.model_validate({"photos": {"a.dng": {"normalise": {"exposure": 1}}}})
+
+
+def test_photo_overrides_round_trip_through_yaml() -> None:
+    config = ProjectConfig.model_validate(
+        {"photos": {"DJI_0042.DNG": {"normalise": {"exposure_ev": 2.5}}}}
+    )
+    assert ProjectConfig.model_validate(yaml.safe_load(dump_project_config(config))) == config
