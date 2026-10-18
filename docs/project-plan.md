@@ -306,19 +306,20 @@ Rule: image operations are pure `f(image: float32 H×W×3, params) -> image`; on
 
 Each milestone ends with a user review of a contact sheet/demo and one quick understanding check (teaching protocol).
 
-### M0 — Setup (current)
+### M0 — Setup (done)
 Project plan, glossary, ADRs, learning log, scaffold, CI, public repo with protection, board + issues, connectors, reference set shot list, licence audit, PyPI name claimed.
 **Exit:** CI green on both OSes; the user signs off this document; reference set shot.
 
-### M1 — Decode & export (neutral render)
+### M1 — Decode & export (neutral render) (done 2026-10-18)
 Decode via rawpy into the working space; proxies + cache; AgX display transform fitted to camera JPEGs; exposure offset and chroma NR (pulled forward from M2, ADR-0010); output sharpening; sRGB JPEG export with ICC/EXIF; `decode`, `export`, `run`; `scripts/compare.py` contact sheet and gate: ours vs in-camera JPEG.
 **Concepts:** RAW/demosaic, linear vs display-referred, colour spaces and gamuts, display transforms.
 **Exit:** `scripts/compare.py` passes its gate on the CC0 samples and on the reference set (real export vs camera JPEG: median |ΔEV| ≤ 0.5, chroma per lightness band (at the same pixels, ADR-0013) within 0.8–1.25, no extra clipping; [ADR-0010](decisions/0010-camera-matched-neutral-render.md)), the user judges the sheet comparable or better; memory budget test passes.
+**Outcome (2026-10-18, #24):** accepted. The reference set passes the whole gate (median |ΔEV| 0.25; chroma 0.92 0.86 0.92 1.00 0.96 0.86; no extra clipping) and the memory budget test passes. The CC0 set passes brightness and highlights but not the near-white chroma band (1.44): the two Pentax JPEGs use a different white balance from the one their RAWs record. The user accepted M1 with that moved to M2 (#57), with low-light scenes rendering darker than the camera (exposure `correction` is off by default, also M2). Along the way M1 also gained threads per photo and memory-scheduled workers (ADR-0015), pulled forward from M5's performance pass.
 
-### M2 — Normalise
+### M2 — Normalise (current)
 Stats JSON, WB disagreement flag, overrides, flags, outliers, `normalise` command + contact sheet (exposure and chroma NR landed in M1, ADR-0010).
 **Concepts:** EV/stops and histograms, white balance (temperature/tint, mired), noise.
-**Exit:** outliers are flagged, not forced; with `correction` on, the reference-set contact sheet looks even.
+**Exit:** outliers are flagged, not forced; with `correction` on, the reference-set contact sheet looks even; the CC0 near-white chroma band passes the M1 gate, or the decision to keep the recorded white balance is in an ADR (#57).
 
 ### M3 — Grade: look engine, look library, previews
 Operations, look file schema + intensity, `lut` operation (oracle-tested), adjustments, 12–16 built-in looks, `preview` and `looks` commands (output sharpening landed in M1).
