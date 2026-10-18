@@ -36,7 +36,7 @@
 | **ICC profile** | The colour profile embedded in an exported file. The only use of "profile". | — |
 | **stats** | Per-photo measurements (luminance percentiles, clipping, …), stored as JSON. | metrics, analysis |
 | **photo info** | What an original's header says about a photo that later stages need: the **as-shot white**, the baseline exposure and the **clip level** (`read_photo_info`). | metadata, header info |
-| **flag** | A per-photo note from a stage that a photo needs a look; it never changes the photo. The names: `exposure_clamped` (exposure correction hit `max_correction_ev`), `wb_disagreement` (the estimated white balance differs from the as-shot one), `outlier` (one per stat outside its range). | warning, alert, issue |
+| **flag** | A per-photo note from a stage that a photo needs a look; it never changes the photo. The names: `exposure_clamped` (exposure correction hit `max_correction_ev`), `wb_disagreement` (both **white balance estimates** differ from the as-shot white the same way, by at least `flag_disagreement_mired`), `outlier` (one per stat outside its range). | warning, alert, issue |
 | **outlier** | A photo whose stats fall outside configured ranges; one kind of flag. | — |
 | **reference set** | The user's local Pocket 4 RAWs (scenarios R01–R10) used for acceptance. | test images |
 | **stand-in** | A reference set photo covering a scenario until a proper shot exists (`status: stand-in` in the manifest). | placeholder, substitute |
@@ -104,6 +104,7 @@
 | **EV / stop** | A doubling or halving of light. `exposure_ev: +1` = ×2 in scene-linear. |
 | **white balance (WB)** | Per-channel gains making neutral objects neutral; **as-shot** = camera's recorded values. |
 | **as-shot white** | The colour of light the camera balanced for, from its recorded white balance (DNG `AsShotNeutral`) through the colour matrix: an xy chromaticity, given as kelvin and tint (`-1000 × Duv`, positive is magenta). |
+| **white balance estimate** | The light's colour guessed from the photo itself, to check the as-shot white against (never applied). Two estimators: `brightest` (the mean colour of the brightest unclipped pixels) and `grey` (grey world on the nearly neutral, well-exposed pixels, iterated). | auto white balance, AWB |
 | **clip level** | The scene-linear value a white the sensor clipped reaches in the decoded image: `2^BaselineExposure`, times a fraction set by `decode.highlight_mode` (not simply 1.0). |
 | **chroma NR / luma NR** | Noise reduction on colour / brightness detail. |
 

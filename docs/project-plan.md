@@ -111,7 +111,7 @@ Implemented (ADR-0010):
 
 Still to do (M2):
 3. Stats per photo (p1/p5/p50/p95/p99, clipped fraction, mean chroma) written as JSON, plus a project summary; stats outside configured ranges mark the photo as an **outlier**.
-4. **WB check:** grey-world/white-patch estimate vs as-shot; a difference > N mired raises flag `wb_disagreement` (no automatic change).
+4. **WB check:** two white balance estimates (`brightest`, a white-patch estimate, and `grey`, grey world on nearly neutral pixels) vs as-shot; when both differ by at least `flag_disagreement_mired` in the same direction, flag `wb_disagreement` (no automatic change).
 5. Overrides (`exposure_ev`, `wb_kelvin`, `tint`, `skip`) and flags (e.g. `exposure_clamped`).
 
 Dropped after measurement (ADR-0010): key detection with per-key targets and the highlight guard (the camera-fitted curve keeps highlights below the white point; cameras don't normalise per scene). Cameras showed no compression of broad areas beyond their global curve, but they keep *detail* steeper than it (clouds in a bright sky): `grade.local_contrast` does that (ADR-0011).

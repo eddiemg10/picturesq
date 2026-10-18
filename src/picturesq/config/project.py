@@ -146,9 +146,11 @@ class ChromaNoiseReductionConfig(_Model):
 class WhiteBalanceConfig(_Model):
     """The white balance check: compare the as-shot white balance with an estimate.
 
-    Normalise keeps the camera's as-shot white balance; when an estimate from the photo itself
-    differs by more than ``flag_disagreement_mired``, the photo gets the ``wb_disagreement``
-    flag. Nothing is changed automatically (plan D6).
+    Normalise keeps the camera's as-shot white balance; when both estimates from the photo
+    itself (``brightest`` and ``grey``) differ from it by at least ``flag_disagreement_mired``
+    in the same direction, the photo gets the ``wb_disagreement`` flag. Nothing is changed
+    automatically (plan D6). See :mod:`picturesq.normalise.white_balance_check` for the
+    measurements behind the default.
     """
 
     flag_disagreement_mired: float = Field(
@@ -156,8 +158,9 @@ class WhiteBalanceConfig(_Model):
         gt=0.0,
         le=500.0,
         description=(
-            "Flag a photo when the estimated white balance differs from the as-shot one by "
-            "more than this, in mired (30 is about 600 K near 4500 K, 1100 K near 6500 K)."
+            "Flag a photo when both white balance estimates differ from the as-shot one by at "
+            "least this, the same way, in mired (30 is about 600 K near 4500 K, 1100 K near "
+            "6500 K)."
         ),
     )
 

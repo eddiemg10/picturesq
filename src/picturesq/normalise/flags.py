@@ -5,6 +5,8 @@ A flag never alters the pixels (plan principle: outliers are flagged, not forced
 ``details`` for agents and the UI.
 
 - ``exposure_clamped``: exposure correction wanted more than ``max_correction_ev``.
+- ``wb_disagreement``: both white balance estimates differ from the as-shot white by at
+  least ``flag_disagreement_mired``, the same way (:mod:`.white_balance_check`).
 - ``outlier``: one of the photo's stats is outside its range in ``normalise.outliers``; one
   flag per stat.
 """
@@ -12,12 +14,14 @@ A flag never alters the pixels (plan principle: outliers are flagged, not forced
 from dataclasses import dataclass, field
 from typing import Final
 
-from picturesq.config import ExposureConfig, OutliersConfig
+from picturesq.config import ExposureConfig, OutliersConfig, WhiteBalanceConfig
 from picturesq.normalise.exposure import ExposureDecision
 from picturesq.normalise.stats import PhotoStats
+from picturesq.normalise.white_balance_check import WhiteBalanceCheck
 
 EXPOSURE_CLAMPED: Final = "exposure_clamped"
 OUTLIER: Final = "outlier"
+WB_DISAGREEMENT: Final = "wb_disagreement"
 
 Detail = float | str
 
@@ -47,6 +51,32 @@ def exposure_flags(decision: ExposureDecision, config: ExposureConfig) -> list[F
             {
                 "correction_ev": round(decision.correction_ev, 3),
                 "limit_ev": config.max_correction_ev,
+            },
+        )
+    ]
+
+
+def white_balance_flags(check: WhiteBalanceCheck, config: WhiteBalanceConfig) -> list[Flag]:
+    """``wb_disagreement`` if the white balance check disagrees with the as-shot white."""
+    brightest, grey = check.brightest, check.grey
+    if not check.disagrees or brightest is None or grey is None or check.as_shot_kelvin is None:
+        return []
+    warmer = brightest.delta_mired > 0.0
+    low, high = sorted((abs(brightest.delta_mired), abs(grey.delta_mired)))
+    return [
+        Flag(
+            WB_DISAGREEMENT,
+            f"the light looks {low:.0f} to {high:.0f} mired {'warmer' if warmer else 'cooler'} "
+            f"than the as-shot white balance ({check.as_shot_kelvin:.0f} K); the photo may "
+            f"look too {'warm' if warmer else 'cool'}",
+            {
+                "as_shot_kelvin": round(check.as_shot_kelvin, 1),
+                "as_shot_tint": round(check.as_shot_tint or 0.0, 1),
+                "brightest_kelvin": round(brightest.kelvin, 1),
+                "brightest_delta_mired": round(brightest.delta_mired, 1),
+                "grey_kelvin": round(grey.kelvin, 1),
+                "grey_delta_mired": round(grey.delta_mired, 1),
+                "limit_mired": config.flag_disagreement_mired,
             },
         )
     ]

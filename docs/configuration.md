@@ -223,11 +223,13 @@ The exposure change is `offset_ev + correction × (target_ev − the photo's med
 
 #### `normalise.white_balance`
 
-Normalise keeps the white balance the camera recorded (as-shot). It also estimates the light's colour from the photo itself; if the two differ by more than this, the photo gets the `wb_disagreement` flag so you can look at it. Nothing changes automatically.
+Normalise keeps the white balance the camera recorded (as-shot). It also checks it: two **white balance estimates** guess the light's colour from the photo itself, `brightest` (the colour of the brightest unclipped pixels) and `grey` (the average of the nearly neutral pixels). Each is often wrong on its own (a yellow wall is bright, a sandy beach is nearly neutral), so the photo gets the `wb_disagreement` flag only when **both** differ from the as-shot white balance by at least `flag_disagreement_mired`, **in the same direction** (both warmer or both cooler). Nothing changes automatically.
+
+Why 30: on the CC0 samples and the reference set, the white balance the camera's own JPEG implies was within 15 mired of as-shot on every photo, while each estimator alone was 30 mired or more off on some of them (median errors 16–17 mired). With both required, 30 flags only the Sony FX3 sample (both estimates about 88 mired warmer). The Pentax K-5 IIs tungsten interior comes close (28 and 33 mired warmer: cameras leave tungsten light a little warm on purpose) but isn't flagged.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `flag_disagreement_mired` | number, 0–500 | `30.0` | How far apart (in mired, 10⁶ ÷ kelvin) the estimate and the as-shot white balance may be before the photo is flagged. 30 mired is about 600 K near 4500 K, or 1100 K near 6500 K. |
+| `flag_disagreement_mired` | number, 0–500 | `30.0` | How far (in mired, 10⁶ ÷ kelvin) both estimates must be from the as-shot white balance, on the same side, for the photo to be flagged. 30 mired is about 600 K near 4500 K, or 1100 K near 6500 K. |
 
 #### `normalise.outliers`
 

@@ -13,8 +13,15 @@ from picturesq.normalise.exposure import (
     exposure_ev,
     median_ev,
 )
-from picturesq.normalise.flags import Flag, exposure_flags, outlier_flags
+from picturesq.normalise.flags import Flag, exposure_flags, outlier_flags, white_balance_flags
 from picturesq.normalise.stats import PhotoStats, photo_stats
+from picturesq.normalise.white_balance_check import (
+    WhiteBalanceCheck,
+    WhiteEstimate,
+    check_white_balance,
+    estimate_white_brightest,
+    estimate_white_grey,
+)
 from picturesq.photo import UNNAMED, PhotoContext
 
 
@@ -39,8 +46,13 @@ __all__ = [
     "ExposureDecision",
     "Flag",
     "PhotoStats",
+    "WhiteBalanceCheck",
+    "WhiteEstimate",
     "apply_exposure",
+    "check_white_balance",
     "chroma_noise_reduction",
+    "estimate_white_brightest",
+    "estimate_white_grey",
     "exposure_decision",
     "exposure_ev",
     "exposure_flags",
@@ -48,4 +60,5 @@ __all__ = [
     "normalise",
     "outlier_flags",
     "photo_stats",
+    "white_balance_flags",
 ]
