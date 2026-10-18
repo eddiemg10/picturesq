@@ -8,7 +8,6 @@ from picturesq.config import ProjectConfig
 from picturesq.normalise.chroma_nr import chroma_noise_reduction
 from picturesq.normalise.exposure import apply_exposure, exposure_ev, median_ev
 from picturesq.normalise.stats import PhotoStats, photo_stats
-
 from picturesq.photo import UNNAMED, PhotoContext
 
 
