@@ -36,7 +36,7 @@
 | **ICC profile** | The colour profile embedded in an exported file. The only use of "profile". | — |
 | **stats** | Per-photo measurements (luminance percentiles, clipping, …), stored as JSON. | metrics, analysis |
 | **photo info** | What an original's header says about a photo that later stages need: the **as-shot white**, the baseline exposure and the **clip level** (`read_photo_info`). | metadata, header info |
-| **flag** | A per-photo warning raised by a stage (e.g. `exposure_clamped`, `wb_disagreement`). | warning, alert, issue |
+| **flag** | A per-photo note from a stage that a photo needs a look; it never changes the photo. The names: `exposure_clamped` (exposure correction hit `max_correction_ev`), `wb_disagreement` (the estimated white balance differs from the as-shot one), `outlier` (one per stat outside its range). | warning, alert, issue |
 | **outlier** | A photo whose stats fall outside configured ranges; one kind of flag. | — |
 | **reference set** | The user's local Pocket 4 RAWs (scenarios R01–R10) used for acceptance. | test images |
 | **stand-in** | A reference set photo covering a scenario until a proper shot exists (`status: stand-in` in the manifest). | placeholder, substitute |

@@ -6,7 +6,14 @@ Pure functions, no IO.
 from picturesq.colour.transfer import FloatArray
 from picturesq.config import ProjectConfig
 from picturesq.normalise.chroma_nr import chroma_noise_reduction
-from picturesq.normalise.exposure import apply_exposure, exposure_ev, median_ev
+from picturesq.normalise.exposure import (
+    ExposureDecision,
+    apply_exposure,
+    exposure_decision,
+    exposure_ev,
+    median_ev,
+)
+from picturesq.normalise.flags import Flag, exposure_flags, outlier_flags
 from picturesq.normalise.stats import PhotoStats, photo_stats
 from picturesq.photo import UNNAMED, PhotoContext
 
@@ -29,11 +36,16 @@ def normalise(
 
 
 __all__ = [
+    "ExposureDecision",
+    "Flag",
     "PhotoStats",
     "apply_exposure",
     "chroma_noise_reduction",
+    "exposure_decision",
     "exposure_ev",
+    "exposure_flags",
     "median_ev",
     "normalise",
+    "outlier_flags",
     "photo_stats",
 ]
