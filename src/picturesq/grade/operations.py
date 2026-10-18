@@ -1,0 +1,136 @@
+"""Operations: the pure image functions behind a look's steps (plan §4.3, ADR-0019).
+
+Each function takes a float32 image (HxWx3, linear Rec.2020 for scene operations) and its
+operation's model, and changes the image in place, a block of pixels at a time on several
+cores. :func:`apply_operation` scales the operation by intensity first and skips it when
+that leaves it neutral, so intensity 0 is exactly the input, bit for bit.
+"""
+
+from collections.abc import Callable, Iterable
+from functools import partial
+from typing import Any
+
+import numpy as np
+
+from picturesq import parallel
+from picturesq.colour.oklab import oklab_to_rec2020, rec2020_to_oklab
+from picturesq.colour.spaces import D65, REC2020_TO_XYZ, apply_matrix
+from picturesq.colour.temperature import (
+    kelvin_tint_to_xy,
+    mired,
+    white_balance_matrix,
+    xy_to_kelvin_tint,
+)
+from picturesq.colour.transfer import EV_FLOOR, FloatArray
+from picturesq.config.operations import (
+    ContrastOperation,
+    ExposureOperation,
+    Operation,
+    SaturationOperation,
+    Space,
+    WhiteBalanceOperation,
+)
+
+Pixels = Callable[[FloatArray], object]
+"""Changes a block of pixels (Nx3) in place."""
+
+_LUMINANCE = REC2020_TO_XYZ[1].astype(np.float32)
+MIN_CONTRAST_SLOPE = 0.05
+"""Least slope (output stops per input stop) contrast keeps at any intensity: below it,
+tones would reverse order."""
+_D65_KELVIN, _D65_TINT = xy_to_kelvin_tint(D65)
+_MIN_MIRED, _MAX_MIRED = 1.0, mired(1667.0)
+"""Range of the light a white balance operation re-balances from (at intensities above 1,
+warmth can reach past it)."""
+
+
+def each_block(image: FloatArray, change: Pixels) -> FloatArray:
+    """Run ``change`` on every block of ``image``'s pixels, in place. Returns ``image``."""
+    if not image.flags.c_contiguous:
+        pixels = image.reshape(-1, 3)
+        change(pixels)
+        image[...] = pixels.reshape(image.shape)
+        return image
+    pixels = image.reshape(-1, 3)
+    parallel.run(partial(change, pixels[block]) for block in parallel.pixel_blocks(len(pixels)))
+    return image
+
+
+def exposure(image: FloatArray, operation: ExposureOperation) -> FloatArray:
+    """Multiply ``image`` by ``2**ev``, in place."""
+    gain = np.float32(2.0**operation.ev)
+    return each_block(image, lambda pixels: np.multiply(pixels, gain, out=pixels))
+
+
+def white_balance_operation_matrix(operation: WhiteBalanceOperation) -> np.ndarray:
+    """The re-balancing matrix of ``operation``: from a light ``warmth`` mired bluer and
+    ``tint`` greener than D65, to D65."""
+    reciprocal = np.clip(mired(_D65_KELVIN) - operation.warmth, _MIN_MIRED, _MAX_MIRED)
+    kelvin = 1e6 / float(reciprocal)
+    source = kelvin_tint_to_xy(kelvin, _D65_TINT - operation.tint)
+    return white_balance_matrix(source, D65)
+
+
+def white_balance(image: FloatArray, operation: WhiteBalanceOperation) -> FloatArray:
+    """Warm/cool and tint ``image`` by chromatic adaptation, in place."""
+    matrix = white_balance_operation_matrix(operation)
+    return each_block(image, lambda pixels: apply_matrix(pixels, matrix, out=pixels))
+
+
+def contrast(image: FloatArray, operation: ContrastOperation) -> FloatArray:
+    """Log-space contrast around ``pivot`` on luminance, same gain on R, G and B, in place."""
+    exponent = np.float32(max(operation.amount, MIN_CONTRAST_SLOPE - 1.0))
+    pivot = np.float32(operation.pivot)
+
+    def change(pixels: FloatArray) -> None:
+        gain = pixels @ _LUMINANCE
+        np.maximum(gain, EV_FLOOR, out=gain)
+        np.divide(gain, pivot, out=gain)
+        np.power(gain, exponent, out=gain)
+        np.multiply(pixels, gain[:, None], out=pixels)
+
+    return each_block(image, change)
+
+
+def saturation(image: FloatArray, operation: SaturationOperation) -> FloatArray:
+    """Scale Oklab chroma by ``1 + amount`` (never below 0), in place."""
+    factor = np.float32(max(0.0, 1.0 + operation.amount))
+
+    def change(pixels: FloatArray) -> None:
+        rec2020_to_oklab(pixels, out=pixels)
+        np.multiply(pixels[:, 1:], factor, out=pixels[:, 1:])
+        oklab_to_rec2020(pixels, out=pixels)
+
+    return each_block(image, change)
+
+
+_FUNCTIONS: dict[type[Operation], Callable[[FloatArray, Any], FloatArray]] = {
+    ExposureOperation: exposure,
+    WhiteBalanceOperation: white_balance,
+    ContrastOperation: contrast,
+    SaturationOperation: saturation,
+}
+
+
+def apply_operation(image: FloatArray, operation: Operation, intensity: float = 1.0) -> FloatArray:
+    """Apply ``operation`` at ``intensity`` to ``image``, in place. Returns ``image``.
+
+    Neutral after scaling (intensity 0, or neutral values) means untouched.
+    """
+    if intensity == 0.0:
+        return image
+    if intensity != 1.0:
+        operation = operation.scaled(intensity)
+    if operation.is_neutral():
+        return image
+    return _FUNCTIONS[type(operation)](image, operation)
+
+
+def apply_operations(
+    image: FloatArray, operations: Iterable[Operation], intensity: float, space: Space
+) -> FloatArray:
+    """Apply the operations of ``space`` among ``operations``, in order, in place."""
+    for operation in operations:
+        if operation.space == space:
+            image = apply_operation(image, operation, intensity)
+    return image
