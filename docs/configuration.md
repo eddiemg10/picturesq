@@ -465,7 +465,7 @@ operations:
 
 | Key | Type | Neutral | Description |
 |---|---|---|---|
-| `points` | list of `[input, output]`, up to 16 | each output = its input | Brightness in stops relative to mid grey: `[2, 1.5]` moves what was 2 stops above mid grey to 1.5 stops (softer highlights). Inputs must increase, outputs must not decrease, all within ±12. The curve is smooth and never overshoots; beyond the first and last points it continues at slope 1. Colours keep their hue and saturation. Intensity moves each output toward its input. |
+| `points` | list of `[input, output]`, up to 16 | each output = its input | Brightness in stops relative to mid grey: `[2, 1.5]` moves what was 2 stops above mid grey to 1.5 stops (softer highlights). Inputs must increase, outputs must not decrease, all within ±12. The curve is smooth and never overshoots; beyond the first and last points it continues straight at the slope between the two end points, so softened highlights stay soft. Colours keep their hue and saturation. Intensity moves each output toward its input. |
 
 #### `hsl` (scene)
 
