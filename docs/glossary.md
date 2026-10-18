@@ -34,15 +34,15 @@
 | **override** | A per-photo value that replaces the project default (look, intensity, normalisation values). | exception, manual edit |
 | **output** | A named export target in config, e.g. `web`, `archive` (size, quality, sharpening). | export profile, preset, recipe |
 | **ICC profile** | The colour profile embedded in an exported file. The only use of "profile". | — |
-| **stats** | Per-photo measurements (luminance percentiles, clipping, …), stored as JSON. | metrics, analysis |
+| **stats** | Per-photo measurements (luminance percentiles, clipping, …), stored as JSON by `picturesq normalise` in `.picturesq/stats/<stem>.json`, with the project's in `summary.json` (counts, flagged photos, the spread of the photos' medians). | metrics, analysis |
 | **photo info** | What an original's header says about a photo that later stages need: the **as-shot white**, the baseline exposure and the **clip level** (`read_photo_info`). | metadata, header info |
-| **flag** | A per-photo warning raised by a stage (e.g. `exposure_clamped`, `wb_disagreement`). | warning, alert, issue |
+| **flag** | A per-photo note from a stage that a photo needs a look; it never changes the photo. The names: `exposure_clamped` (exposure correction hit `max_correction_ev`), `wb_disagreement` (both **white balance estimates** differ from the as-shot white the same way, by at least `flag_disagreement_mired`; only with `flag_disagreement` on, off by default), `outlier` (one per stat outside its range). | warning, alert, issue |
 | **outlier** | A photo whose stats fall outside configured ranges; one kind of flag. | — |
 | **reference set** | The user's local Pocket 4 RAWs (scenarios R01–R10) used for acceptance. | test images |
 | **stand-in** | A reference set photo covering a scenario until a proper shot exists (`status: stand-in` in the manifest). | placeholder, substitute |
 | **samples** | CC0 RAWs from raw.pixls.us used in CI. | fixtures (fixture = pytest) |
 | **camera JPEG** | The JPEG the camera embedded in the original: the reference our neutral render is compared against (`scripts/compare.py`). Some cameras embed a neighbouring frame; those are left out. | in-camera JPEG, preview |
-| **sidecar** | The `<photo>.picturesq.json` file written next to each export: picturesq version, the original's SHA-256, the output's settings and the config that rendered it. Enough to reproduce the export. | manifest, metadata file |
+| **sidecar** | The `<photo>.picturesq.json` file written next to each export: picturesq version, the original's SHA-256, the output's settings and the config that rendered it, including the photo's overrides. Enough to reproduce the export. | manifest, metadata file |
 | **capture EXIF** | The original's EXIF that describes the moment of capture (time, camera, lens, exposure), copied into each export by allowlist (ADR-0014). | metadata (too broad) |
 | **golden** | A stored expected output used by a regression test. | snapshot (that's for text/JSON) |
 
@@ -56,7 +56,7 @@
 | **block** | A run of pixels or rows that one thread works on at a time, sized to fit the CPU cache (`--block-pixels`). Code only, and CLI/docs about performance. | tile (for row ranges), chunk, batch |
 | **stage** | One of the four pipeline steps below. | phase (that's project management), step |
 | **decode** | Stage 1: original → scene-linear image in the working space (rawpy/LibRaw), plus proxy. | develop, import, convert, ingest |
-| **normalise** | Stage 2: adaptive per-photo correction to a common baseline (exposure, WB check, chroma NR). | auto, correct, balance |
+| **normalise** | Stage 2: adaptive per-photo correction to a common baseline (exposure, WB check, chroma NR, scene contrast). | auto, correct, balance |
 | **grade** | Stage 3: apply the photo's look + adjustments, then the display transform. The *act*; a look is the *thing*. | style, edit, look (as a verb) |
 | **export** | Stage 4: encode, resize and write each enabled output with sidecar. | render, save |
 | **render** | Producing pixels from a proxy or original through stages 2–3 (used by preview and export). | process |
@@ -80,6 +80,7 @@
 | **toe / shoulder** | The bottom and top bends of the display transform's S-curve: the toe eases shadows into black, the shoulder rolls highlights off toward white. |
 | **inset / outset** | The display transform's matrices around the curve: **inset** pulls the primaries toward white so bright saturated colours fade to white without hue skews; **outset** gives back some of that saturation afterwards. |
 | **chroma preservation** | The display transform's blend toward a luminance-only tone map that keeps each pixel's colour ratios, so bright colours stay colourful. |
+| **scene contrast** | The normalise step that gives flat scenes extra contrast, as cameras do: a scene whose **range** (p5 to p95 of luminance, in EV) is under `target_range_ev` has its tones pushed away from a pivot (its p75), the same gain on R, G and B (ADR-0017). Off by default; per photo with the `scene_contrast` override. Its result, the **extra contrast** (0.25 = tones near the pivot 25 % steeper), is in the stats. Not "auto contrast" or "adaptive contrast". |
 | **local contrast** | The grade step that keeps detail where the display transform's curve is flat: log luminance is split into a **base** (broad areas, smoothed without crossing strong edges) and **detail** (the rest); the curve still places the base, and the detail is amplified so it keeps at least `detail_floor` contrast (ADR-0011). |
 | **blue rendering** | The display transform's camera-matched treatment of blues (skies): deeper, more colourful and a few degrees more cyan than an accurate render, as camera JPEGs show them (ADR-0012). On by default; `grade.display_transform.blue_rendering.enabled: false` turns it off. |
 | **colour matrix** | A DNG's 3×3 matrix from XYZ to camera RGB, measured under one **calibration illuminant**; most DNGs carry two (tungsten and daylight), blended by the photo's white balance. |
@@ -104,6 +105,7 @@
 | **EV / stop** | A doubling or halving of light. `exposure_ev: +1` = ×2 in scene-linear. |
 | **white balance (WB)** | Per-channel gains making neutral objects neutral; **as-shot** = camera's recorded values. |
 | **as-shot white** | The colour of light the camera balanced for, from its recorded white balance (DNG `AsShotNeutral`) through the colour matrix: an xy chromaticity, given as kelvin and tint (`-1000 × Duv`, positive is magenta). |
+| **white balance estimate** | The light's colour guessed from the photo itself, to check the as-shot white against (never applied). Two estimators: `brightest` (the mean colour of the brightest unclipped pixels) and `grey` (grey world on the nearly neutral, well-exposed pixels, iterated). | auto white balance, AWB |
 | **clip level** | The scene-linear value a white the sensor clipped reaches in the decoded image: `2^BaselineExposure`, times a fraction set by `decode.highlight_mode` (not simply 1.0). |
 | **grey-world** | A white balance estimate: assume the photo averages to grey, so its average colour is the light's. Fails when one colour fills the frame. |
 | **chroma NR / luma NR** | Noise reduction on colour / brightness detail. |

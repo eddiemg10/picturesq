@@ -30,5 +30,5 @@ def test_help_lists_all_verbs() -> None:
 
 
 def test_unimplemented_command_fails_cleanly() -> None:
-    result = runner.invoke(app, ["normalise", "."])
+    result = runner.invoke(app, ["preview", "."])
     assert result.exit_code == 1

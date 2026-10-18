@@ -10,6 +10,7 @@ off by default because cameras don't do it. ``target_ev`` is measured before ``o
 with ``correction`` 1 the median ends at ``offset_ev + target_ev``.
 """
 
+from dataclasses import dataclass
 from functools import partial
 
 import numpy as np
@@ -45,13 +46,33 @@ def median_ev(image: FloatArray) -> float:
     return linear_to_ev(float(np.median(luminance(sample_grid(image)))))
 
 
+@dataclass(frozen=True)
+class ExposureDecision:
+    """How normalise chose a photo's exposure change."""
+
+    ev: float
+    """The exposure change, in EV: ``offset_ev`` plus the (limited) correction."""
+    correction_ev: float
+    """The correction part of ``ev``, after limiting; 0 when correction is off."""
+    clamped: bool
+    """The correction wanted more than ``max_correction_ev`` and was limited to it."""
+
+
+def exposure_decision(image: FloatArray, config: ExposureConfig) -> ExposureDecision:
+    """The exposure change for ``image`` and how it was reached."""
+    if config.correction <= 0.0:
+        return ExposureDecision(ev=config.offset_ev, correction_ev=0.0, clamped=False)
+    wanted = config.correction * (config.target_ev - median_ev(image))
+    limit = config.max_correction_ev
+    correction = float(np.clip(wanted, -limit, limit))
+    return ExposureDecision(
+        ev=config.offset_ev + correction, correction_ev=correction, clamped=abs(wanted) > limit
+    )
+
+
 def exposure_ev(image: FloatArray, config: ExposureConfig) -> float:
     """The exposure change for ``image``, in EV."""
-    correction = 0.0
-    if config.correction > 0.0:
-        correction = config.correction * (config.target_ev - median_ev(image))
-        correction = float(np.clip(correction, -config.max_correction_ev, config.max_correction_ev))
-    return config.offset_ev + correction
+    return exposure_decision(image, config).ev
 
 
 def apply_exposure(image: FloatArray, ev: float, out: FloatArray | None = None) -> FloatArray:

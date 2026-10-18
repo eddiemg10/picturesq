@@ -17,7 +17,7 @@ from picturesq.colour.agx import AgxCurve, agx
 from picturesq.colour.filters import gaussian_radius
 from picturesq.colour.transfer import srgb_encode
 from picturesq.config import DisplayTransformConfig, OutputConfig, ProjectConfig
-from picturesq.decode import DecodeError, decode_original, read_capture_exif
+from picturesq.decode import DecodeError, decode_original, read_capture_exif, read_photo_info
 from picturesq.export import (
     export_exif,
     resize_to_long_edge,
@@ -30,7 +30,7 @@ from picturesq.export import (
 )
 from picturesq.export.sharpen import sharpened_rows
 from picturesq.grade import grade
-from picturesq.normalise import normalise
+from picturesq.normalise import WhiteBalanceOverrideError, normalise
 from picturesq.photo import UNNAMED, PhotoContext
 from picturesq.pipeline.workers import WorkerPlan, photos_to_start
 
@@ -55,6 +55,22 @@ def render_scene(
     for _name, stage in SCENE_STAGES:
         image = stage(image, config, photo)
     return image
+
+
+def photo_context(original: Path, config: ProjectConfig) -> PhotoContext:
+    """What the scene stages need to know about ``original``: its name and, when its
+    overrides need it, its photo info.
+
+    The photo info is read only for a white balance override (it starts from the as-shot
+    white): a few milliseconds for a DNG, but a RAF or ARW is unpacked for it (0.2-1.1 s on
+    the CC0 samples), which photos without overrides shouldn't pay. Raises DecodeError
+    like ``read_photo_info``. Every render of a project's photo (exports, proxies) builds
+    its context here, so they resolve the photo's overrides the same way.
+    """
+    info = None
+    if config.photo(original.name).sets_white_balance:
+        info = read_photo_info(original, config.decode)
+    return PhotoContext(name=original.name, info=info)
 
 
 def render_output(
@@ -191,7 +207,7 @@ def export_photo(
     try:
         capture = read_capture_exif(original)
         original_sha256 = sha256_file(original)
-        photo = PhotoContext(name=original.name)
+        photo = photo_context(original, config)
         image = render_scene(decode_original(original, config.decode), config, photo)
         for index, name in enumerate(names):
             spec = config.export.outputs[name]
@@ -214,7 +230,7 @@ def export_photo(
             write_sidecar(sidecar_path(path), document)
             result.outputs[name] = path
         del image
-    except (DecodeError, OSError) as error:
+    except (DecodeError, OSError, WhiteBalanceOverrideError) as error:
         result.error = str(error)
     result.seconds = time.perf_counter() - photo_started
     return result

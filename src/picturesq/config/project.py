@@ -1,7 +1,8 @@
 """Project config model: the contents of ``<project>/picturesq.yaml``.
 
-v0 holds the decode, normalise (exposure, chroma noise reduction, white balance check,
-outlier ranges), grade (display transform only), export and per-photo override sections.
+v0 holds the decode, normalise (exposure, chroma noise reduction, scene contrast, white
+balance check, outlier ranges), grade (display transform only), export and per-photo
+override sections.
 Looks and adjustments are added in the milestones that implement them, so the config never
 offers a setting the pipeline ignores.
 """
@@ -149,18 +150,30 @@ class ChromaNoiseReductionConfig(_Model):
 class WhiteBalanceConfig(_Model):
     """The white balance check: compare the as-shot white balance with an estimate.
 
-    Normalise keeps the camera's as-shot white balance; when an estimate from the photo itself
-    differs by more than ``flag_disagreement_mired``, the photo gets the ``wb_disagreement``
-    flag. Nothing is changed automatically (plan D6).
+    Normalise keeps the camera's as-shot white balance and always runs the check (its numbers
+    go into the stats). With ``flag_disagreement`` on, when both estimates from the photo
+    itself (``brightest`` and ``grey``) differ from it by at least ``flag_disagreement_mired``
+    in the same direction, the photo gets the ``wb_disagreement`` flag. It is off by default:
+    genuinely coloured scenes (sunsets, blue sky over foliage) trip it while the as-shot white
+    balance is right (ADR-0016). Nothing is changed automatically (plan D6). See
+    :mod:`picturesq.normalise.white_balance_check` for the measurements behind the default.
     """
 
+    flag_disagreement: bool = Field(
+        default=False,
+        description=(
+            "Raise wb_disagreement when the estimates disagree with as-shot; off by default "
+            "because coloured scenes such as sunsets trip it."
+        ),
+    )
     flag_disagreement_mired: float = Field(
         default=30.0,
         gt=0.0,
         le=500.0,
         description=(
-            "Flag a photo when the estimated white balance differs from the as-shot one by "
-            "more than this, in mired (30 is about 600 K near 4500 K, 1100 K near 6500 K)."
+            "Flag a photo when both white balance estimates differ from the as-shot one by at "
+            "least this, the same way, in mired (30 is about 600 K near 4500 K, 1100 K near "
+            "6500 K)."
         ),
     )
 
@@ -199,12 +212,77 @@ class OutliersConfig(_Model):
         return self
 
 
+class SceneContrastConfig(_Model):
+    """Extra contrast for flat scenes, as cameras add (ADR-0017).
+
+    A scene whose luminance spans less than ``target_range_ev`` between its 5th and 95th
+    percentiles gets extra contrast ``amount * min(target_range_ev / range - 1, max_contrast)``:
+    tones are pushed away from the pivot (the ``pivot_percentile`` of the scene's luminance)
+    by up to ``soft_limit_ev`` times that, the same gain on R, G and B so colours keep their
+    hue. Off by default: the evidence is two flat photos from one camera.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Add contrast to flat scenes. Off by default until more flat photos confirm it; a "
+            "photo's scene_contrast override applies even when this is off."
+        ),
+    )
+    amount: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=2.0,
+        description=(
+            "How much of the extra contrast to apply: 0.5 is gentle (the default), 1.0 matches "
+            "the camera on the photos it was fitted to, 0 turns it off."
+        ),
+    )
+    target_range_ev: float = Field(
+        default=4.5,
+        gt=0.0,
+        le=20.0,
+        description=(
+            "Scenes whose luminance spans less than this between their 5th and 95th "
+            "percentiles, in EV, get extra contrast; wider scenes are left alone."
+        ),
+    )
+    max_contrast: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=2.0,
+        description=(
+            "Most extra contrast a very flat scene gets, before amount: 0.5 makes tones near "
+            "the pivot 50 % steeper."
+        ),
+    )
+    pivot_percentile: float = Field(
+        default=75.0,
+        ge=0.0,
+        le=100.0,
+        description=(
+            "Tones at this percentile of the scene's luminance stay put; darker ones get "
+            "darker, brighter ones brighter. 75 keeps the bright end where it was, as cameras do."
+        ),
+    )
+    soft_limit_ev: float = Field(
+        default=3.0,
+        gt=0.0,
+        le=10.0,
+        description=(
+            "Tones far from the pivot move at most this times the extra contrast, in EV, so "
+            "deep shadows and highlights are not pushed without limit."
+        ),
+    )
+
+
 class NormaliseConfig(_Model):
     """Stage 2 settings: per-photo exposure, noise reduction, and the checks that flag photos."""
 
     enabled: bool = Field(default=True, description="Run the normalise stage.")
     exposure: ExposureConfig = Field(default_factory=ExposureConfig)
     chroma_nr: ChromaNoiseReductionConfig = Field(default_factory=ChromaNoiseReductionConfig)
+    scene_contrast: SceneContrastConfig = Field(default_factory=SceneContrastConfig)
     white_balance: WhiteBalanceConfig = Field(default_factory=WhiteBalanceConfig)
     outliers: OutliersConfig = Field(default_factory=OutliersConfig)
 
@@ -471,8 +549,38 @@ class ExportConfig(_Model):
 
 
 class NormaliseOverrides(_Model):
-    """One photo's normalise overrides; an unset value keeps the computed one."""
+    """One photo's normalise overrides; an unset value keeps the project's or computed one.
 
+    ``wb_kelvin`` and ``tint`` re-balance the photo from its as-shot white to the white they
+    describe (scene-linear, before exposure). Either alone keeps the as-shot value of the
+    other.
+    """
+
+    enabled: bool | None = Field(
+        default=None,
+        description=(
+            "Run the normalise stage for this photo; replaces normalise.enabled. false skips "
+            "it (exposure, white balance and colour noise reduction)."
+        ),
+    )
+    wb_kelvin: float | None = Field(
+        default=None,
+        ge=1667.0,
+        le=25000.0,
+        description=(
+            "Colour temperature of the light, in kelvin: the photo is re-balanced from its "
+            "as-shot white to this one. Without tint, keeps the as-shot tint."
+        ),
+    )
+    tint: float | None = Field(
+        default=None,
+        ge=-150.0,
+        le=150.0,
+        description=(
+            "Tint of the light, -1000 x Duv: positive is magenta, negative green. Without "
+            "wb_kelvin, keeps the as-shot colour temperature."
+        ),
+    )
     exposure_ev: float | None = Field(
         default=None,
         ge=-6.0,
@@ -482,12 +590,26 @@ class NormaliseOverrides(_Model):
             "any correction)."
         ),
     )
+    scene_contrast: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=2.0,
+        description=(
+            "Scene contrast amount for this photo; replaces normalise.scene_contrast.amount "
+            "and applies even when scene_contrast is off. 0 turns it off for this photo."
+        ),
+    )
 
 
 class PhotoOverrides(_Model):
     """Overrides for one photo, keyed in ``photos:`` by the original's file name."""
 
     normalise: NormaliseOverrides = Field(default_factory=NormaliseOverrides)
+
+    @property
+    def sets_white_balance(self) -> bool:
+        """Whether a white balance override is set: rendering then needs the as-shot white."""
+        return self.normalise.wb_kelvin is not None or self.normalise.tint is not None
 
 
 NO_OVERRIDES: Final = PhotoOverrides()

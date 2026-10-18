@@ -57,7 +57,7 @@ Photoshop-style GUI, local retouching, lens correction, cataloguing/DAM, ML trai
 | D3 | Camera LUT | None; use the DNG colour matrices. [ADR-0002](decisions/0002-no-camera-conversion-lut.md) | DJI's D-Log LUTs are for D-Log *video*; DNG is linear sensor data. |
 | D4 | Working space | Scene-linear float32, linear Rec.2020 primaries | Holds camera colours without clipping; linear makes exposure/WB physically correct. |
 | D5 | Display transform | AgX-style. [ADR-0003](decisions/0003-agx-display-transform.md) | Graceful highlight roll-off, no hue skews; open design. |
-| D6 | Normalise | Camera-fitted exposure offset (+2 EV); optional partial correction toward a target (off by default); chroma NR in the shadows; as-shot WB, never corrected, + disagreement flag. [ADR-0010](decisions/0010-camera-matched-neutral-render.md), [ADR-0016](decisions/0016-keep-as-shot-white-balance.md) | Measured: cameras brighten by a near-constant amount, not per scene. Batch evening-out stays available but off: the user preferred per-photo fixes (review 2026-10-18). |
+| D6 | Normalise | Camera-fitted exposure offset (+2 EV); optional partial correction toward a target (off by default); chroma NR in the shadows; as-shot WB, never corrected, + disagreement flag; scene contrast for flat scenes (off by default). [ADR-0010](decisions/0010-camera-matched-neutral-render.md), [ADR-0016](decisions/0016-keep-as-shot-white-balance.md), [ADR-0017](decisions/0017-scene-contrast.md) | Measured: cameras brighten by a near-constant amount, not per scene, but give flat scenes extra contrast. Batch evening-out stays available but off: the user preferred per-photo fixes (review 2026-10-18). |
 | D7 | Looks | Every look is a look file (YAML operations, optionally a `lut` operation); four categories | One concept; editable by agents; LUTs give breadth. |
 | D8 | LUT maths | Our own numpy trilinear/tetrahedral; colour-science as **test oracle only** | ~30 lines, no heavy runtime dependency, verified against a reference. |
 | D9 | Config | YAML, machine-owned, pydantic models = schema. [ADR-0004](decisions/0004-yaml-machine-owned.md) | Diffable and readable for agents; humans use the UI. |
@@ -109,12 +109,14 @@ Implemented (ADR-0010):
 1. **Exposure:** `exposure_ev = offset_ev + clamp(correction × (target_ev − median_ev), ±max_correction_ev)`. `offset_ev` (+2.0) is fitted to camera JPEGs; `correction` defaults to 0 because cameras don't even out a batch, and evening out darkened most daylight photos and flattened the mood of low-light scenes (user review 2026-10-18); flagged photos are fixed per photo with overrides instead. `target_ev` is measured before `offset_ev`, so with `correction` 1 every median lands at `offset_ev + target_ev` (+1 EV by default). The median is measured on a ~100k-pixel grid.
 2. **Chroma NR:** each pixel keeps its luminance and moves toward the local average chromaticity, smoothed on a small copy (radius a fraction of the long edge); full strength in the shadows, faded out 1.5 EV below mid grey.
 
+Also implemented, **scene contrast** (off by default, ADR-0017): a flat scene (p5–p95 range under `target_range_ev`, 4.5 EV) gets extra contrast `amount × min(4.5/range − 1, max_contrast)`, pivoting on its p75 with a tanh soft limit, the same gain on R, G and B. After chroma NR (which keeps luminance, so the range and pivot are the same). Fitted on two flat DJI photos; the default waits for 3–5 more (#60).
+
 Still to do (M2):
 3. Stats per photo (p1/p5/p50/p95/p99, clipped fraction, mean chroma) written as JSON, plus a project summary; stats outside configured ranges mark the photo as an **outlier**.
-4. **WB check:** grey-world/white-patch estimate vs as-shot; a difference > N mired raises flag `wb_disagreement` (no automatic change).
-5. Overrides (`exposure_ev`, `wb_kelvin`, `tint`, `skip`) and flags (e.g. `exposure_clamped`).
+4. **WB check:** two white balance estimates (`brightest`, a white-patch estimate, and `grey`, grey world on nearly neutral pixels) vs as-shot; when both differ by at least `flag_disagreement_mired` in the same direction, flag `wb_disagreement` (no automatic change). The flag is opt-in (`flag_disagreement`, off by default): coloured scenes such as sunsets trip it while as-shot is right (ADR-0016).
+5. Overrides (`exposure_ev`, `wb_kelvin`, `tint`, and `enabled: false` to skip normalise for one photo) and flags (e.g. `exposure_clamped`). `wb_kelvin`/`tint` re-balance from the as-shot white (photo info) in scene-linear, before exposure; the sidecar records the photo's overrides.
 
-Dropped after measurement (ADR-0010): key detection with per-key targets and the highlight guard (the camera-fitted curve keeps highlights below the white point; cameras don't normalise per scene). Cameras showed no compression of broad areas beyond their global curve, but they keep *detail* steeper than it (clouds in a bright sky): `grade.local_contrast` does that (ADR-0011).
+Dropped after measurement (ADR-0010): key detection with per-key targets and the highlight guard (the camera-fitted curve keeps highlights below the white point; cameras don't normalise brightness per scene, though they do add contrast to flat scenes, ADR-0017). Cameras showed no compression of broad areas beyond their global curve, but they keep *detail* steeper than it (clouds in a bright sky): `grade.local_contrast` does that (ADR-0011).
 
 ### 4.3 Grade
 - **Per photo:** one look + intensity + adjustments (project default, with optional per-photo override).
@@ -190,14 +192,14 @@ normalise:
   enabled: true
   exposure: {offset_ev: 2.0, correction: 0.0, target_ev: -1.0, max_correction_ev: 2.0}
   chroma_nr: {amount: 1.0, radius: 0.004, full_lightness: 0.2, fade_lightness: 0.4}
-  white_balance: {flag_disagreement_mired: 30}
+  white_balance: {flag_disagreement: false, flag_disagreement_mired: 30}
   outliers: {min_median_ev: -2.0, max_median_ev: 3.0, max_clipped: 0.02}
 grade:
   look: {name: cold/nordic, intensity: 0.8, parameters: {}}
   adjustments: {exposure: 0.0, warmth: 0.0, tint: 0.0, contrast: 0.0, saturation: 0.0, vibrance: 0.0}
 photos:                          # overrides, written by the UI
   DJI_20261011_0042.DNG:
-    normalise: {exposure_ev: 2.3}  # replaces the computed exposure (offset_ev 2.0 + correction)
+    normalise: {exposure_ev: 2.3, wb_kelvin: 3200}  # exposure replaces offset_ev 2.0 + correction; wb_kelvin re-balances from the as-shot white
     grade:
       look: {name: bw/silver, intensity: 1.0}
 export:
@@ -232,7 +234,7 @@ operations:
 |---|---|
 | `picturesq run PROJECT` | Whole pipeline: decode → normalise → grade → export (creates `picturesq.yaml` with defaults if missing) |
 | `picturesq decode PROJECT [--full-res]` | Decode originals, build proxies (+ optional 16-bit TIFFs; `--full-res` not yet implemented) |
-| `picturesq normalise PROJECT` | Compute stats, flags and normalisation; print a summary |
+| `picturesq normalise PROJECT [--strict] [--png FILE]` | On proxies: per photo the exposure, stats, white balance check and flags, one line each and a summary; writes `.picturesq/stats/<stem>.json` and `summary.json`; `--strict` exits 3 if any photo is flagged; `--png` also writes a contact sheet of the normalised photos (flagged ones in amber) |
 | `picturesq preview PROJECT [--category cold] [--png FILE]` | Contact sheet of photos × looks: in the terminal, or as a PNG |
 | `picturesq looks [--category cold]` | List the look library |
 | `picturesq ui PROJECT` | Start the local web UI (opens the browser) |

@@ -43,7 +43,15 @@ normalise:
     radius: 0.004
     full_lightness: 0.2
     fade_lightness: 0.4
+  scene_contrast:
+    enabled: false
+    amount: 0.5
+    target_range_ev: 4.5
+    max_contrast: 0.5
+    pivot_percentile: 75.0
+    soft_limit_ev: 3.0
   white_balance:
+    flag_disagreement: false
     flag_disagreement_mired: 30.0
   outliers:
     min_median_ev: -2.0
@@ -145,6 +153,13 @@ normalise:
   exposure: {correction: 0.6, target_ev: -1.0}
 ```
 
+Give flat scenes (overcast, fog, snow) extra contrast, as cameras do (off by default):
+
+```yaml
+normalise:
+  scene_contrast: {enabled: true}
+```
+
 No sharpening on the web output:
 
 ```yaml
@@ -172,7 +187,7 @@ photos:
 |---|---|---|---|
 | `version` | `1` | `1` | Config format version. Only `1` is accepted. |
 | `decode` | mapping | see below | How RAW originals are decoded. |
-| `normalise` | mapping | see below | Per-photo corrections (exposure, colour noise reduction) and the checks that flag photos for review. |
+| `normalise` | mapping | see below | Per-photo corrections (exposure, colour noise reduction, scene contrast) and the checks that flag photos for review. |
 | `grade` | mapping | see below | How images are rendered for display. Today only the display transform. |
 | `export` | mapping | see below | Which files `picturesq export` writes. |
 | `photos` | mapping of file name → overrides | `{}` | Per-photo overrides. See [`photos`](#photos). |
@@ -198,6 +213,7 @@ The defaults for the first two keys may change during M1 while they are tested o
 | `enabled` | `true` \| `false` | `true` | Run the normalise stage. Off, photos keep the raw's own (darker) exposure. |
 | `exposure` | mapping | see below | One brightness change per photo. |
 | `chroma_nr` | mapping | see below | Colour noise reduction in the shadows: smooths colour, keeps each pixel's brightness. |
+| `scene_contrast` | mapping | see below | Extra contrast for flat scenes, as cameras add. Off by default. |
 | `white_balance` | mapping | see below | When the white balance check flags a photo. |
 | `outliers` | mapping | see below | The ranges a photo's stats should fall in; outside one, the photo is flagged as an outlier. |
 
@@ -221,13 +237,37 @@ The exposure change is `offset_ev + correction × (target_ev − the photo's med
 | `full_lightness` | number, 0–1 | `0.2` | Tones up to this lightness (the cube root of luminance, after exposure; 0.2 is 4.5 stops below mid grey) get the full amount. |
 | `fade_lightness` | number, 0–1 | `0.4` | By this lightness (1.5 stops below mid grey) it has faded out, so brighter areas keep crisp colour edges. Must be greater than `full_lightness`. |
 
-#### `normalise.white_balance`
+#### `normalise.scene_contrast`
 
-Normalise keeps the white balance the camera recorded (as-shot). It also estimates the light's colour from the photo itself; if the two differ by more than this, the photo gets the `wb_disagreement` flag so you can look at it. Nothing changes automatically.
+Cameras give flat scenes (overcast light, fog, a low-contrast subject) more contrast than a fixed tone curve would. Scene contrast does the same: it measures the scene's **range**, the spread of its luminance between the 5th and 95th percentiles in stops, and a scene narrower than `target_range_ev` gets extra contrast
+
+`amount × min(target_range_ev ÷ range − 1, max_contrast)`
+
+Scenes at least `target_range_ev` wide are left exactly as they were. The extra contrast pushes tones away from a pivot, the `pivot_percentile` of the scene's luminance: darker tones get darker and brighter ones brighter. Near the pivot the tones get steeper by the extra contrast (`0.25` is 25 % steeper); far from it the change levels off at `soft_limit_ev × extra contrast` stops. Each pixel's red, green and blue are multiplied by the same factor, so colours keep their hue and saturation and greys stay grey. It runs in scene-linear after exposure and colour noise reduction. `picturesq normalise` records each photo's range, pivot and extra contrast in its stats (`scene_contrast`) and shows the extra contrast when it is above 0.
+
+**Off by default.** On the two flat photos in the reference set (ranges 1.8 and 3.3 stops, both from a DJI Pocket 4) the camera JPEG's tones were 1.4–1.5× steeper than ours; on wider scenes there was no such pattern. Two photos from one camera aren't enough to change every photo, so it waits for more flat photos ([ADR-0017](decisions/0017-scene-contrast.md)). `amount: 1.0` matched the camera on those two; the default `0.5` is the gentler version preferred on review. Turn it on for the project, or for one photo with the `scene_contrast` override in [`photos`](#photos).
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `flag_disagreement_mired` | number, 0–500 | `30.0` | How far apart (in mired, 10⁶ ÷ kelvin) the estimate and the as-shot white balance may be before the photo is flagged. 30 mired is about 600 K near 4500 K, or 1100 K near 6500 K. |
+| `enabled` | `true` \| `false` | `false` | Add contrast to flat scenes. A photo's `scene_contrast` override applies even when this is off. |
+| `amount` | number, 0–2 | `0.5` | How much of the extra contrast to apply: `0.5` is gentle, `1.0` matched the camera on the photos it was fitted to, `0` turns it off. |
+| `target_range_ev` | number, 0–20 | `4.5` | Scenes whose range (5th to 95th percentile of luminance) is narrower than this, in stops, get extra contrast. Raising it reaches wider scenes too: at 7, a wide-range photo's clipped highlights nearly doubled. |
+| `max_contrast` | number, 0–2 | `0.5` | The most extra contrast a very flat scene gets, before `amount`: `0.5` makes tones near the pivot 50 % steeper. With the defaults a scene of 3 stops or less reaches it. |
+| `pivot_percentile` | number, 0–100 | `75.0` | Tones at this percentile of the scene's luminance stay where they are. `75` keeps the bright end in place and darkens the rest, as the camera did; `50` would also brighten the bright end. |
+| `soft_limit_ev` | number, 0–10 | `3.0` | Tones far from the pivot move at most this × the extra contrast, in stops, so deep shadows and highlights aren't pushed without limit. |
+
+#### `normalise.white_balance`
+
+Normalise keeps the white balance the camera recorded (as-shot). It also checks it: two **white balance estimates** guess the light's colour from the photo itself, `brightest` (the colour of the brightest unclipped pixels) and `grey` (the average of the nearly neutral pixels). Each is often wrong on its own (a yellow wall is bright, a sandy beach is nearly neutral), so with `flag_disagreement` on, the photo gets the `wb_disagreement` flag only when **both** differ from the as-shot white balance by at least `flag_disagreement_mired`, **in the same direction** (both warmer or both cooler). Nothing changes automatically.
+
+The flag is **off by default**. The check still runs and its numbers are in each photo's stats, but genuinely coloured scenes trip it while the as-shot white balance is right: on the reference set it flagged 3 of 17 photos and none were wrong, all genuinely coloured scenes (ADR-0016: the camera always keeps its recorded white balance). Turn it on if you want the alarm anyway.
+
+Why 30: on the CC0 samples and the reference set, the white balance the camera's own JPEG implies was within 15 mired of as-shot on every photo, while each estimator alone was 30 mired or more off on some of them (median errors 16–17 mired). With both required, 30 flags only the Sony FX3 sample (both estimates about 88 mired warmer). The Pentax K-5 IIs tungsten interior comes close (28 and 33 mired warmer: cameras leave tungsten light a little warm on purpose) but isn't flagged.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `flag_disagreement` | `true` \| `false` | `false` | Raise `wb_disagreement` when the estimates disagree with as-shot. Off by default because coloured scenes such as sunsets trip it. |
+| `flag_disagreement_mired` | number, 0–500 | `30.0` | How far (in mired, 10⁶ ÷ kelvin) both estimates must be from the as-shot white balance, on the same side, for the photo to be flagged. 30 mired is about 600 K near 4500 K, or 1100 K near 6500 K. |
 
 #### `normalise.outliers`
 
@@ -324,6 +364,12 @@ Per-photo **overrides**, written by the UI (or an agent) when one photo needs so
 photos:
   DJI_0042.DNG:
     normalise: {exposure_ev: 2.7}
+  DJI_0043.DNG:
+    normalise: {wb_kelvin: 3200}   # lit by tungsten; the camera balanced for daylight
+  DJI_0044.DNG:
+    normalise: {enabled: false}    # skip normalise for this photo
+  DJI_0045.DNG:
+    normalise: {scene_contrast: 0.5}   # a foggy scene: extra contrast for this photo only
 ```
 
 Each photo:
@@ -336,7 +382,15 @@ Each photo:
 
 | Key | Type | Default | Description |
 |---|---|---|---|
+| `enabled` | `true` \| `false` \| `null` | `null` | Run the normalise stage for this photo; replaces `normalise.enabled`. `false` skips it (exposure, white balance and colour noise reduction), so the photo keeps the raw's own exposure; `null` follows the project. |
 | `exposure_ev` | number, −6 to 10, or `null` | `null` | This photo's exposure change, in stops. It *replaces* the computed change (`offset_ev` plus any `correction`), so `2.0` is the default brightness and `2.5` is half a stop brighter. `null` uses the computed one. |
+| `wb_kelvin` | number, 1667 to 25000, or `null` | `null` | Colour temperature of the light, in kelvin. The photo is re-balanced from its as-shot white to this one (in scene-linear, before exposure): a surface that was grey under this light comes out grey. Below the as-shot temperature the photo turns cooler (bluer), above it warmer. `null` keeps the as-shot temperature. |
+| `scene_contrast` | number, 0–2, or `null` | `null` | This photo's scene contrast `amount`: replaces `normalise.scene_contrast.amount` and applies even when `scene_contrast` is off for the project, so `0.5` turns it on for one flat photo and `0` turns it off. It still only changes a scene narrower than `target_range_ev`. `null` follows the project. |
+| `tint` | number, −150 to 150, or `null` | `null` | Tint of the light, `-1000 × Duv`: positive is magenta, negative green (Lightroom's direction; the Adobe DNG SDK's scale is three times ours). Re-balances like `wb_kelvin`: a positive tint turns the photo greener. `null` keeps the as-shot tint. |
+
+`wb_kelvin` and `tint` together describe one white; set either alone and the other keeps its as-shot value (`picturesq` reads the as-shot white from the original's header). A photo whose original records no usable as-shot white can't be re-balanced: with either set, its export fails with an error naming it, and the other photos carry on.
+
+Each export's sidecar records the photo's overrides under `config.photos`, so the sidecar alone says how the photo was rendered.
 
 ## Validation and errors
 
@@ -356,6 +410,7 @@ picturesq checks the whole file before doing any work:
 | `0` | Success |
 | `1` | Error while running |
 | `2` | Invalid config or usage |
+| `3` | Completed, but a photo has a flag (only `picturesq normalise --strict`) |
 
 ## Notes
 

@@ -12,7 +12,7 @@ from typer.testing import CliRunner
 from picturesq import __version__
 from picturesq.cli import app
 from picturesq.config import ProjectConfig
-from picturesq.decode import DecodeError
+from picturesq.decode import DecodeError, PhotoInfo
 from picturesq.export import sha256_file, sidecar_document, sidecar_path
 from picturesq.pipeline import export as pipeline_export
 
@@ -74,7 +74,7 @@ def test_document_records_version_original_output_and_config() -> None:
     assert document["picturesq_version"] == "1.2.3"
     assert document["original"] == {"name": "IMG.dng", "sha256": "ab"}
     assert document["output"] == {"name": "web", **config.export.outputs["web"].model_dump()}
-    assert set(document["config"]) == {"version", "decode", "normalise", "grade"}
+    assert set(document["config"]) == {"version", "decode", "normalise", "grade", "photos"}
     # The recorded config is a valid config: it reproduces the render.
     ProjectConfig.model_validate(document["config"])
 
@@ -112,6 +112,76 @@ def test_config_change_changes_the_sidecar(tmp_path: Path) -> None:
     after = _read(sidecar)
     assert before["config"]["decode"]["demosaic"] == "ahd"
     assert after["config"]["decode"]["demosaic"] == "vng"
+
+
+def test_document_records_only_this_photos_overrides() -> None:
+    config = ProjectConfig.model_validate(
+        {
+            "photos": {
+                "IMG.DNG": {"normalise": {"wb_kelvin": 3200.0, "enabled": True}},
+                "other.dng": {"normalise": {"exposure_ev": 1.0}},
+            }
+        }
+    )
+
+    def document(name: str) -> dict[str, Any]:
+        return sidecar_document(
+            version="1", original=Path(name), original_sha256="ab", output="web", config=config
+        )
+
+    with_overrides = document("img.dng")["config"]
+    assert with_overrides["photos"] == {
+        "img.dng": {
+            "normalise": {
+                "enabled": True,
+                "exposure_ev": None,
+                "wb_kelvin": 3200.0,
+                "tint": None,
+                "scene_contrast": None,
+            }
+        }
+    }
+    # The recorded config resolves this photo's overrides the same way.
+    recorded = ProjectConfig.model_validate(with_overrides)
+    assert recorded.photo("img.dng") == config.photo("img.dng")
+    assert document("plain.dng")["config"]["photos"] == {}
+    assert document("plain.dng")["sidecar_version"] == 2
+
+
+def test_run_records_overrides_and_reads_photo_info_only_when_needed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    read: list[str] = []
+
+    def fake_info(path: Path, _config: object) -> PhotoInfo:
+        read.append(path.name)
+        return PhotoInfo((0.3457, 0.3585), 5000.0, 0.0, 0.0, 1.0)
+
+    monkeypatch.setattr(pipeline_export, "read_photo_info", fake_info)
+    project = _project(tmp_path)
+    (project / "b.dng").write_bytes(b"another")
+    overrides = "photos:\n  a.dng:\n    normalise: {wb_kelvin: 3000, exposure_ev: 1.5}\n"
+    (project / "picturesq.yaml").write_text(CONFIG + overrides)
+    assert runner.invoke(app, ["--workers", "1", "run", str(project)]).exit_code == 0
+    assert read == ["a.dng"]
+    a = _read(project / "exports" / "web" / "a.picturesq.json")
+    b = _read(project / "exports" / "web" / "b.picturesq.json")
+    assert a["config"]["photos"]["a.dng"]["normalise"]["wb_kelvin"] == 3000.0
+    assert b["config"]["photos"] == {}
+
+
+def test_white_balance_override_without_an_as_shot_white_fails_that_photo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        pipeline_export, "read_photo_info", lambda *_: PhotoInfo(None, None, None, 0.0, 1.0)
+    )
+    project = _project(tmp_path)
+    (project / "picturesq.yaml").write_text(CONFIG + "photos: {a.dng: {normalise: {tint: 5}}}\n")
+    result = runner.invoke(app, ["run", str(project)])
+    assert result.exit_code == 1
+    assert "as-shot" in result.output
+    assert not list(project.rglob("*.picturesq.json"))
 
 
 def test_failed_photo_writes_no_sidecar(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
