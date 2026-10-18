@@ -1,10 +1,9 @@
 """Project config model: the contents of ``<project>/picturesq.yaml``.
 
 v0 holds the decode, normalise (exposure, chroma noise reduction, scene contrast, white
-balance check, outlier ranges), grade (display transform only), export and per-photo
-override sections.
-Looks and adjustments are added in the milestones that implement them, so the config never
-offers a setting the pipeline ignores.
+balance check, outlier ranges), grade (look, adjustments, local contrast, display
+transform), export and per-photo override sections. Settings are added in the milestones
+that implement them, so the config never offers a setting the pipeline ignores.
 """
 
 from typing import Annotated, Final, Literal
@@ -490,9 +489,53 @@ class LocalContrastConfig(_Model):
     )
 
 
-class GradeConfig(_Model):
-    """Stage 3 settings. v0: local contrast and the display transform; looks come in M3."""
+LookName = Annotated[str, StringConstraints(pattern=r"^(bw|cold|warm|cinematic)/[a-z][a-z0-9_]*$")]
 
+
+class LookChoice(_Model):
+    """Which look a photo is graded with, how strongly, and its parameter values."""
+
+    name: LookName = Field(description="The look, as category/name (see `picturesq looks`).")
+    intensity: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.5,
+        description="How strongly the look applies: 0 is the neutral render, 1 as designed.",
+    )
+    parameters: dict[str, float] = Field(
+        default_factory=dict,
+        description="Values for the look's parameters; unset ones use the look's defaults.",
+    )
+
+
+class AdjustmentsConfig(_Model):
+    """The controls every look has, applied after the look's scene operations."""
+
+    exposure: float = Field(default=0.0, ge=-3.0, le=3.0, description="Exposure change in EV.")
+    warmth: float = Field(
+        default=0.0, ge=-50.0, le=50.0, description="Warmth in mired; positive is warmer."
+    )
+    tint: float = Field(
+        default=0.0, ge=-30.0, le=30.0, description="Tint; positive is magenta, negative green."
+    )
+    contrast: float = Field(
+        default=0.0, ge=-0.5, le=0.5, description="Contrast around mid grey; 0.1 is 10 % more."
+    )
+    saturation: float = Field(
+        default=0.0, ge=-1.0, le=1.0, description="Colour for every colour; -1 is black and white."
+    )
+    vibrance: float = Field(
+        default=0.0, ge=-1.0, le=1.0, description="Colour for muted colours, less for vivid ones."
+    )
+
+
+class GradeConfig(_Model):
+    """Stage 3 settings: the look and adjustments, local contrast and the display transform."""
+
+    look: LookChoice | None = Field(
+        default=None, description="The project's look; none (null) is the neutral render."
+    )
+    adjustments: AdjustmentsConfig = Field(default_factory=AdjustmentsConfig)
     local_contrast: LocalContrastConfig = Field(default_factory=LocalContrastConfig)
     display_transform: DisplayTransformConfig = Field(default_factory=DisplayTransformConfig)
 
@@ -601,10 +644,37 @@ class NormaliseOverrides(_Model):
     )
 
 
+class AdjustmentOverrides(_Model):
+    """One photo's adjustments; an unset value keeps the project's."""
+
+    exposure: float | None = Field(default=None, ge=-3.0, le=3.0, description="Replaces exposure.")
+    warmth: float | None = Field(default=None, ge=-50.0, le=50.0, description="Replaces warmth.")
+    tint: float | None = Field(default=None, ge=-30.0, le=30.0, description="Replaces tint.")
+    contrast: float | None = Field(default=None, ge=-0.5, le=0.5, description="Replaces contrast.")
+    saturation: float | None = Field(
+        default=None, ge=-1.0, le=1.0, description="Replaces saturation."
+    )
+    vibrance: float | None = Field(default=None, ge=-1.0, le=1.0, description="Replaces vibrance.")
+
+
+class GradeOverrides(_Model):
+    """One photo's grade overrides."""
+
+    look: LookChoice | None = Field(
+        default=None,
+        description=(
+            "Replaces the project's look for this photo (name, intensity and parameters). "
+            "Intensity 0 grades this photo with no look."
+        ),
+    )
+    adjustments: AdjustmentOverrides = Field(default_factory=AdjustmentOverrides)
+
+
 class PhotoOverrides(_Model):
     """Overrides for one photo, keyed in ``photos:`` by the original's file name."""
 
     normalise: NormaliseOverrides = Field(default_factory=NormaliseOverrides)
+    grade: GradeOverrides = Field(default_factory=GradeOverrides)
 
     @property
     def sets_white_balance(self) -> bool:
@@ -653,3 +723,19 @@ class ProjectConfig(_Model):
             if key.casefold() == folded:
                 return value
         return NO_OVERRIDES
+
+    def photo_look(self, name: str) -> LookChoice | None:
+        """The look photo ``name`` is graded with: its override, else the project's; None
+        when neither is set or the intensity is 0 (the neutral render)."""
+        choice = self.photo(name).grade.look or self.grade.look
+        if choice is None or choice.intensity == 0.0:
+            return None
+        return choice
+
+    def photo_adjustments(self, name: str) -> AdjustmentsConfig:
+        """Photo ``name``'s adjustments: the project's, with the photo's overrides replacing
+        the values they set."""
+        overrides = self.photo(name).grade.adjustments.model_dump(exclude_none=True)
+        if not overrides:
+            return self.grade.adjustments
+        return self.grade.adjustments.model_copy(update=overrides)

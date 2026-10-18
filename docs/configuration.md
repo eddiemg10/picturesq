@@ -15,7 +15,7 @@ The machine-readable version of this page is the JSON Schema: `picturesq schema`
 
 Every export records the config that rendered it in its **sidecar** (`exports/<output>/<photo>.picturesq.json`); the sidecar's `config` section is a valid `picturesq.yaml`.
 
-> **Status:** config format version `1`, pre-alpha. This page documents what exists today (`decode`, `normalise`, `grade.local_contrast`, `grade.display_transform`, `export`, `photos`) and the [look file](#look-files) format. Choosing a look and adjustments in `picturesq.yaml` is added in [#118](https://github.com/eddiemg10/picturesq/issues/118).
+> **Status:** config format version `1`, pre-alpha. This page documents what exists today: `decode`, `normalise`, `grade` (look, adjustments, local contrast, display transform), `export`, `photos`, and the [look file](#look-files) format.
 
 ## Defaults
 
@@ -58,6 +58,14 @@ normalise:
     max_median_ev: 3.0
     max_clipped: 0.02
 grade:
+  look: null
+  adjustments:
+    exposure: 0.0
+    warmth: 0.0
+    tint: 0.0
+    contrast: 0.0
+    saturation: 0.0
+    vibrance: 0.0
   local_contrast:
     enabled: true
     detail_floor: 0.8
@@ -113,6 +121,19 @@ photos: {}
 ```
 
 ## Examples
+
+Grade every photo with a look at 80 %, a little warmer, and one photo with another look:
+
+```yaml
+grade:
+  look: {name: cold/nordic, intensity: 0.8, parameters: {fade: 0.06}}
+  adjustments: {warmth: 8}
+photos:
+  DJI_0042.DNG:
+    grade:
+      look: {name: bw/silver, intensity: 1.0}
+      adjustments: {exposure: 0.3}
+```
 
 Write only web-sized JPEGs:
 
@@ -283,8 +304,33 @@ After normalise, a photo whose stats fall outside these ranges is flagged as an 
 
 | Key | Type | Default | Description |
 |---|---|---|---|
+| `look` | mapping or `null` | `null` | The project's look, below; `null` is the neutral render. |
+| `adjustments` | mapping | all `0` | Controls every look has, below. |
 | `local_contrast` | mapping | see below | Keeps detail (clouds, distant hills) where the display transform would flatten it. |
 | `display_transform` | mapping | see below | The AgX-style display transform that turns scene light into display values, rolling highlights off toward white instead of clipping them. |
+
+#### `grade.look`
+
+Which look the photos are graded with (see [Look files](#look-files); `picturesq looks` lists them). Its scene operations run before local contrast and the display transform, its display operations (`fade`, `grain`) after it, for each output.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `name` | `category/name` | (required) | The look, e.g. `cold/nordic`. An unknown name is an error (exit 2) before anything is rendered. |
+| `intensity` | number, 0–1.5 | `1.0` | How strongly the look applies: `0` is exactly the neutral render, `1` the look as designed, `1.5` half as much again. It scales each operation's strength, not a blend of two images ([ADR-0019](decisions/0019-grade-operations-and-intensity.md)). |
+| `parameters` | mapping of name to number | `{}` | Values for the look's parameters (its sliders); unset ones use the look's defaults. An unknown name or a value outside the parameter's range is an error. |
+
+#### `grade.adjustments`
+
+The same six controls for every look, applied after the look's scene operations and before local contrast, so "a bit warmer" means the same on every look. All `0` changes nothing.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `exposure` | number, −3–3 | `0.0` | Exposure change in stops. |
+| `warmth` | number, −50–50 | `0.0` | Warmth in mired: positive is warmer (yellower), negative cooler. 10 is a gentle change. |
+| `tint` | number, −30–30 | `0.0` | Positive is magenta, negative green. |
+| `contrast` | number, −0.5–0.5 | `0.0` | Contrast around mid grey, in stops: `0.1` makes every stop 1.1 stops. Colours keep their hue and saturation. |
+| `saturation` | number, −1–1 | `0.0` | Colour for every colour, lightness kept: `-1` is black and white. |
+| `vibrance` | number, −1–1 | `0.0` | Colour for muted colours, less for vivid ones (skin changes less than with `saturation`). |
 
 #### `grade.local_contrast`
 
@@ -377,6 +423,7 @@ Each photo:
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `normalise` | mapping | `{}` | This photo's normalise overrides, below. |
+| `grade` | mapping | `{}` | This photo's look and adjustments, below. |
 
 `photos.<name>.normalise`:
 
@@ -390,7 +437,14 @@ Each photo:
 
 `wb_kelvin` and `tint` together describe one white; set either alone and the other keeps its as-shot value (`picturesq` reads the as-shot white from the original's header). A photo whose original records no usable as-shot white can't be re-balanced: with either set, its export fails with an error naming it, and the other photos carry on.
 
-Each export's sidecar records the photo's overrides under `config.photos`, so the sidecar alone says how the photo was rendered.
+`photos.<name>.grade`:
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `look` | mapping or `null` | `null` | Replaces the project's `grade.look` for this photo (name, intensity and parameters together; see `grade.look`). Intensity `0` grades this photo with no look. `null` follows the project. |
+| `adjustments` | mapping | `{}` | This photo's adjustments: each key set (`exposure`, `warmth`, `tint`, `contrast`, `saturation`, `vibrance`, same ranges as `grade.adjustments`) replaces the project's value; unset (`null`) ones follow the project. |
+
+Each export's sidecar records the photo's overrides under `config.photos`, and the look it was graded with under `look` (name, intensity, every parameter's value and the look file's SHA-256), so the sidecar alone says how the photo was rendered.
 
 ## Look files
 
