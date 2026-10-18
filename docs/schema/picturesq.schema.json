@@ -470,6 +470,9 @@
         "chroma_nr": {
           "$ref": "#/$defs/ChromaNoiseReductionConfig"
         },
+        "scene_contrast": {
+          "$ref": "#/$defs/SceneContrastConfig"
+        },
         "white_balance": {
           "$ref": "#/$defs/WhiteBalanceConfig"
         },
@@ -541,6 +544,21 @@
           "default": null,
           "description": "Exposure change for this photo, in EV; replaces the computed one (offset_ev plus any correction).",
           "title": "Exposure Ev"
+        },
+        "scene_contrast": {
+          "anyOf": [
+            {
+              "maximum": 2.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Scene contrast amount for this photo; replaces normalise.scene_contrast.amount and applies even when scene_contrast is off. 0 turns it off for this photo.",
+          "title": "Scene Contrast"
         }
       },
       "title": "NormaliseOverrides",
@@ -620,6 +638,60 @@
         }
       },
       "title": "PhotoOverrides",
+      "type": "object"
+    },
+    "SceneContrastConfig": {
+      "additionalProperties": false,
+      "description": "Extra contrast for flat scenes, as cameras add (ADR-0017).\n\nA scene whose luminance spans less than ``target_range_ev`` between its 5th and 95th\npercentiles gets extra contrast ``amount * min(target_range_ev / range - 1, max_contrast)``:\ntones are pushed away from the pivot (the ``pivot_percentile`` of the scene's luminance)\nby up to ``soft_limit_ev`` times that, the same gain on R, G and B so colours keep their\nhue. Off by default: the evidence is two flat photos from one camera.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Add contrast to flat scenes. Off by default until more flat photos confirm it; a photo's scene_contrast override applies even when this is off.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "amount": {
+          "default": 0.5,
+          "description": "How much of the extra contrast to apply: 0.5 is gentle (the default), 1.0 matches the camera on the photos it was fitted to, 0 turns it off.",
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Amount",
+          "type": "number"
+        },
+        "target_range_ev": {
+          "default": 4.5,
+          "description": "Scenes whose luminance spans less than this between their 5th and 95th percentiles, in EV, get extra contrast; wider scenes are left alone.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 20.0,
+          "title": "Target Range Ev",
+          "type": "number"
+        },
+        "max_contrast": {
+          "default": 0.5,
+          "description": "Most extra contrast a very flat scene gets, before amount: 0.5 makes tones near the pivot 50 % steeper.",
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Max Contrast",
+          "type": "number"
+        },
+        "pivot_percentile": {
+          "default": 75.0,
+          "description": "Tones at this percentile of the scene's luminance stay put; darker ones get darker, brighter ones brighter. 75 keeps the bright end where it was, as cameras do.",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Pivot Percentile",
+          "type": "number"
+        },
+        "soft_limit_ev": {
+          "default": 3.0,
+          "description": "Tones far from the pivot move at most this times the extra contrast, in EV, so deep shadows and highlights are not pushed without limit.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 10.0,
+          "title": "Soft Limit Ev",
+          "type": "number"
+        }
+      },
+      "title": "SceneContrastConfig",
       "type": "object"
     },
     "SharpenConfig": {

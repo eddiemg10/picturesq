@@ -132,7 +132,13 @@ def test_document_records_only_this_photos_overrides() -> None:
     with_overrides = document("img.dng")["config"]
     assert with_overrides["photos"] == {
         "img.dng": {
-            "normalise": {"enabled": True, "exposure_ev": None, "wb_kelvin": 3200.0, "tint": None}
+            "normalise": {
+                "enabled": True,
+                "exposure_ev": None,
+                "wb_kelvin": 3200.0,
+                "tint": None,
+                "scene_contrast": None,
+            }
         }
     }
     # The recorded config resolves this photo's overrides the same way.

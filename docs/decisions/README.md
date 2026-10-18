@@ -14,9 +14,10 @@ New ADRs get the next number; superseded ones are marked, not deleted.
 | [0007](0007-asset-licences.md) | Asset licences: AgX references and film-simulation LUT collections | Accepted |
 | [0008](0008-derived-colour-matrices.md) | Derive colour matrices from primaries; never use rounded published matrices | Accepted |
 | [0009](0009-m1-matched-exposure.md) | M1 is judged at matched exposure | Superseded by 0010 |
-| [0010](0010-camera-matched-neutral-render.md) | The neutral render is fitted to camera JPEGs and gated on the real export | Accepted; decision 2 amended by 0011, saturation defaults by 0012, colour gate by 0013 |
+| [0010](0010-camera-matched-neutral-render.md) | The neutral render is fitted to camera JPEGs and gated on the real export | Accepted; decision 2 amended by 0011, saturation defaults by 0012, colour gate by 0013, per-scene normalisation by 0017 |
 | [0011](0011-local-contrast.md) | Local contrast keeps the detail the display transform's shoulder flattens | Accepted |
 | [0012](0012-sky-colour.md) | DNG-specification colour matrices and a camera-matched blue rendering | Accepted |
 | [0013](0013-pixel-aligned-colour-gate.md) | The colour gate compares chroma at the same pixels | Accepted |
 | [0014](0014-export-metadata.md) | Exports carry allowlisted capture EXIF and a reproducible sidecar | Accepted |
 | [0015](0015-parallelism-policy.md) | Threads within a photo, photos scheduled by memory, and both as machine settings | Accepted |
+| [0017](0017-scene-contrast.md) | Scene contrast for flat scenes, off by default | Accepted |
