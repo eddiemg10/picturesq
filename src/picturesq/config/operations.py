@@ -38,12 +38,10 @@ def _neutral(info: Any) -> float | None:
     return None
 
 
-class Operation(BaseModel):
-    """One step of a look. Subclasses add an ``op`` literal and their parameters."""
+class Scalable(BaseModel):
+    """A model whose scaled values intensity moves toward neutral (operations and their parts)."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-
-    space: ClassVar[Space] = "scene"
 
     def scaled(self, intensity: float) -> Self:
         """This operation at ``intensity``: each scaled value becomes
@@ -58,7 +56,7 @@ class Operation(BaseModel):
             neutral = _neutral(info)
             if neutral is not None:
                 update[name] = neutral + intensity * (value - neutral)
-            elif isinstance(value, Operation):
+            elif isinstance(value, Scalable):
                 update[name] = value.scaled(intensity)
         return self.model_copy(update=update)
 
@@ -69,9 +67,15 @@ class Operation(BaseModel):
             neutral = _neutral(info)
             if neutral is not None and value != neutral:
                 return False
-            if isinstance(value, Operation) and not value.is_neutral():
+            if isinstance(value, Scalable) and not value.is_neutral():
                 return False
         return True
+
+
+class Operation(Scalable):
+    """One step of a look. Subclasses add an ``op`` literal and their parameters."""
+
+    space: ClassVar[Space] = "scene"
 
 
 class ExposureOperation(Operation):
@@ -196,13 +200,130 @@ class FadeOperation(Operation):
     )
 
 
+class VibranceOperation(Operation):
+    """Raise (or lower) the chroma of muted colours more than of colourful ones.
+
+    Oklab chroma ``C`` is scaled by ``1 + amount * (1 - C / VIBRANCE_FULL_CHROMA)``
+    (no change at or above that chroma), lightness and hue kept: muted colours and skin
+    (chroma ~0.08) gain colour, colours that are already saturated stay as they are.
+    """
+
+    op: Literal["vibrance"] = "vibrance"
+    amount: float = scaled(
+        0.0,
+        ge=-1.0,
+        le=1.0,
+        description="Chroma change for the most muted colours; 0.3 is up to 30 % more.",
+    )
+
+
+VIBRANCE_FULL_CHROMA = 0.25
+"""Oklab chroma at and above which vibrance changes nothing (sRGB red is 0.26)."""
+
+HUE_BANDS: dict[str, float] = {
+    "red": 25.0,
+    "orange": 55.0,
+    "yellow": 100.0,
+    "green": 140.0,
+    "aqua": 195.0,
+    "blue": 255.0,
+    "purple": 295.0,
+    "magenta": 330.0,
+}
+"""Centre of each hue band, as an Oklab hue angle in degrees. Measured from sRGB colours:
+red 29, orange 53, yellow 110, green 143, aqua (cyan) 195, blue 264, purple 294, magenta
+328; skin (about 49) falls in orange and sky blue (about 255) in blue."""
+
+
+class HueBand(Scalable):
+    """Changes to one hue band's colours."""
+
+    hue: float = scaled(
+        0.0,
+        ge=-45.0,
+        le=45.0,
+        description="Hue shift in degrees (Oklab); + turns red toward yellow, blue toward purple.",
+    )
+    chroma: float = scaled(
+        0.0, ge=-1.0, le=1.0, description="Chroma change; -1 removes the band's colour."
+    )
+    lightness: float = scaled(
+        0.0, ge=-2.0, le=2.0, description="Brightness change in EV (a darker sky: -0.5)."
+    )
+
+
+class HslOperation(Operation):
+    """Change hue, chroma and brightness of colours by hue band (Oklab).
+
+    Each pixel belongs to the two bands its hue sits between, weighted smoothly (weights
+    sum to 1, so there are no seams). Greys have no hue: the change fades in with chroma
+    and is full from ``HSL_FULL_CHROMA``.
+    """
+
+    op: Literal["hsl"] = "hsl"
+    red: HueBand = Field(default_factory=HueBand)
+    orange: HueBand = Field(default_factory=HueBand)
+    yellow: HueBand = Field(default_factory=HueBand)
+    green: HueBand = Field(default_factory=HueBand)
+    aqua: HueBand = Field(default_factory=HueBand)
+    blue: HueBand = Field(default_factory=HueBand)
+    purple: HueBand = Field(default_factory=HueBand)
+    magenta: HueBand = Field(default_factory=HueBand)
+
+
+HSL_FULL_CHROMA = 0.04
+"""Oklab chroma from which a hue band's change applies fully (it fades in from grey)."""
+
+
+class ToneTint(Scalable):
+    """A tint for one end of the tones: the hue it moves toward, and how far."""
+
+    hue: float = Field(default=0.0, ge=0.0, lt=360.0, description="Oklab hue angle, degrees.")
+    amount: float = scaled(
+        0.0,
+        ge=0.0,
+        le=1.0,
+        description="How strong the tint is; 1 adds 0.1 of Oklab chroma at mid grey.",
+    )
+
+
+class SplitToneOperation(Operation):
+    """Tint the shadows toward one hue and the highlights toward another.
+
+    The tint is added in Oklab a/b (lightness kept), in proportion to lightness (so black
+    stays black), weighted smoothly by tone: shadows below the crossover, highlights above
+    it. The crossover is mid grey, moved by ``balance``.
+    """
+
+    op: Literal["split_tone"] = "split_tone"
+    shadows: ToneTint = Field(default_factory=ToneTint)
+    highlights: ToneTint = Field(default_factory=ToneTint)
+    balance: float = Field(
+        default=0.0,
+        ge=-1.0,
+        le=1.0,
+        description="Moves the crossover: positive gives the shadows' tint more of the tones.",
+    )
+
+
+SPLIT_TONE_CHROMA = 0.1
+"""Oklab chroma that ``amount: 1`` adds at mid grey."""
+SPLIT_TONE_WIDTH = 0.25
+"""Half the Oklab lightness range over which split toning blends from shadows to
+highlights (mid grey is 0.565; black 0, diffuse white 1)."""
+SPLIT_TONE_BALANCE = 0.2
+"""How far ``balance: 1`` moves the crossover, in Oklab lightness."""
+
 AnyOperation = Annotated[
     ExposureOperation
     | WhiteBalanceOperation
     | ContrastOperation
     | SaturationOperation
     | ToneCurveOperation
-    | FadeOperation,
+    | FadeOperation
+    | VibranceOperation
+    | HslOperation
+    | SplitToneOperation,
     Field(discriminator="op"),
 ]
 """Any operation, chosen by its ``op`` name (for look files)."""
@@ -214,4 +335,7 @@ OPERATION_TYPES: tuple[type[Operation], ...] = (
     SaturationOperation,
     ToneCurveOperation,
     FadeOperation,
+    VibranceOperation,
+    HslOperation,
+    SplitToneOperation,
 )
