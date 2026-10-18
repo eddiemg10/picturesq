@@ -15,7 +15,7 @@ The machine-readable version of this page is the JSON Schema: `picturesq schema`
 
 Every export records the config that rendered it in its **sidecar** (`exports/<output>/<photo>.picturesq.json`); the sidecar's `config` section is a valid `picturesq.yaml`.
 
-> **Status:** config format version `1`, pre-alpha. This page documents what exists today (`decode`, `normalise`, `grade.local_contrast`, `grade.display_transform`, `export`). Sections for looks, adjustments and per-photo overrides are added as those stages ship.
+> **Status:** config format version `1`, pre-alpha. This page documents what exists today (`decode`, `normalise`, `grade.local_contrast`, `grade.display_transform`, `export`, `photos`). Sections for looks and adjustments are added as those stages ship.
 
 ## Defaults
 
@@ -43,6 +43,12 @@ normalise:
     radius: 0.004
     full_lightness: 0.2
     fade_lightness: 0.4
+  white_balance:
+    flag_disagreement_mired: 30.0
+  outliers:
+    min_median_ev: -2.0
+    max_median_ev: 3.0
+    max_clipped: 0.02
 grade:
   local_contrast:
     enabled: true
@@ -95,6 +101,7 @@ export:
   enabled:
   - web
   - archive
+photos: {}
 ```
 
 ## Examples
@@ -149,6 +156,14 @@ export:
 
 Setting `outputs` replaces the default outputs entirely, so list every output you want to keep (`archive` isn't defined above, so it can't be enabled).
 
+Give one photo more light than the rest (it replaces the computed exposure, normally `offset_ev`, 2.0):
+
+```yaml
+photos:
+  DJI_20261011_0042.DNG:
+    normalise: {exposure_ev: 2.7}
+```
+
 ## Reference
 
 ### Top level
@@ -157,9 +172,10 @@ Setting `outputs` replaces the default outputs entirely, so list every output yo
 |---|---|---|---|
 | `version` | `1` | `1` | Config format version. Only `1` is accepted. |
 | `decode` | mapping | see below | How RAW originals are decoded. |
-| `normalise` | mapping | see below | Per-photo corrections: exposure and colour noise reduction. |
+| `normalise` | mapping | see below | Per-photo corrections (exposure, colour noise reduction) and the checks that flag photos for review. |
 | `grade` | mapping | see below | How images are rendered for display. Today only the display transform. |
 | `export` | mapping | see below | Which files `picturesq export` writes. |
+| `photos` | mapping of file name → overrides | `{}` | Per-photo overrides. See [`photos`](#photos). |
 
 ### `decode`
 
@@ -182,6 +198,8 @@ The defaults for the first two keys may change during M1 while they are tested o
 | `enabled` | `true` \| `false` | `true` | Run the normalise stage. Off, photos keep the raw's own (darker) exposure. |
 | `exposure` | mapping | see below | One brightness change per photo. |
 | `chroma_nr` | mapping | see below | Colour noise reduction in the shadows: smooths colour, keeps each pixel's brightness. |
+| `white_balance` | mapping | see below | When the white balance check flags a photo. |
+| `outliers` | mapping | see below | The ranges a photo's stats should fall in; outside one, the photo is flagged as an outlier. |
 
 #### `normalise.exposure`
 
@@ -202,6 +220,24 @@ The exposure change is `offset_ev + correction × (target_ev − the photo's med
 | `radius` | number, 0–0.05 | `0.004` | Blur radius as a fraction of the photo's long edge (`0.004` is 31 px on a 7680 px photo). |
 | `full_lightness` | number, 0–1 | `0.2` | Tones up to this lightness (the cube root of luminance, after exposure; 0.2 is 4.5 stops below mid grey) get the full amount. |
 | `fade_lightness` | number, 0–1 | `0.4` | By this lightness (1.5 stops below mid grey) it has faded out, so brighter areas keep crisp colour edges. Must be greater than `full_lightness`. |
+
+#### `normalise.white_balance`
+
+Normalise keeps the white balance the camera recorded (as-shot). It also estimates the light's colour from the photo itself; if the two differ by more than this, the photo gets the `wb_disagreement` flag so you can look at it. Nothing changes automatically.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `flag_disagreement_mired` | number, 0–500 | `30.0` | How far apart (in mired, 10⁶ ÷ kelvin) the estimate and the as-shot white balance may be before the photo is flagged. 30 mired is about 600 K near 4500 K, or 1100 K near 6500 K. |
+
+#### `normalise.outliers`
+
+After normalise, a photo whose stats fall outside these ranges is flagged as an **outlier**. Outliers are flagged, never forced into range: fix one with an override in [`photos`](#photos). The defaults flag only photos far from the CC0 samples and the reference set, whose medians span −2.5 to +2.3 stops.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `min_median_ev` | number, −10 to 10 | `-2.0` | Darkest median brightness that isn't an outlier, in stops relative to mid grey. |
+| `max_median_ev` | number, −10 to 10 | `3.0` | Brightest median brightness that isn't an outlier. Must be greater than `min_median_ev`. |
+| `max_clipped` | number, 0–1 | `0.02` | Largest fraction of pixels the sensor clipped (pure white, no detail) that isn't an outlier. |
 
 ### `grade`
 
@@ -279,6 +315,28 @@ Each output:
 | `sharpen` | mapping | `{amount: 0.5, radius: 0.8}` | Unsharp mask at the output's size: `amount` (0–3, `0` is off) and `radius` in output pixels (0–5). The default `archive` output uses `{amount: 0.3, radius: 1.2}`. |
 
 Exports are written to `<project>/exports/<output name>/`.
+
+### `photos`
+
+Per-photo **overrides**, written by the UI (or an agent) when one photo needs something different from the project's settings. Keys are the original's file name (`DJI_0042.DNG`), matched ignoring case; a photo with no entry uses the project's settings. An entry for a file that isn't in the project is kept (it may be added later).
+
+```yaml
+photos:
+  DJI_0042.DNG:
+    normalise: {exposure_ev: 2.7}
+```
+
+Each photo:
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `normalise` | mapping | `{}` | This photo's normalise overrides, below. |
+
+`photos.<name>.normalise`:
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `exposure_ev` | number, −6 to 10, or `null` | `null` | This photo's exposure change, in stops. It *replaces* the computed change (`offset_ev` plus any `correction`), so `2.0` is the default brightness and `2.5` is half a stop brighter. `null` uses the computed one. |
 
 ## Validation and errors
 

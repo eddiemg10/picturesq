@@ -31,6 +31,7 @@ from picturesq.export import (
 from picturesq.export.sharpen import sharpened_rows
 from picturesq.grade import grade
 from picturesq.normalise import normalise
+from picturesq.photo import UNNAMED, PhotoContext
 from picturesq.pipeline.workers import WorkerPlan, photos_to_start
 
 EXPORTS_DIRNAME = "exports"
@@ -39,19 +40,20 @@ SHARPEN_BAND_RADII = 8
 """Sharpening bands are at least this many blur radii tall (measured in #68: 8-row bands
 on a 7680 px wide image were 2.5x slower than 32-row ones)."""
 
-# Scene-linear stages that run after decode, as (name, fn(image, config) -> image). Stages
-# may modify the image in place. Grade's look operations (M3) are added here; render_scene
+# Scene-linear stages that run after decode, as (name, fn(image, config, photo) -> image).
+# Stages may modify the image in place. Grade's look operations (M3) are added here; render_scene
 # and the stage sheet (scripts/stage_sheet.py) both iterate this, so a new stage gets a
 # panel automatically.
-SCENE_STAGES: tuple[
-    tuple[str, Callable[[NDArray[np.float32], ProjectConfig], NDArray[np.float32]]], ...
-] = (("normalise", normalise), ("grade", grade))
+SceneStage = Callable[[NDArray[np.float32], ProjectConfig, PhotoContext], NDArray[np.float32]]
+SCENE_STAGES: tuple[tuple[str, SceneStage], ...] = (("normalise", normalise), ("grade", grade))
 
 
-def render_scene(image: NDArray[np.float32], config: ProjectConfig) -> NDArray[np.float32]:
-    """Run the scene-linear stages after decode (normalise, grade), in place."""
+def render_scene(
+    image: NDArray[np.float32], config: ProjectConfig, photo: PhotoContext = UNNAMED
+) -> NDArray[np.float32]:
+    """Run the scene-linear stages after decode (normalise, grade) for ``photo``, in place."""
     for _name, stage in SCENE_STAGES:
-        image = stage(image, config)
+        image = stage(image, config, photo)
     return image
 
 
@@ -189,7 +191,8 @@ def export_photo(
     try:
         capture = read_capture_exif(original)
         original_sha256 = sha256_file(original)
-        image = render_scene(decode_original(original, config.decode), config)
+        photo = PhotoContext(name=original.name)
+        image = render_scene(decode_original(original, config.decode), config, photo)
         for index, name in enumerate(names):
             spec = config.export.outputs[name]
             path = exports_dir / name / f"{original.stem}.jpg"
