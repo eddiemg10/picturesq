@@ -14,7 +14,6 @@ from picturesq.atomic import atomic_write
 from picturesq.cli.config import EXIT_ERROR, EXIT_FLAGGED, EXIT_INVALID, fail, project_config
 from picturesq.colour.transfer import FloatArray
 from picturesq.decode import find_originals
-from picturesq.photo import PhotoContext
 from picturesq.pipeline.export import StemCollisionError, check_stems
 from picturesq.pipeline.normalise import (
     NormaliseResult,
@@ -113,8 +112,7 @@ def normalise_project(
     pixels: dict[str, Uint8Array] = {}
 
     def render(result: NormaliseResult, image: FloatArray) -> None:
-        photo = PhotoContext(name=result.name, info=result.info)
-        pixels[result.name] = render_panel_pixels(image, config, photo)
+        pixels[result.name] = render_panel_pixels(image, config)
 
     results = normalise_originals(
         originals, config, cache_dir, on_photo=report, on_image=render if png else None
