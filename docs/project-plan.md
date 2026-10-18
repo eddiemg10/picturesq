@@ -24,7 +24,7 @@ You copy RAW originals into a project folder and run `picturesq run ./lisbon`. T
 ### Success criteria for v1 (v0.1.0)
 - One command turns a project's originals into exports using looks chosen in the web UI.
 - The neutral render looks at least as good as the camera's own JPEG on the reference set.
-- A contact sheet of the normalised reference set looks even; outliers are flagged, not forced.
+- On a contact sheet of the normalised reference set, outliers and too-dark photos are flagged, not forced, and per-photo overrides fix them.
 - An agent can make a described change ("softer highlights") by editing config, and the preview reflects it.
 - 100 full-resolution Pocket 4 photos export in < 15 min on the reference laptop with peak RAM ≤ 3 GB.
 
@@ -57,7 +57,7 @@ Photoshop-style GUI, local retouching, lens correction, cataloguing/DAM, ML trai
 | D3 | Camera LUT | None; use the DNG colour matrices. [ADR-0002](decisions/0002-no-camera-conversion-lut.md) | DJI's D-Log LUTs are for D-Log *video*; DNG is linear sensor data. |
 | D4 | Working space | Scene-linear float32, linear Rec.2020 primaries | Holds camera colours without clipping; linear makes exposure/WB physically correct. |
 | D5 | Display transform | AgX-style. [ADR-0003](decisions/0003-agx-display-transform.md) | Graceful highlight roll-off, no hue skews; open design. |
-| D6 | Normalise | Camera-fitted exposure offset (+2 EV); optional partial correction toward a target (off by default); chroma NR in the shadows; as-shot WB, never corrected, + disagreement flag. [ADR-0010](decisions/0010-camera-matched-neutral-render.md), [ADR-0016](decisions/0016-keep-as-shot-white-balance.md) | Measured: cameras brighten by a near-constant amount, not per scene. Batch evening-out stays available. |
+| D6 | Normalise | Camera-fitted exposure offset (+2 EV); optional partial correction toward a target (off by default); chroma NR in the shadows; as-shot WB, never corrected, + disagreement flag. [ADR-0010](decisions/0010-camera-matched-neutral-render.md), [ADR-0016](decisions/0016-keep-as-shot-white-balance.md) | Measured: cameras brighten by a near-constant amount, not per scene. Batch evening-out stays available but off: the user preferred per-photo fixes (review 2026-10-18). |
 | D7 | Looks | Every look is a look file (YAML operations, optionally a `lut` operation); four categories | One concept; editable by agents; LUTs give breadth. |
 | D8 | LUT maths | Our own numpy trilinear/tetrahedral; colour-science as **test oracle only** | ~30 lines, no heavy runtime dependency, verified against a reference. |
 | D9 | Config | YAML, machine-owned, pydantic models = schema. [ADR-0004](decisions/0004-yaml-machine-owned.md) | Diffable and readable for agents; humans use the UI. |
@@ -106,7 +106,7 @@ Photoshop-style GUI, local retouching, lens correction, cataloguing/DAM, ML trai
 
 ### 4.2 Normalise (algorithm v1)
 Implemented (ADR-0010):
-1. **Exposure:** `exposure_ev = offset_ev + clamp(correction × (target_ev − median_ev), ±max_correction_ev)`. `offset_ev` (+2.0) is fitted to camera JPEGs; `correction` defaults to 0 because cameras don't even out a batch. The median is measured on a ~100k-pixel grid.
+1. **Exposure:** `exposure_ev = offset_ev + clamp(correction × (target_ev − median_ev), ±max_correction_ev)`. `offset_ev` (+2.0) is fitted to camera JPEGs; `correction` defaults to 0 because cameras don't even out a batch, and evening out darkened most daylight photos and flattened the mood of low-light scenes (user review 2026-10-18); flagged photos are fixed per photo with overrides instead. `target_ev` is measured before `offset_ev`, so with `correction` 1 every median lands at `offset_ev + target_ev` (+1 EV by default). The median is measured on a ~100k-pixel grid.
 2. **Chroma NR:** each pixel keeps its luminance and moves toward the local average chromaticity, smoothed on a small copy (radius a fraction of the long edge); full strength in the shadows, faded out 1.5 EV below mid grey.
 
 Still to do (M2):
@@ -320,7 +320,7 @@ Decode via rawpy into the working space; proxies + cache; AgX display transform 
 ### M2 — Normalise (current)
 Stats JSON, WB disagreement flag, overrides, flags, outliers, `normalise` command + contact sheet (exposure and chroma NR landed in M1, ADR-0010).
 **Concepts:** EV/stops and histograms, white balance (temperature/tint, mired), noise.
-**Exit:** outliers are flagged, not forced; with `correction` on, the reference-set contact sheet looks even; the CC0 near-white chroma band passes the M1 gate, or the decision to keep the recorded white balance is in an ADR (#57). Since 2026-10-18 the band passes on the absolute tolerance (ratio 1.44, mean difference +0.006 Oklab chroma; ADR-0013, amended).
+**Exit:** outliers and too-dark photos are flagged, not forced, and per-photo overrides (`exposure_ev`, `wb_kelvin`, `tint`) fix them; batch `correction` stays off by default (user review 2026-10-18: it darkened most daylight photos and flattened the mood of sunset and club scenes); the CC0 near-white chroma band passes the M1 gate, or the decision to keep the recorded white balance is in an ADR (#57). Since 2026-10-18 the band passes on the absolute tolerance (ratio 1.44, mean difference +0.006 Oklab chroma; ADR-0013, amended).
 
 ### M3 — Grade: look engine, look library, previews
 Operations, look file schema + intensity, `lut` operation (oracle-tested), adjustments, 12–16 built-in looks, `preview` and `looks` commands (output sharpening landed in M1).
@@ -328,7 +328,7 @@ Operations, look file schema + intensity, `lut` operation (oracle-tested), adjus
 **Exit:** an agent makes a described change via config and the preview reflects it.
 
 ### M4 — UI
-Starlette app, photo × look grid, look panel (intensity / parameters / adjustments), per-photo normalisation review, YAML write-back, file watching, Playwright tests.
+Starlette app, photo × look grid, look panel (intensity / parameters / adjustments), per-photo normalisation review (flagged photos first, with exposure and white balance sliders that write the per-photo overrides `exposure_ev`, `wb_kelvin` and `tint`), YAML write-back, file watching, Playwright tests.
 **Exit:** the user grades a whole project without touching YAML; an agent edit live-reloads in the browser.
 
 ### M5 — v0.1 release
