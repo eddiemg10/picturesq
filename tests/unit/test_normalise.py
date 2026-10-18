@@ -5,6 +5,7 @@ from picturesq.colour.oklab import rec2020_to_oklab
 from picturesq.colour.spaces import REC2020_TO_XYZ
 from picturesq.config import ChromaNoiseReductionConfig, ExposureConfig, ProjectConfig
 from picturesq.normalise import chroma_noise_reduction, exposure_ev, median_ev, normalise
+from picturesq.photo import PhotoContext
 
 
 def _grey(value: float, shape: tuple[int, int] = (40, 60)) -> np.ndarray:
@@ -91,3 +92,15 @@ def test_chroma_nr_off_and_grey() -> None:
 def test_chroma_nr_config_rejects_inverted_fade() -> None:
     with pytest.raises(ValueError):
         ChromaNoiseReductionConfig(full_lightness=0.6, fade_lightness=0.5)
+
+
+def test_exposure_override_replaces_the_computed_exposure() -> None:
+    config = ProjectConfig.model_validate(
+        {"photos": {"A.DNG": {"normalise": {"exposure_ev": 1.0}}}}
+    )
+    image = _grey(0.1)
+    normalise(image, config, PhotoContext(name="a.dng"))
+    np.testing.assert_allclose(image, 0.1 * 2.0, rtol=1e-5)
+    other = _grey(0.1)
+    normalise(other, config, PhotoContext(name="B.DNG"))  # no override: offset_ev 2.0
+    np.testing.assert_allclose(other, 0.1 * 4.0, rtol=1e-5)

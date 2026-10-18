@@ -190,13 +190,14 @@ normalise:
   enabled: true
   exposure: {offset_ev: 2.0, correction: 0.0, target_ev: -1.0, max_correction_ev: 2.0}
   chroma_nr: {amount: 1.0, radius: 0.004, full_lightness: 0.2, fade_lightness: 0.4}
-  white_balance: {mode: as_shot, flag_disagreement_mired: 30}   # M2
+  white_balance: {flag_disagreement_mired: 30}
+  outliers: {min_median_ev: -2.0, max_median_ev: 3.0, max_clipped: 0.02}
 grade:
   look: {name: cold/nordic, intensity: 0.8, parameters: {}}
   adjustments: {exposure: 0.0, warmth: 0.0, tint: 0.0, contrast: 0.0, saturation: 0.0, vibrance: 0.0}
 photos:                          # overrides, written by the UI
   DJI_20261011_0042.DNG:
-    normalise: {exposure_ev: 0.3}
+    normalise: {exposure_ev: 2.3}  # replaces the computed exposure (offset_ev 2.0 + correction)
     grade:
       look: {name: bw/silver, intensity: 1.0}
 export:

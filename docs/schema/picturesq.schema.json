@@ -456,7 +456,7 @@
     },
     "NormaliseConfig": {
       "additionalProperties": false,
-      "description": "Stage 2 settings: per-photo exposure and noise reduction.",
+      "description": "Stage 2 settings: per-photo exposure, noise reduction, and the checks that flag photos.",
       "properties": {
         "enabled": {
           "default": true,
@@ -469,9 +469,70 @@
         },
         "chroma_nr": {
           "$ref": "#/$defs/ChromaNoiseReductionConfig"
+        },
+        "white_balance": {
+          "$ref": "#/$defs/WhiteBalanceConfig"
+        },
+        "outliers": {
+          "$ref": "#/$defs/OutliersConfig"
         }
       },
       "title": "NormaliseConfig",
+      "type": "object"
+    },
+    "NormaliseOverrides": {
+      "additionalProperties": false,
+      "description": "One photo's normalise overrides; an unset value keeps the computed one.",
+      "properties": {
+        "exposure_ev": {
+          "anyOf": [
+            {
+              "maximum": 10.0,
+              "minimum": -6.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Exposure change for this photo, in EV; replaces the computed one (offset_ev plus any correction).",
+          "title": "Exposure Ev"
+        }
+      },
+      "title": "NormaliseOverrides",
+      "type": "object"
+    },
+    "OutliersConfig": {
+      "additionalProperties": false,
+      "description": "Ranges a photo's stats should fall in after normalise; outside one, it is an outlier.\n\nAn outlier is flagged, never forced back into range. Defaults from the CC0 samples and\nthe reference set (2026-10-18): medians span -2.5 to +2.3 EV, and only the two dark\nscenes the camera brightened more than we do fall below -2.",
+      "properties": {
+        "min_median_ev": {
+          "default": -2.0,
+          "description": "Darkest median brightness that isn't an outlier, in EV from mid grey.",
+          "maximum": 10.0,
+          "minimum": -10.0,
+          "title": "Min Median Ev",
+          "type": "number"
+        },
+        "max_median_ev": {
+          "default": 3.0,
+          "description": "Brightest median brightness that isn't an outlier, in EV from mid grey.",
+          "maximum": 10.0,
+          "minimum": -10.0,
+          "title": "Max Median Ev",
+          "type": "number"
+        },
+        "max_clipped": {
+          "default": 0.02,
+          "description": "Largest fraction of pixels clipped by the sensor that isn't an outlier.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Max Clipped",
+          "type": "number"
+        }
+      },
+      "title": "OutliersConfig",
       "type": "object"
     },
     "OutputConfig": {
@@ -507,6 +568,17 @@
       "title": "OutputConfig",
       "type": "object"
     },
+    "PhotoOverrides": {
+      "additionalProperties": false,
+      "description": "Overrides for one photo, keyed in ``photos:`` by the original's file name.",
+      "properties": {
+        "normalise": {
+          "$ref": "#/$defs/NormaliseOverrides"
+        }
+      },
+      "title": "PhotoOverrides",
+      "type": "object"
+    },
     "SharpenConfig": {
       "additionalProperties": false,
       "description": "Unsharp mask on lightness, at the output's size (after resizing).",
@@ -529,6 +601,22 @@
         }
       },
       "title": "SharpenConfig",
+      "type": "object"
+    },
+    "WhiteBalanceConfig": {
+      "additionalProperties": false,
+      "description": "The white balance check: compare the as-shot white balance with an estimate.\n\nNormalise keeps the camera's as-shot white balance; when an estimate from the photo itself\ndiffers by more than ``flag_disagreement_mired``, the photo gets the ``wb_disagreement``\nflag. Nothing is changed automatically (plan D6).",
+      "properties": {
+        "flag_disagreement_mired": {
+          "default": 30.0,
+          "description": "Flag a photo when the estimated white balance differs from the as-shot one by more than this, in mired (30 is about 600 K near 4500 K, 1100 K near 6500 K).",
+          "exclusiveMinimum": 0.0,
+          "maximum": 500.0,
+          "title": "Flag Disagreement Mired",
+          "type": "number"
+        }
+      },
+      "title": "WhiteBalanceConfig",
       "type": "object"
     }
   },
@@ -553,6 +641,14 @@
     },
     "export": {
       "$ref": "#/$defs/ExportConfig"
+    },
+    "photos": {
+      "additionalProperties": {
+        "$ref": "#/$defs/PhotoOverrides"
+      },
+      "description": "Per-photo overrides, keyed by the original's file name (matched ignoring case). Written by the UI or an agent.",
+      "title": "Photos",
+      "type": "object"
     }
   },
   "title": "ProjectConfig",

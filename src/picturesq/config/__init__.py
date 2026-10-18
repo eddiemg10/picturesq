@@ -11,9 +11,13 @@ from picturesq.config.project import (
     GradeConfig,
     LocalContrastConfig,
     NormaliseConfig,
+    NormaliseOverrides,
+    OutliersConfig,
     OutputConfig,
+    PhotoOverrides,
     ProjectConfig,
     SharpenConfig,
+    WhiteBalanceConfig,
 )
 from picturesq.config.schema import dump_schema, project_schema
 from picturesq.config.yaml_io import (
@@ -35,9 +39,13 @@ __all__ = [
     "GradeConfig",
     "LocalContrastConfig",
     "NormaliseConfig",
+    "NormaliseOverrides",
+    "OutliersConfig",
     "OutputConfig",
+    "PhotoOverrides",
     "ProjectConfig",
     "SharpenConfig",
+    "WhiteBalanceConfig",
     "dump_project_config",
     "dump_schema",
     "load_project_config",

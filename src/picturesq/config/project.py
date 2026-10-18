@@ -1,11 +1,12 @@
 """Project config model: the contents of ``<project>/picturesq.yaml``.
 
-v0 holds the decode, normalise (exposure, chroma noise reduction), grade (display transform
-only) and export sections. Looks, adjustments and per-photo overrides are added in the
-milestones that implement them, so the config never offers a setting the pipeline ignores.
+v0 holds the decode, normalise (exposure, chroma noise reduction, white balance check,
+outlier ranges), grade (display transform only), export and per-photo override sections.
+Looks and adjustments are added in the milestones that implement them, so the config never
+offers a setting the pipeline ignores.
 """
 
-from typing import Annotated, Literal
+from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -145,12 +146,67 @@ class ChromaNoiseReductionConfig(_Model):
         return self
 
 
+class WhiteBalanceConfig(_Model):
+    """The white balance check: compare the as-shot white balance with an estimate.
+
+    Normalise keeps the camera's as-shot white balance; when an estimate from the photo itself
+    differs by more than ``flag_disagreement_mired``, the photo gets the ``wb_disagreement``
+    flag. Nothing is changed automatically (plan D6).
+    """
+
+    flag_disagreement_mired: float = Field(
+        default=30.0,
+        gt=0.0,
+        le=500.0,
+        description=(
+            "Flag a photo when the estimated white balance differs from the as-shot one by "
+            "more than this, in mired (30 is about 600 K near 4500 K, 1100 K near 6500 K)."
+        ),
+    )
+
+
+class OutliersConfig(_Model):
+    """Ranges a photo's stats should fall in after normalise; outside one, it is an outlier.
+
+    An outlier is flagged, never forced back into range. Defaults from the CC0 samples and
+    the reference set (2026-10-18): medians span -2.5 to +2.3 EV, and only the two dark
+    scenes the camera brightened more than we do fall below -2.
+    """
+
+    min_median_ev: float = Field(
+        default=-2.0,
+        ge=-10.0,
+        le=10.0,
+        description="Darkest median brightness that isn't an outlier, in EV from mid grey.",
+    )
+    max_median_ev: float = Field(
+        default=3.0,
+        ge=-10.0,
+        le=10.0,
+        description="Brightest median brightness that isn't an outlier, in EV from mid grey.",
+    )
+    max_clipped: float = Field(
+        default=0.02,
+        ge=0.0,
+        le=1.0,
+        description="Largest fraction of pixels clipped by the sensor that isn't an outlier.",
+    )
+
+    @model_validator(mode="after")
+    def _median_range(self) -> "OutliersConfig":
+        if self.max_median_ev <= self.min_median_ev:
+            raise ValueError("max_median_ev must be greater than min_median_ev")
+        return self
+
+
 class NormaliseConfig(_Model):
-    """Stage 2 settings: per-photo exposure and noise reduction."""
+    """Stage 2 settings: per-photo exposure, noise reduction, and the checks that flag photos."""
 
     enabled: bool = Field(default=True, description="Run the normalise stage.")
     exposure: ExposureConfig = Field(default_factory=ExposureConfig)
     chroma_nr: ChromaNoiseReductionConfig = Field(default_factory=ChromaNoiseReductionConfig)
+    white_balance: WhiteBalanceConfig = Field(default_factory=WhiteBalanceConfig)
+    outliers: OutliersConfig = Field(default_factory=OutliersConfig)
 
 
 class BlueRenderingConfig(_Model):
@@ -414,6 +470,29 @@ class ExportConfig(_Model):
         return self
 
 
+class NormaliseOverrides(_Model):
+    """One photo's normalise overrides; an unset value keeps the computed one."""
+
+    exposure_ev: float | None = Field(
+        default=None,
+        ge=-6.0,
+        le=10.0,
+        description=(
+            "Exposure change for this photo, in EV; replaces the computed one (offset_ev plus "
+            "any correction)."
+        ),
+    )
+
+
+class PhotoOverrides(_Model):
+    """Overrides for one photo, keyed in ``photos:`` by the original's file name."""
+
+    normalise: NormaliseOverrides = Field(default_factory=NormaliseOverrides)
+
+
+NO_OVERRIDES: Final = PhotoOverrides()
+
+
 class ProjectConfig(_Model):
     """Everything in ``picturesq.yaml``. All sections have defaults, so ``{}`` is valid."""
 
@@ -422,3 +501,33 @@ class ProjectConfig(_Model):
     normalise: NormaliseConfig = Field(default_factory=NormaliseConfig)
     grade: GradeConfig = Field(default_factory=GradeConfig)
     export: ExportConfig = Field(default_factory=ExportConfig)
+    photos: dict[str, PhotoOverrides] = Field(
+        default_factory=dict,
+        description=(
+            "Per-photo overrides, keyed by the original's file name (matched ignoring case). "
+            "Written by the UI or an agent."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _photo_names_unique(self) -> "ProjectConfig":
+        folded = [name.casefold() for name in self.photos]
+        if len(set(folded)) != len(folded):
+            raise ValueError(
+                "photos lists the same file name twice (names are matched ignoring case)"
+            )
+        return self
+
+    def photo(self, name: str) -> PhotoOverrides:
+        """The overrides of the original named ``name`` (ignoring case); empty if it has none.
+
+        Case is ignored as on Windows and macOS, where ``IMG.DNG`` and ``img.dng`` are one file.
+        """
+        overrides = self.photos.get(name)
+        if overrides is not None:
+            return overrides
+        folded = name.casefold()
+        for key, value in self.photos.items():
+            if key.casefold() == folded:
+                return value
+        return NO_OVERRIDES
