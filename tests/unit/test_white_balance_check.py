@@ -99,7 +99,7 @@ def test_no_disagreement_on_an_unchanged_neutral_scene() -> None:
     assert abs(check.brightest.delta_mired) < 1.0
     assert abs(check.grey.delta_mired) < 1.0
     assert not check.disagrees
-    assert white_balance_flags(check, WhiteBalanceConfig()) == []
+    assert white_balance_flags(check, WhiteBalanceConfig(flag_disagreement=True)) == []
 
 
 def test_a_scene_dominated_by_one_colour_still_finds_its_grey_patch() -> None:
@@ -127,7 +127,7 @@ def test_no_flag_when_only_one_estimator_disagrees() -> None:
     assert check.brightest.delta_mired > 30.0
     assert abs(check.grey.delta_mired) < 5.0
     assert not check.disagrees
-    assert white_balance_flags(check, WhiteBalanceConfig()) == []
+    assert white_balance_flags(check, WhiteBalanceConfig(flag_disagreement=True)) == []
 
 
 def _estimate(delta_mired: float) -> WhiteEstimate:
@@ -183,7 +183,7 @@ def test_missing_as_shot_white() -> None:
     assert not check.disagrees
     assert check.reason == "no as-shot white"
     assert (check.as_shot_kelvin, check.brightest, check.grey) == (None, None, None)
-    assert white_balance_flags(check, WhiteBalanceConfig()) == []
+    assert white_balance_flags(check, WhiteBalanceConfig(flag_disagreement=True)) == []
 
 
 def test_to_dict_is_json_ready_and_rounded() -> None:
@@ -205,9 +205,21 @@ def test_to_dict_is_json_ready_and_rounded() -> None:
     assert data["disagrees"] is True
 
 
-def test_wb_disagreement_flag() -> None:
+def test_wb_disagreement_flag_is_off_by_default() -> None:
     light = kelvin_tint_to_xy(4000.0, 0.0)
     config = WhiteBalanceConfig()
+    assert config.flag_disagreement is False
+    check = check_white_balance(_decoded(_greys((120, 160), 0.01, 0.8), light), _info(), config)
+    # The check still runs and still disagrees; only the flag is off.
+    assert check.disagrees
+    assert check.grey is not None
+    assert check.grey.delta_mired == pytest.approx(50.0, abs=5.0)
+    assert white_balance_flags(check, config) == []
+
+
+def test_wb_disagreement_flag() -> None:
+    light = kelvin_tint_to_xy(4000.0, 0.0)
+    config = WhiteBalanceConfig(flag_disagreement=True)
     check = check_white_balance(_decoded(_greys((120, 160), 0.01, 0.8), light), _info(), config)
     (flag,) = white_balance_flags(check, config)
     assert flag.name == WB_DISAGREEMENT
@@ -217,7 +229,7 @@ def test_wb_disagreement_flag() -> None:
     assert flag.details["grey_delta_mired"] == pytest.approx(50.0, abs=5.0)
     json.dumps(flag.to_dict())
     # A wider limit: no flag.
-    wide = WhiteBalanceConfig(flag_disagreement_mired=60.0)
+    wide = WhiteBalanceConfig(flag_disagreement=True, flag_disagreement_mired=60.0)
     assert (
         white_balance_flags(
             check_white_balance(_decoded(_greys((120, 160), 0.01, 0.8), light), _info(), wide), wide
@@ -228,7 +240,7 @@ def test_wb_disagreement_flag() -> None:
 
 def test_cooler_light_is_flagged_as_cooler() -> None:
     light = kelvin_tint_to_xy(7500.0, 0.0)  # 67 mired cooler than 5000 K
-    config = WhiteBalanceConfig()
+    config = WhiteBalanceConfig(flag_disagreement=True)
     check = check_white_balance(_decoded(_greys((120, 160), 0.01, 0.8), light), _info(), config)
     (flag,) = white_balance_flags(check, config)
     assert "cooler" in flag.message

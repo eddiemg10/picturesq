@@ -146,13 +146,22 @@ class ChromaNoiseReductionConfig(_Model):
 class WhiteBalanceConfig(_Model):
     """The white balance check: compare the as-shot white balance with an estimate.
 
-    Normalise keeps the camera's as-shot white balance; when both estimates from the photo
+    Normalise keeps the camera's as-shot white balance and always runs the check (its numbers
+    go into the stats). With ``flag_disagreement`` on, when both estimates from the photo
     itself (``brightest`` and ``grey``) differ from it by at least ``flag_disagreement_mired``
-    in the same direction, the photo gets the ``wb_disagreement`` flag. Nothing is changed
-    automatically (plan D6). See :mod:`picturesq.normalise.white_balance_check` for the
-    measurements behind the default.
+    in the same direction, the photo gets the ``wb_disagreement`` flag. It is off by default:
+    genuinely coloured scenes (sunsets, blue sky over foliage) trip it while the as-shot white
+    balance is right (ADR-0016). Nothing is changed automatically (plan D6). See
+    :mod:`picturesq.normalise.white_balance_check` for the measurements behind the default.
     """
 
+    flag_disagreement: bool = Field(
+        default=False,
+        description=(
+            "Raise wb_disagreement when the estimates disagree with as-shot; off by default "
+            "because coloured scenes such as sunsets trip it."
+        ),
+    )
     flag_disagreement_mired: float = Field(
         default=30.0,
         gt=0.0,
