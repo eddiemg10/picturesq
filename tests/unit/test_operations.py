@@ -15,8 +15,10 @@ from picturesq.config.operations import (
     OPERATION_TYPES,
     ContrastOperation,
     ExposureOperation,
+    FadeOperation,
     Operation,
     SaturationOperation,
+    ToneCurveOperation,
     WhiteBalanceOperation,
 )
 from picturesq.grade.operations import (
@@ -31,6 +33,8 @@ LOOK_VALUES: list[Operation] = [
     WhiteBalanceOperation(warmth=25.0, tint=-6.0),
     ContrastOperation(amount=0.3, pivot=0.2),
     SaturationOperation(amount=-0.4),
+    ToneCurveOperation(points=((-3.0, -3.4), (0.0, 0.0), (2.0, 1.5))),
+    FadeOperation(amount=0.06),
 ]
 
 
