@@ -16,9 +16,13 @@ from picturesq.config import (
     GradeConfig,
     LocalContrastConfig,
     NormaliseConfig,
+    NormaliseOverrides,
+    OutliersConfig,
     OutputConfig,
+    PhotoOverrides,
     ProjectConfig,
     SharpenConfig,
+    WhiteBalanceConfig,
     dump_project_config,
 )
 
@@ -49,6 +53,8 @@ def test_examples_are_valid(block: str) -> None:
         NormaliseConfig,
         ExposureConfig,
         ChromaNoiseReductionConfig,
+        WhiteBalanceConfig,
+        OutliersConfig,
         GradeConfig,
         LocalContrastConfig,
         DisplayTransformConfig,
@@ -56,6 +62,8 @@ def test_examples_are_valid(block: str) -> None:
         ExportConfig,
         OutputConfig,
         SharpenConfig,
+        PhotoOverrides,
+        NormaliseOverrides,
     ],
 )
 def test_reference_lists_every_key(model: type[ProjectConfig]) -> None:

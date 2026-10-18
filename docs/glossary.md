@@ -35,6 +35,7 @@
 | **output** | A named export target in config, e.g. `web`, `archive` (size, quality, sharpening). | export profile, preset, recipe |
 | **ICC profile** | The colour profile embedded in an exported file. The only use of "profile". | — |
 | **stats** | Per-photo measurements (luminance percentiles, clipping, …), stored as JSON. | metrics, analysis |
+| **photo info** | What an original's header says about a photo that later stages need: the **as-shot white**, the baseline exposure and the **clip level** (`read_photo_info`). | metadata, header info |
 | **flag** | A per-photo warning raised by a stage (e.g. `exposure_clamped`, `wb_disagreement`). | warning, alert, issue |
 | **outlier** | A photo whose stats fall outside configured ranges; one kind of flag. | — |
 | **reference set** | The user's local Pocket 4 RAWs (scenarios R01–R10) used for acceptance. | test images |
@@ -102,6 +103,9 @@
 | **key** | Overall brightness character of a scene: `low_key`, `normal`, `high_key`. (Not used by normalise since ADR-0010.) |
 | **EV / stop** | A doubling or halving of light. `exposure_ev: +1` = ×2 in scene-linear. |
 | **white balance (WB)** | Per-channel gains making neutral objects neutral; **as-shot** = camera's recorded values. |
+| **as-shot white** | The colour of light the camera balanced for, from its recorded white balance (DNG `AsShotNeutral`) through the colour matrix: an xy chromaticity, given as kelvin and tint (`-1000 × Duv`, positive is magenta). |
+| **clip level** | The scene-linear value a white the sensor clipped reaches in the decoded image: `2^BaselineExposure`, times a fraction set by `decode.highlight_mode` (not simply 1.0). |
+| **grey-world** | A white balance estimate: assume the photo averages to grey, so its average colour is the light's. Fails when one colour fills the frame. |
 | **chroma NR / luma NR** | Noise reduction on colour / brightness detail. |
 
 ## Project management

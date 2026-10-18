@@ -31,6 +31,7 @@ from picturesq.config import OutputConfig, ProjectConfig
 from picturesq.decode import decode_original, read_baseline_exposure
 from picturesq.decode.embedded import camera_jpeg
 from picturesq.export import resize_to_long_edge
+from picturesq.photo import UNNAMED
 from picturesq.pipeline.export import SCENE_STAGES, render_output, render_scene
 from picturesq.preview.stage_sheet import (
     ExposureMatch,
@@ -99,7 +100,7 @@ def build_panels(
     panels.append(Panel("decode (via display transform)", render_output(image, view, display)))
     staged = image.copy()
     for name, stage in SCENE_STAGES:
-        staged = stage(staged, config)
+        staged = stage(staged, config, UNNAMED)
         panels.append(
             Panel(f"{name} (via display transform)", render_output(staged, view, display))
         )
