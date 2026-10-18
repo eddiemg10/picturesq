@@ -15,6 +15,8 @@ from picturesq.config import (
 EXIT_ERROR = 1
 EXIT_INVALID = 2
 """Exit code for invalid config or usage (project plan section 7)."""
+EXIT_FLAGGED = 3
+"""Exit code when the command completed but a photo has a flag (only with ``--strict``)."""
 
 
 def fail(message: str, code: int) -> typer.Exit:

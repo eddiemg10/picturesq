@@ -11,6 +11,7 @@ from picturesq import __version__, parallel
 from picturesq.cli.decode import decode_project
 from picturesq.cli.doctor import run_doctor
 from picturesq.cli.export import MachineOptions, render_project
+from picturesq.cli.normalise import normalise_project
 from picturesq.config import dump_schema, project_schema
 from picturesq.pipeline.workers import parse_memory_budget
 
@@ -126,9 +127,34 @@ def decode(project: ProjectArg, as_json: JsonOption = False) -> None:
 
 
 @app.command()
-def normalise(project: ProjectArg) -> None:
-    """Compute per-photo stats, normalise exposure and flag outliers."""
-    _not_implemented("normalise", "M2")
+def normalise(
+    project: ProjectArg,
+    as_json: JsonOption = False,
+    strict: Annotated[
+        bool, typer.Option("--strict", help="Exit 3 if any photo has a flag (after printing).")
+    ] = False,
+) -> None:
+    """Show how normalise sees each photo: exposure, stats, white balance check and flags.
+
+    Works on proxies (built if missing), so it takes seconds; changes no photo. Writes
+    .picturesq/stats/<stem>.json per photo and .picturesq/stats/summary.json. Doesn't create
+    picturesq.yaml. Warns about photos: overrides naming no original. Exits 1 if a photo
+    failed, else 3 with --strict if any photo has a flag.
+
+    With --json, one document: {"version": str, "photos": [{"photo": name, "proxy_key": str,
+    "normalised": bool, "exposure_ev": EV|null, "correction_ev": EV|null, "overrides":
+    {key: value}, "info": {"as_shot_xy", "as_shot_kelvin", "as_shot_tint",
+    "baseline_exposure_ev", "clip_level"}, "stats": {"p1_ev", "p5_ev", "p50_ev", "p95_ev",
+    "p99_ev", "dynamic_range_ev", "clipped", "mean_chroma"}, "white_balance":
+    {"as_shot_kelvin", "as_shot_tint", "brightest", "grey", "disagrees", "reason"}, "flags":
+    [{"flag": name, "message": str, "details": {...}}], "error": str|null}], "summary":
+    {"photos": n, "failed": n, "flagged": n, "flags": {name: n}, "flagged_photos": [name],
+    "failed_photos": [name], "median_ev": {"median", "min", "max", "spread"}|null,
+    "unmatched_overrides": [name], "seconds": s}}. A failed photo has null info, stats and
+    white_balance. The stats files hold the same objects (each with "version"; the summary
+    without "seconds").
+    """
+    normalise_project(project, as_json=as_json, strict=strict)
 
 
 @app.command()
