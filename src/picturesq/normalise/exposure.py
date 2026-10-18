@@ -6,7 +6,8 @@
 camera JPEGs of the CC0 samples and the reference set (ADR-0010), where the camera's
 brightening was nearly constant (+2.3 ± 0.6 EV) and did not depend on the scene's median.
 ``correction`` pulls each photo's median toward ``target_ev`` for batch consistency; it is
-off by default because cameras don't do it.
+off by default because cameras don't do it. ``target_ev`` is measured before ``offset_ev``, so
+with ``correction`` 1 the median ends at ``offset_ev + target_ev``.
 """
 
 from functools import partial

@@ -360,7 +360,7 @@
         },
         "target_ev": {
           "default": -1.0,
-          "description": "Median brightness that correction pulls toward, in EV relative to mid grey.",
+          "description": "Median brightness that correction pulls toward, in EV relative to mid grey, measured before offset_ev: with correction 1 the median ends at offset_ev + target_ev.",
           "maximum": 3.0,
           "minimum": -6.0,
           "title": "Target Ev",

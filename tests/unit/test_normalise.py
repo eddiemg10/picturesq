@@ -29,6 +29,17 @@ def test_partial_correction_and_clamp() -> None:
     assert exposure_ev(_grey(0.18 / 64), far) == pytest.approx(2.0)  # +6 clamped to +2
 
 
+@pytest.mark.parametrize("level", [0.05, 0.18, 0.3])  # within max_correction_ev
+def test_full_correction_lands_median_at_offset_plus_target(level: float) -> None:
+    # target_ev is measured before offset_ev (#103).
+    config = ProjectConfig.model_validate({"normalise": {"exposure": {"correction": 1.0}}})
+    exposure = config.normalise.exposure
+    rng = np.random.default_rng(0)
+    image = (level * np.exp(rng.normal(0.0, 0.5, (40, 60, 1)))).repeat(3, axis=2)
+    result = normalise(image.astype(np.float32), config)
+    assert median_ev(result) == pytest.approx(exposure.offset_ev + exposure.target_ev, abs=0.01)
+
+
 def test_normalise_applies_gain_in_place() -> None:
     image = _grey(0.1)
     result = normalise(image, ProjectConfig())
