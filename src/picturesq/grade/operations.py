@@ -11,6 +11,7 @@ from functools import partial
 from typing import Any
 
 import numpy as np
+from PIL import Image
 
 from picturesq import parallel
 from picturesq.colour.filters import gaussian_blur_plane, gaussian_radius
@@ -411,14 +412,33 @@ def _sample(field: FloatArray, height: int, width: int, top: int, bottom: int) -
     return samples
 
 
+def _field_for_size(field: FloatArray, height: int, width: int) -> FloatArray:
+    """The field as an image of ``height`` x ``width`` pixels sees it.
+
+    Pixels larger than the grain cells each cover several cells: the field is box-averaged
+    down to the image's size, so the grain averages out as it would if the full-size image
+    were shrunk (a 360 px preview shows faint grain, not every pixel at full strength).
+    Pixels smaller than a cell sample the field as it is.
+    """
+    fh, fw = field.shape
+    if width >= fw and height >= fh:
+        return field
+    small = Image.fromarray(field, mode="F").resize(
+        (min(width, fw), min(height, fh)), Image.Resampling.BOX
+    )
+    return np.asarray(small, dtype=np.float32)
+
+
 def grain(image: FloatArray, operation: GrainOperation, seed: int = 0) -> FloatArray:
     """Add grain to display-referred ``image`` (display-linear, 0 to 1), in place.
 
     On sRGB-encoded values: each channel plus ``amount * noise * 4t(1 - t)``, ``t`` being
     the pixel's mean encoded value (the same offset on R, G and B), then clipped to 0-1.
+    In the mid tones of an image at least as large as the grain field, the noise's standard
+    deviation is ``amount``; smaller images see it averaged (``_field_for_size``).
     """
     height, width = image.shape[:2]
-    field = grain_field(height, width, operation, seed)
+    field = _field_for_size(grain_field(height, width, operation, seed), height, width)
     amount = np.float32(operation.amount)
 
     def change(top: int, bottom: int) -> None:
