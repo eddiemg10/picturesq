@@ -17,6 +17,7 @@ New ADRs get the next number; superseded ones are marked, not deleted.
 | [0010](0010-camera-matched-neutral-render.md) | The neutral render is fitted to camera JPEGs and gated on the real export | Accepted; decision 2 amended by 0011, saturation defaults by 0012, colour gate by 0013 |
 | [0011](0011-local-contrast.md) | Local contrast keeps the detail the display transform's shoulder flattens | Accepted |
 | [0012](0012-sky-colour.md) | DNG-specification colour matrices and a camera-matched blue rendering | Accepted |
-| [0013](0013-pixel-aligned-colour-gate.md) | The colour gate compares chroma at the same pixels | Accepted |
+| [0013](0013-pixel-aligned-colour-gate.md) | The colour gate compares chroma at the same pixels | Accepted; its reading of the near-white failure amended by 0016 |
 | [0014](0014-export-metadata.md) | Exports carry allowlisted capture EXIF and a reproducible sidecar | Accepted |
 | [0015](0015-parallelism-policy.md) | Threads within a photo, photos scheduled by memory, and both as machine settings | Accepted |
+| [0016](0016-keep-as-shot-white-balance.md) | Keep the as-shot white balance; flag disagreement, never correct it | Accepted |

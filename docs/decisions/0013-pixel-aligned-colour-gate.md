@@ -1,6 +1,6 @@
 # ADR-0013: The colour gate compares chroma at the same pixels
 
-**Status:** Accepted · 2026-10-17 · Amends [ADR-0010](0010-camera-matched-neutral-render.md) (decision 3, colour)
+**Status:** Accepted · 2026-10-17 · Amends [ADR-0010](0010-camera-matched-neutral-render.md) (decision 3, colour) · Its reading of the near-white failure amended by [ADR-0016](0016-keep-as-shot-white-balance.md)
 
 ## Context
 The colour part of the camera-match gate compares mean Oklab chroma per lightness band. Until now each image was banded by **its own** lightness: our pixels in our 0.85–1.0 band against the camera's pixels in the camera's 0.85–1.0 band. When a photo is brighter or darker than the camera's, those are different parts of the picture, so a brightness difference shows up as a colour difference (#58). Example: the Pentax K-5 IIs export is 0.75 EV darker than its JPEG, so the camera has a lit wall in its near-white band and we have a few lamp highlights.
