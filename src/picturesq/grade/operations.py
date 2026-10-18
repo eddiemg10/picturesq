@@ -121,9 +121,15 @@ CURVE_STEP_EV = 1.0 / 64.0
 interpolation between entries this close is within 1e-4 EV of it, measured: 3e-5)."""
 
 
+TAIL_EV = 40.0
+"""How far past its end points a tone curve's straight tails are tabulated (further than
+any pixel: luminance is floored at 2^-20, about -17.5 EV)."""
+
+
 def _curve_slopes(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
-    """Monotone cubic (PCHIP, Fritsch-Carlson) slopes at the points; slope 1 at the ends
-    where that keeps the curve monotone, so it joins the slope-1 tails smoothly."""
+    """Monotone cubic (PCHIP, Fritsch-Carlson) slopes at the points. At the ends, the end
+    secant: the curve leaves its last point at the slope it arrived with and continues
+    straight, so the tails join without a kink."""
     h = np.diff(xs)
     secant = np.diff(ys) / h
     slopes = np.empty_like(xs)
@@ -134,16 +140,15 @@ def _curve_slopes(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
         else:
             w1, w2 = 2.0 * h[i] + h[i - 1], h[i] + 2.0 * h[i - 1]
             slopes[i] = (w1 + w2) / (w1 / before + w2 / after)
-    # An end slope above 3x the end secant would overshoot (Fritsch-Carlson's limit).
-    slopes[0] = min(1.0, 3.0 * secant[0])
-    slopes[-1] = min(1.0, 3.0 * secant[-1])
+    slopes[0], slopes[-1] = secant[0], secant[-1]
     return slopes
 
 
 def tone_curve_table(points: tuple[CurvePoint, ...]) -> tuple[np.ndarray, np.ndarray]:
-    """``(ev, shift)``: the curve's output minus its input, tabulated over its points.
-
-    Beyond the table the shift is constant (slope 1), which is what ``np.interp`` gives.
+    """``(ev, shift)``: the curve's output minus its input, tabulated over its points and
+    out to ``TAIL_EV`` beyond them, where it continues straight at the end secants (a
+    curve that softens highlights keeps softening them). ``np.interp`` of the table is the
+    curve; one point is a constant shift.
     """
     if len(points) == 1:
         ((x, y),) = points
@@ -163,6 +168,9 @@ def tone_curve_table(points: tuple[CurvePoint, ...]) -> tuple[np.ndarray, np.nda
         + (-2 * t3 + 3 * t2) * ys[i + 1]
         + (t3 - t2) * h * slopes[i + 1]
     )
+    low, high = xs[0] - TAIL_EV, xs[-1] + TAIL_EV
+    grid = np.concatenate([[low], grid, [high]])
+    curve = np.concatenate([[ys[0] - TAIL_EV * slopes[0]], curve, [ys[-1] + TAIL_EV * slopes[-1]]])
     return grid, curve - grid
 
 
