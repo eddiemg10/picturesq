@@ -49,10 +49,23 @@ def grade(image: FloatArray, config: ProjectConfig, photo: PhotoContext = UNNAME
             f"{photo.name or 'the image'} is graded with {choice.name}, but its context "
             "doesn't carry that look; build it with photo_context"
         )
+    return grade_with(image, config, photo, config.photo_adjustments(photo.name))
+
+
+def grade_with(
+    image: FloatArray,
+    config: ProjectConfig,
+    photo: PhotoContext,
+    adjustments: AdjustmentsConfig,
+) -> FloatArray:
+    """The grade stage with ``photo.look`` and ``adjustments`` as given, whatever the config
+    says for the photo (previews of other looks); local contrast and the display transform
+    settings come from ``config``. In place; returns ``image``.
+    """
+    look = photo.look
     if look is not None:
         apply_operations(image, look.operations, look.intensity, "scene", seed=photo.seed)
-    adjustments = adjustment_operations(config.photo_adjustments(photo.name))
-    apply_operations(image, adjustments, 1.0, "scene")
+    apply_operations(image, adjustment_operations(adjustments), 1.0, "scene")
     settings = config.grade
     return local_contrast(image, settings.local_contrast, settings.display_transform)
 
@@ -79,6 +92,7 @@ __all__ = [
     "adjustment_operations",
     "display_operations",
     "grade",
+    "grade_with",
     "has_display_operations",
     "local_contrast",
 ]

@@ -13,6 +13,7 @@ from picturesq.cli.doctor import run_doctor
 from picturesq.cli.export import MachineOptions, render_project
 from picturesq.cli.looks import list_looks
 from picturesq.cli.normalise import normalise_project
+from picturesq.cli.preview import preview_project
 from picturesq.config import dump_schema, look_schema, project_schema
 from picturesq.pipeline.workers import parse_memory_budget
 
@@ -166,12 +167,6 @@ def normalise(
     normalise_project(project, as_json=as_json, strict=strict, png=png)
 
 
-@app.command()
-def preview(project: ProjectArg) -> None:
-    """Render a contact sheet of photos x looks (terminal or PNG)."""
-    _not_implemented("preview", "M3")
-
-
 class CategoryName(StrEnum):
     """A look category, for `picturesq looks --category`."""
 
@@ -225,6 +220,37 @@ def export(
         out=out,
         as_json=as_json,
         machine=ctx.obj,
+    )
+
+
+@app.command()
+def preview(
+    project: ProjectArg,
+    category: Annotated[
+        CategoryName | None, typer.Option("--category", help="Only this category's looks.")
+    ] = None,
+    look: Annotated[
+        list[str] | None,
+        typer.Option("--look", help="Only this look, as category/name (repeatable)."),
+    ] = None,
+    png: Annotated[
+        Path | None,
+        typer.Option("--png", help="Write the sheet here (default .picturesq/previews/sheet.png)."),
+    ] = None,
+) -> None:
+    """Render a contact sheet of the photos through looks, from proxies, in seconds.
+
+    One row per photo: the neutral render, the photo's current grade (look and adjustments
+    from picturesq.yaml) when it has one, then each look (all, a --category, or the --look
+    ones). A look is shown at the photo's own intensity and parameters if it's the photo's
+    look, else at 100 % with its defaults; the photo's adjustments apply to every look.
+    Builds missing proxies; doesn't create picturesq.yaml. Prints the sheet's path.
+    """
+    preview_project(
+        project,
+        category=None if category is None else category.value,
+        look_names=look,
+        png=png,
     )
 
 
