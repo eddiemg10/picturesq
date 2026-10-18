@@ -20,12 +20,18 @@ import typer
 
 from picturesq import __version__, parallel
 from picturesq.cli.config import EXIT_ERROR
-from picturesq.hardware import Hardware, detect
+from picturesq.hardware import Hardware, available_memory, detect
 from picturesq.parallel import (
     CACHE_BYTES_PER_BLOCK_PIXEL,
     MAX_BLOCK_PIXELS,
     MIN_BLOCK_PIXELS,
     Parallelism,
+)
+from picturesq.pipeline.workers import (
+    DEFAULT_MEMORY_FRACTION,
+    default_memory_budget,
+    format_bytes,
+    plan_workers,
 )
 
 MIN_PYTHON = (3, 11)
@@ -40,6 +46,9 @@ LIBRAW_FEATURES = {
     "DNGLOSSYCODEC": ("DNG lossy", "lossy (JPEG-compressed) DNGs"),
 }
 """LibRaw build features we rely on, as rawpy reports them in ``rawpy.flags``."""
+
+EXAMPLE_PHOTO_PIXELS = 24_000_000
+"""Photo size used to show what the memory budget fits (a common 24 MP camera)."""
 
 PILLOW_FEATURES = {
     "jpg": "JPEG export",
@@ -105,6 +114,14 @@ class Environment:
     threads_source: str | None
     """The flag or env variable that set the threads, or None when chosen automatically."""
     block_source: str | None
+    available_memory: int | None
+    """Bytes available now, or None when it can't be read."""
+    memory_budget: int | None
+    """The budget this run uses (``--memory-budget``, else a share of available)."""
+    budget_source: str | None
+    max_photos: int | None
+    """``--workers`` (a cap on photos at once), or None when automatic."""
+    workers_source: str | None
     terminal: TerminalGraphics
 
 
@@ -369,6 +386,59 @@ def _block(env: Environment) -> Check:
     return Check("block_size", "Block size", Status.ok, value, message, data)
 
 
+def _memory(env: Environment) -> Check:
+    available = env.available_memory
+    budget = env.memory_budget
+    data = {
+        "available_bytes": available,
+        "budget_bytes": budget,
+        "source": env.budget_source or "automatic",
+    }
+    value = "unknown" if available is None else f"{format_bytes(available)} available"
+    if budget is None:
+        message = "budget unknown: photos run one at a time (set --memory-budget)"
+        return Check("memory", "Memory", Status.warning, value, message, data)
+    if env.budget_source is not None:
+        message = f"budget {format_bytes(budget)}, set by {env.budget_source}"
+        if available is not None and budget > available:
+            message += "; more than is available, so the system may swap"
+            return Check("memory", "Memory", Status.warning, value, message, data)
+        return Check("memory", "Memory", Status.ok, value, message, data)
+    share = round(DEFAULT_MEMORY_FRACTION * 100)
+    message = f"budget {format_bytes(budget)}: {share} % of what's available now"
+    return Check("memory", "Memory", Status.ok, value, message, data)
+
+
+def _photos_at_once(env: Environment) -> Check:
+    cores = env.hardware.physical_cores or env.hardware.logical_cpus
+    threads = env.parallelism.threads if env.threads_source is not None else None
+    cap = plan_workers(
+        [], cores=cores, memory_budget=None, max_photos=env.max_photos, threads=threads
+    ).max_photos
+    fits = plan_workers(
+        [EXAMPLE_PHOTO_PIXELS] * cap,
+        cores=cores,
+        memory_budget=env.memory_budget,
+        max_photos=cap,
+        threads=threads,
+    )
+    example = EXAMPLE_PHOTO_PIXELS // 1_000_000
+    fitting = fits.workers if env.memory_budget is not None else 1
+    data = {
+        "max_photos": cap,
+        "source": env.workers_source or "automatic",
+        "example_megapixels": example,
+        "example_fits": fitting,
+    }
+    value = f"up to {cap}"
+    if env.workers_source is not None:
+        reason = f"set by {env.workers_source}"
+    else:
+        reason = f"{cores} cores, at least {cores // cap} threads each"
+    message = f"{reason}; the memory budget fits {fitting} x {example} MP photos at once"
+    return Check("photos_at_once", "Photos at once", Status.ok, value, message, data)
+
+
 def _terminal(env: Environment) -> Check:
     graphics = env.terminal
     notes = [graphics.reason]
@@ -406,6 +476,8 @@ def build_checks(env: Environment) -> list[Check]:
         _cache(env),
         _threads(env),
         _block(env),
+        _memory(env),
+        _photos_at_once(env),
         _terminal(env),
     ]
 
@@ -488,6 +560,11 @@ def gather(ctx: typer.Context) -> Environment:
 
     root = ctx.find_root()
     hardware = detect()
+    machine = root.obj
+    available = available_memory()
+    budget = getattr(machine, "memory_budget", None)
+    if budget is None:
+        budget = default_memory_budget(available)
     flags = getattr(libraw, "flags", None)
     return Environment(
         picturesq=__version__,
@@ -503,6 +580,11 @@ def gather(ctx: typer.Context) -> Environment:
         automatic=parallel.auto(hardware=hardware),
         threads_source=_override_source(root, "threads"),
         block_source=_override_source(root, "block_pixels"),
+        available_memory=available,
+        memory_budget=budget,
+        budget_source=_override_source(root, "memory_budget"),
+        max_photos=getattr(machine, "workers", None),
+        workers_source=_override_source(root, "workers"),
         terminal=detect_terminal_graphics(os.environ, tty=sys.stdout.isatty()),
     )
 
