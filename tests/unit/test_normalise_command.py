@@ -8,6 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from picturesq.cli import app
+from picturesq.cli.normalise import photo_line
 from picturesq.config import DecodeConfig, ProjectConfig
 from picturesq.decode import DecodeError, PhotoInfo
 from picturesq.normalise.exposure import linear_to_ev
@@ -58,6 +59,21 @@ def test_neutral_photo_is_exposed_measured_and_unflagged() -> None:
     assert not result.white_balance.disagrees
     assert result.flags == []
     assert result.overrides == {}
+
+
+def test_scene_contrast_is_off_by_default_and_recorded_when_on() -> None:
+    off = normalise_proxy(_neutral(BRIGHT), "a.dng", D65_INFO, _config())
+    assert off.scene_contrast is None
+    assert off.to_dict()["scene_contrast"] is None
+    config = _config({"normalise": {"scene_contrast": {"enabled": True}}})
+    on = normalise_proxy(_neutral(BRIGHT), "a.dng", D65_INFO, config)
+    assert on.scene_contrast is not None
+    recorded = on.to_dict()["scene_contrast"]
+    assert set(recorded) == {"contrast", "range_ev", "pivot_ev"}
+    assert recorded["contrast"] == round(on.scene_contrast.contrast, 3)
+    assert recorded["contrast"] > 0  # lognormal sigma 0.6: p5-p95 is about 2.8 EV
+    assert "scene contrast" in photo_line(on)
+    assert "scene contrast" not in photo_line(off)
 
 
 def test_dark_photo_is_an_outlier() -> None:
@@ -248,6 +264,7 @@ def test_json_contract_and_stats_files(tmp_path: Path, fake: FakeDecode) -> None
         "normalised",
         "exposure_ev",
         "correction_ev",
+        "scene_contrast",
         "overrides",
         "info",
         "stats",

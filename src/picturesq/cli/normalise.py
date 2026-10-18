@@ -33,7 +33,8 @@ from picturesq.preview.stage_sheet import Uint8Array
 
 
 def photo_line(result: NormaliseResult, name_width: int = 0) -> str:
-    """One line per photo: exposure, median after normalise, clipped, as-shot white, flags."""
+    """One line per photo: exposure (and scene contrast, if any), median after normalise,
+    clipped, as-shot white, flags."""
     name = result.name.ljust(name_width)
     if result.error is not None:
         return f"{name}  FAILED ({result.error})"
@@ -43,6 +44,9 @@ def photo_line(result: NormaliseResult, name_width: int = 0) -> str:
     else:
         source = " (override)" if "exposure_ev" in result.overrides else ""
         exposure = f"exposure {result.exposure.ev:+.2f} EV{source}"
+    contrast = result.scene_contrast
+    if contrast is not None and contrast.contrast > 0.0:
+        exposure += f"  scene contrast {contrast.contrast:.2f}"
     kelvin = None if result.info is None else result.info.as_shot_kelvin
     as_shot = "as-shot ?" if kelvin is None else f"as-shot {kelvin:.0f} K"
     flags = ", ".join(flag.name for flag in result.flags) or "ok"

@@ -6,11 +6,12 @@ Behind ``picturesq normalise`` (and later the UI's review panel). Per photo:
 1. **White balance check** on the decoded proxy, *before* normalise: it checks the camera's
    as-shot white, which a ``wb_kelvin`` / ``tint`` override would hide.
 2. **Normalise** with the photo's overrides (:func:`~picturesq.normalise.normalise_with_decision`),
-   which says how the exposure was chosen.
+   which says how the exposure and scene contrast were chosen.
 3. **Stats** of the normalised proxy. The clip level is the photo info's, times
    ``2**exposure_ev``: exposure scales the clipped values with everything else, the same
    way :func:`~picturesq.normalise.check_white_balance` treats an exposed image. (A white
-   balance override scales the channels unequally, so its clip test is approximate.)
+   balance override scales the channels unequally, and scene contrast scales pixels by
+   their brightness, so with either the clip test is approximate.)
 4. **Flags**: ``exposure_clamped`` (not with an ``exposure_ev`` override, which replaces
    the correction), ``wb_disagreement`` (not with a ``wb_kelvin`` / ``tint`` override: the
    photo's white balance has been chosen by hand), and ``outlier``.
@@ -40,6 +41,7 @@ from picturesq.normalise import (
     ExposureDecision,
     Flag,
     PhotoStats,
+    SceneContrastDecision,
     WhiteBalanceCheck,
     WhiteBalanceOverrideError,
     check_white_balance,
@@ -71,6 +73,8 @@ class NormaliseResult:
     info: PhotoInfo | None = None
     exposure: ExposureDecision | None = None
     """How the exposure was chosen; None when the photo isn't normalised (or failed)."""
+    scene_contrast: SceneContrastDecision | None = None
+    """How scene contrast was chosen; None when it is off for the photo."""
     overrides: dict[str, Any] = field(default_factory=dict)
     """The photo's normalise overrides that are set (``photos.<name>.normalise``)."""
     stats: PhotoStats | None = None
@@ -91,6 +95,7 @@ class NormaliseResult:
             "normalised": self.normalised,
             "exposure_ev": None if exposure is None else _ev(exposure.ev),
             "correction_ev": None if exposure is None else _ev(exposure.correction_ev),
+            "scene_contrast": _scene_contrast_dict(self.scene_contrast),
             "overrides": dict(self.overrides),
             "info": None if self.info is None else self.info.to_dict(),
             "stats": None if self.stats is None else self.stats.to_dict(),
@@ -98,6 +103,16 @@ class NormaliseResult:
             "flags": [flag.to_dict() for flag in self.flags],
             "error": self.error,
         }
+
+
+def _scene_contrast_dict(decision: SceneContrastDecision | None) -> dict[str, float] | None:
+    if decision is None:
+        return None
+    return {
+        "contrast": round(decision.contrast, _EV_DECIMALS),
+        "range_ev": _ev(decision.range_ev),
+        "pivot_ev": _ev(decision.pivot_ev),
+    }
 
 
 def normalise_proxy(
@@ -112,18 +127,20 @@ def normalise_proxy(
     overrides = config.photo(name).normalise
     white_balance = check_white_balance(image, info, settings.white_balance)
     decision = normalise_with_decision(image, config, PhotoContext(name=name, info=info))
-    applied_ev = 0.0 if decision is None else decision.ev
+    exposure = None if decision is None else decision.exposure
+    applied_ev = 0.0 if exposure is None else exposure.ev
     stats = photo_stats(image, info.clip_level * 2.0**applied_ev)
     flags: list[Flag] = []
-    if decision is not None and overrides.exposure_ev is None:
-        flags += exposure_flags(decision, settings.exposure)
+    if exposure is not None and overrides.exposure_ev is None:
+        flags += exposure_flags(exposure, settings.exposure)
     if overrides.wb_kelvin is None and overrides.tint is None:
         flags += white_balance_flags(white_balance, settings.white_balance)
     flags += outlier_flags(stats, settings.outliers)
     return NormaliseResult(
         name=name,
         info=info,
-        exposure=decision,
+        exposure=exposure,
+        scene_contrast=None if decision is None else decision.scene_contrast,
         overrides=overrides.model_dump(exclude_none=True),
         stats=stats,
         white_balance=white_balance,

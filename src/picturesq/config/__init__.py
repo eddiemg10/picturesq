@@ -16,6 +16,7 @@ from picturesq.config.project import (
     OutputConfig,
     PhotoOverrides,
     ProjectConfig,
+    SceneContrastConfig,
     SharpenConfig,
     WhiteBalanceConfig,
 )
@@ -44,6 +45,7 @@ __all__ = [
     "OutputConfig",
     "PhotoOverrides",
     "ProjectConfig",
+    "SceneContrastConfig",
     "SharpenConfig",
     "WhiteBalanceConfig",
     "dump_project_config",

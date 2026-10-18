@@ -56,7 +56,7 @@
 | **block** | A run of pixels or rows that one thread works on at a time, sized to fit the CPU cache (`--block-pixels`). Code only, and CLI/docs about performance. | tile (for row ranges), chunk, batch |
 | **stage** | One of the four pipeline steps below. | phase (that's project management), step |
 | **decode** | Stage 1: original → scene-linear image in the working space (rawpy/LibRaw), plus proxy. | develop, import, convert, ingest |
-| **normalise** | Stage 2: adaptive per-photo correction to a common baseline (exposure, WB check, chroma NR). | auto, correct, balance |
+| **normalise** | Stage 2: adaptive per-photo correction to a common baseline (exposure, WB check, chroma NR, scene contrast). | auto, correct, balance |
 | **grade** | Stage 3: apply the photo's look + adjustments, then the display transform. The *act*; a look is the *thing*. | style, edit, look (as a verb) |
 | **export** | Stage 4: encode, resize and write each enabled output with sidecar. | render, save |
 | **render** | Producing pixels from a proxy or original through stages 2–3 (used by preview and export). | process |
@@ -80,6 +80,7 @@
 | **toe / shoulder** | The bottom and top bends of the display transform's S-curve: the toe eases shadows into black, the shoulder rolls highlights off toward white. |
 | **inset / outset** | The display transform's matrices around the curve: **inset** pulls the primaries toward white so bright saturated colours fade to white without hue skews; **outset** gives back some of that saturation afterwards. |
 | **chroma preservation** | The display transform's blend toward a luminance-only tone map that keeps each pixel's colour ratios, so bright colours stay colourful. |
+| **scene contrast** | The normalise step that gives flat scenes extra contrast, as cameras do: a scene whose **range** (p5 to p95 of luminance, in EV) is under `target_range_ev` has its tones pushed away from a pivot (its p75), the same gain on R, G and B (ADR-0017). Off by default; per photo with the `scene_contrast` override. Its result, the **extra contrast** (0.25 = tones near the pivot 25 % steeper), is in the stats. Not "auto contrast" or "adaptive contrast". |
 | **local contrast** | The grade step that keeps detail where the display transform's curve is flat: log luminance is split into a **base** (broad areas, smoothed without crossing strong edges) and **detail** (the rest); the curve still places the base, and the detail is amplified so it keeps at least `detail_floor` contrast (ADR-0011). |
 | **blue rendering** | The display transform's camera-matched treatment of blues (skies): deeper, more colourful and a few degrees more cyan than an accurate render, as camera JPEGs show them (ADR-0012). On by default; `grade.display_transform.blue_rendering.enabled: false` turns it off. |
 | **colour matrix** | A DNG's 3×3 matrix from XYZ to camera RGB, measured under one **calibration illuminant**; most DNGs carry two (tungsten and daylight), blended by the photo's white balance. |
