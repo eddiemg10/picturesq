@@ -1,4 +1,4 @@
-"""Stage 2, normalise: exposure and chroma noise reduction, per photo.
+"""Stage 2, normalise: exposure, chroma noise reduction and stats, per photo.
 
 Pure functions, no IO.
 """
@@ -7,6 +7,7 @@ from picturesq.colour.transfer import FloatArray
 from picturesq.config import ProjectConfig
 from picturesq.normalise.chroma_nr import chroma_noise_reduction
 from picturesq.normalise.exposure import apply_exposure, exposure_ev, median_ev
+from picturesq.normalise.stats import PhotoStats, photo_stats
 from picturesq.photo import UNNAMED, PhotoContext
 
 
@@ -27,4 +28,12 @@ def normalise(
     return chroma_noise_reduction(image, settings.chroma_nr)
 
 
-__all__ = ["apply_exposure", "chroma_noise_reduction", "exposure_ev", "median_ev", "normalise"]
+__all__ = [
+    "PhotoStats",
+    "apply_exposure",
+    "chroma_noise_reduction",
+    "exposure_ev",
+    "median_ev",
+    "normalise",
+    "photo_stats",
+]
