@@ -14,6 +14,8 @@ from picturesq.config.look import (
 )
 from picturesq.config.project import (
     CONFIG_FILENAME,
+    AdjustmentOverrides,
+    AdjustmentsConfig,
     BlueRenderingConfig,
     ChromaNoiseReductionConfig,
     DecodeConfig,
@@ -21,7 +23,9 @@ from picturesq.config.project import (
     ExportConfig,
     ExposureConfig,
     GradeConfig,
+    GradeOverrides,
     LocalContrastConfig,
+    LookChoice,
     NormaliseConfig,
     NormaliseOverrides,
     OutliersConfig,
@@ -43,6 +47,8 @@ from picturesq.config.yaml_io import (
 __all__ = [
     "CATEGORIES",
     "CONFIG_FILENAME",
+    "AdjustmentOverrides",
+    "AdjustmentsConfig",
     "BlueRenderingConfig",
     "ChromaNoiseReductionConfig",
     "ConfigError",
@@ -51,8 +57,10 @@ __all__ = [
     "ExportConfig",
     "ExposureConfig",
     "GradeConfig",
+    "GradeOverrides",
     "LocalContrastConfig",
     "Look",
+    "LookChoice",
     "LookFile",
     "LookFileError",
     "LookParameter",

@@ -10,7 +10,6 @@ from typer.testing import CliRunner
 from picturesq.cli import app
 from picturesq.config import ProjectConfig
 from picturesq.normalise import ExposureDecision, Flag
-from picturesq.photo import PhotoContext
 from picturesq.pipeline import normalise as normalise_module
 from picturesq.pipeline import proxy as proxy_module
 from picturesq.pipeline.normalise import NormaliseResult
@@ -95,7 +94,7 @@ def test_sheet_is_columns_wide() -> None:
 def test_render_panel_pixels_leaves_the_image_alone() -> None:
     image = _neutral(4 * BRIGHT, size=(120, 180))
     before = image.copy()
-    pixels = render_panel_pixels(image, ProjectConfig(), PhotoContext(name="a.dng"))
+    pixels = render_panel_pixels(image, ProjectConfig())
     assert np.array_equal(image, before)
     assert pixels.dtype == np.uint8
     assert pixels.shape == (120, 180, 3)  # never upscaled
@@ -129,3 +128,15 @@ def test_json_mode_prints_only_json(tmp_path: Path, fake: FakeDecode) -> None:
     assert result.exit_code == 0
     assert result.stdout.startswith("{")
     assert sheet.is_file()
+
+
+def test_panels_are_the_neutral_render_whatever_the_look() -> None:
+    """The sheet judges normalise: a project look or adjustments don't change it (and need
+    no resolved look)."""
+    image = np.full((60, 80, 3), 0.18, dtype=np.float32)
+    graded = ProjectConfig.model_validate(
+        {"grade": {"look": {"name": "cold/anything"}, "adjustments": {"exposure": 1.0}}}
+    )
+    assert np.array_equal(
+        render_panel_pixels(image, graded), render_panel_pixels(image, ProjectConfig())
+    )
