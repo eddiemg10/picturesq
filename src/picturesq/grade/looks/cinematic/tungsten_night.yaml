@@ -1,0 +1,9 @@
+version: 1
+name: tungsten_night
+category: cinematic
+description: Tungsten-balanced night film, cool shadows, glowing warm lights (LUT by GlassMeter, CC BY 4.0)
+parameters:
+  grain: {default: 0.015, min: 0.0, max: 0.05, label: Grain}
+operations:
+  - {op: lut, file: luts/tungsten_night.cube, input_space: srgb}
+  - {op: grain, amount: $grain}

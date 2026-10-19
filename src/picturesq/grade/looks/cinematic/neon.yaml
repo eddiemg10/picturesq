@@ -1,0 +1,6 @@
+version: 1
+name: neon
+category: cinematic
+description: Cyan shadows, magenta highlights, extra colour and contrast for neon and stage light (LUT by slay, CC BY 4.0)
+operations:
+  - {op: lut, file: luts/neon.cube, input_space: srgb}

@@ -1,0 +1,14 @@
+version: 1
+name: stage
+category: cinematic
+description: Concerts and stage light, deep blacks, punchy haze, LED colour tamed toward blue, warm skin
+parameters:
+  contrast: {default: 0.3, min: 0.0, max: 0.6, label: Contrast}
+  grain: {default: 0.015, min: 0.0, max: 0.05, label: Grain}
+operations:
+  - {op: contrast, amount: $contrast}
+  - {op: tone_curve, points: [[-7, -8.5], [-4, -4.9], [-1.5, -1.7], [0, 0]]}
+  - {op: hsl, purple: {hue: -15, chroma: -0.3}, magenta: {chroma: -0.25}, blue: {chroma: -0.1}, orange: {chroma: 0.1}}
+  - {op: split_tone, shadows: {hue: 235, amount: 0.12}, highlights: {hue: 60, amount: 0.1}}
+  - {op: vignette, amount: -0.3, midpoint: 0.45}
+  - {op: grain, amount: $grain}
