@@ -1,0 +1,11 @@
+version: 1
+name: matte
+category: bw
+description: Soft, faded black and white with lifted blacks
+parameters:
+  fade: {default: 0.08, min: 0.0, max: 0.2, label: Fade}
+operations:
+  - {op: channel_mixer, red: 0.35, green: 0.55, blue: 0.10, amount: 1.0}
+  - {op: contrast, amount: -0.08}
+  - {op: tone_curve, points: [[0.0, 0.0], [2.0, 1.7], [4.0, 3.0]]}
+  - {op: fade, amount: $fade}
