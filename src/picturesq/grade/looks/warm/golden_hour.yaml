@@ -1,0 +1,11 @@
+version: 1
+name: golden_hour
+category: warm
+description: Warm, glowing late-afternoon light with golden highlights
+parameters:
+  warmth: {default: 22.0, min: 0.0, max: 50.0, label: Warmth}
+operations:
+  - {op: white_balance, warmth: $warmth, tint: 3}
+  - {op: contrast, amount: 0.06}
+  - {op: split_tone, shadows: {hue: 40, amount: 0.1}, highlights: {hue: 75, amount: 0.25}}
+  - {op: vibrance, amount: 0.15}

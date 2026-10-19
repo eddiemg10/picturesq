@@ -1,0 +1,11 @@
+version: 1
+name: terracotta
+category: warm
+description: Earthy and rich, deep oranges and reds, muted greens and blues
+parameters:
+  vignette: {default: -0.25, min: -1.0, max: 0.0, label: Vignette}
+operations:
+  - {op: white_balance, warmth: 14}
+  - {op: contrast, amount: 0.12}
+  - {op: hsl, red: {lightness: -0.1, chroma: 0.1}, orange: {chroma: 0.15}, green: {hue: 15, chroma: -0.35}, blue: {chroma: -0.4}}
+  - {op: vignette, amount: $vignette}
