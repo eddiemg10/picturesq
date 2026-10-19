@@ -14,6 +14,7 @@ from picturesq.cli.export import MachineOptions, render_project
 from picturesq.cli.looks import list_looks
 from picturesq.cli.normalise import normalise_project
 from picturesq.cli.preview import preview_project
+from picturesq.cli.ui import serve_project
 from picturesq.config import dump_schema, look_schema, project_schema
 from picturesq.pipeline.workers import parse_memory_budget
 
@@ -193,9 +194,20 @@ def looks(
 
 
 @app.command()
-def ui(project: ProjectArg) -> None:
-    """Open the local web UI to choose looks and review photos."""
-    _not_implemented("ui", "M4")
+def ui(
+    project: ProjectArg,
+    port: Annotated[int, typer.Option("--port", min=1, max=65535, help="Port to serve on.")] = 8765,
+    open_browser: Annotated[
+        bool, typer.Option("--open/--no-open", help="Open the UI in the default browser.")
+    ] = True,
+) -> None:
+    """Open the local web UI to choose looks and review photos.
+
+    Serves on localhost only. Every change is saved to picturesq.yaml as you make it; edits
+    to that file from elsewhere (an agent) show up in the browser within a second.
+    Proxies are built on first view if missing (`picturesq decode` builds them up front).
+    """
+    serve_project(project, host="127.0.0.1", port=port, open_browser=open_browser)
 
 
 @app.command()
