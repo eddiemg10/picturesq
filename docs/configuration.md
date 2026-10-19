@@ -418,6 +418,8 @@ photos:
     normalise: {scene_contrast: 0.5}   # a foggy scene: extra contrast for this photo only
 ```
 
+The UI writes only what a photo overrides: unset values are left out, and a photo whose last override is removed disappears from `photos`.
+
 Each photo:
 
 | Key | Type | Default | Description |
