@@ -10,7 +10,7 @@ hue) are kept. The functions that apply operations live in ``picturesq.grade.ope
 from itertools import pairwise
 from typing import Annotated, Any, ClassVar, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 from picturesq.colour.transfer import MIDDLE_GREY
 
@@ -391,6 +391,54 @@ class GrainOperation(Operation):
     )
 
 
+LutFile = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\.cube$")]
+
+
+class LutOperation(Operation):
+    """A ``.cube`` LUT, display-referred, in the colour space it was built for.
+
+    ``file`` is relative to the look file (no ``..``). ``input_space`` says what the LUT
+    expects and returns: ``srgb`` (sRGB primaries and curve, what most creative LUTs are
+    made for) or ``rec709`` (Rec.709 primaries, BT.1886 gamma 2.4). The display transform's
+    output is encoded into that space, looked up, and decoded back. ``amount`` blends the
+    LUT's result with its input: intensity scales it like any strength value. The table is
+    loaded with the look file (``picturesq.config.look``).
+    """
+
+    space: ClassVar[Space] = "display"
+    op: Literal["lut"] = "lut"
+    file: LutFile = Field(description="The .cube file, relative to the look file.")
+    input_space: Literal["srgb", "rec709"] = Field(
+        default="srgb", description="What the LUT expects: srgb or rec709 (gamma 2.4)."
+    )
+    amount: float = scaled(
+        0.0,
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Blend of the LUT's result with its input; 1 is the LUT as made.",
+    )
+    _table: Any = PrivateAttr(default=None)
+
+    @field_validator("file")
+    @classmethod
+    def _inside(cls, file: str) -> str:
+        if any(part in ("", ".", "..") for part in file.split("/")):
+            raise ValueError("file must be a path inside the look's folder (no . or ..)")
+        return file
+
+    @property
+    def table(self) -> Any:
+        """The loaded LUT (``picturesq.colour.lut.Lut``), or None before loading."""
+        return self._table
+
+    def with_table(self, table: Any) -> Self:
+        """This operation with its LUT loaded."""
+        loaded = self.model_copy()
+        loaded._table = table
+        return loaded
+
+
 AnyOperation = Annotated[
     ExposureOperation
     | WhiteBalanceOperation
@@ -403,7 +451,8 @@ AnyOperation = Annotated[
     | SplitToneOperation
     | ChannelMixerOperation
     | VignetteOperation
-    | GrainOperation,
+    | GrainOperation
+    | LutOperation,
     Field(discriminator="op"),
 ]
 """Any operation, chosen by its ``op`` name (for look files)."""
@@ -421,4 +470,5 @@ OPERATION_TYPES: tuple[type[Operation], ...] = (
     ChannelMixerOperation,
     VignetteOperation,
     GrainOperation,
+    LutOperation,
 )

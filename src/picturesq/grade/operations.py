@@ -15,6 +15,7 @@ from PIL import Image
 
 from picturesq import parallel
 from picturesq.colour.filters import gaussian_blur_plane, gaussian_radius
+from picturesq.colour.lut import apply_lut
 from picturesq.colour.oklab import oklab_to_rec2020, rec2020_to_oklab
 from picturesq.colour.spaces import D65, REC2020_TO_XYZ, apply_matrix
 from picturesq.colour.temperature import (
@@ -23,7 +24,15 @@ from picturesq.colour.temperature import (
     white_balance_matrix,
     xy_to_kelvin_tint,
 )
-from picturesq.colour.transfer import EV_FLOOR, MIDDLE_GREY, FloatArray, srgb_decode, srgb_encode
+from picturesq.colour.transfer import (
+    EV_FLOOR,
+    MIDDLE_GREY,
+    FloatArray,
+    bt1886_decode,
+    bt1886_encode,
+    srgb_decode,
+    srgb_encode,
+)
 from picturesq.config.operations import (
     HSL_FULL_CHROMA,
     HUE_BANDS,
@@ -38,6 +47,7 @@ from picturesq.config.operations import (
     FadeOperation,
     GrainOperation,
     HslOperation,
+    LutOperation,
     Operation,
     SaturationOperation,
     Space,
@@ -463,6 +473,39 @@ def grain(image: FloatArray, operation: GrainOperation, seed: int = 0) -> FloatA
     return image
 
 
+class LutNotLoadedError(ValueError):
+    """A ``lut`` operation's table wasn't loaded (load looks with ``load_look_file``)."""
+
+
+def lut(image: FloatArray, operation: LutOperation) -> FloatArray:
+    """Display-referred ``image`` (display-linear Rec.709) through the operation's LUT, in
+    its input space, blended by ``amount``; clipped to 0-1. In place."""
+    table = operation.table
+    if table is None:
+        raise LutNotLoadedError(f"the LUT {operation.file} wasn't loaded with its look file")
+    encode, decode = (
+        (srgb_encode, srgb_decode)
+        if operation.input_space == "srgb"
+        else (bt1886_encode, bt1886_decode)
+    )
+    amount = np.float32(operation.amount)
+
+    def change(pixels: FloatArray) -> None:
+        encode(pixels, out=pixels)
+        looked_up = apply_lut(pixels, table)
+        if amount == 1.0:
+            pixels[...] = looked_up
+        else:
+            # pixels + amount * (looked_up - pixels)
+            looked_up -= pixels
+            looked_up *= amount
+            pixels += looked_up
+        np.clip(pixels, 0.0, 1.0, out=pixels)
+        decode(pixels, out=pixels)
+
+    return each_block(image, change)
+
+
 _FUNCTIONS: dict[type[Operation], Callable[[FloatArray, Any], FloatArray]] = {
     ExposureOperation: exposure,
     WhiteBalanceOperation: white_balance,
@@ -476,6 +519,7 @@ _FUNCTIONS: dict[type[Operation], Callable[[FloatArray, Any], FloatArray]] = {
     ChannelMixerOperation: channel_mixer,
     VignetteOperation: vignette,
     GrainOperation: grain,
+    LutOperation: lut,
 }
 
 
