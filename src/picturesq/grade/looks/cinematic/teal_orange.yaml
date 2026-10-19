@@ -1,0 +1,11 @@
+version: 1
+name: teal_orange
+category: cinematic
+description: Blockbuster colour, teal shadows and orange skin and highlights
+parameters:
+  shadows: {default: 0.3, min: 0.0, max: 0.8, label: Teal shadows}
+  highlights: {default: 0.25, min: 0.0, max: 0.6, label: Orange highlights}
+operations:
+  - {op: contrast, amount: 0.15}
+  - {op: split_tone, shadows: {hue: 210, amount: $shadows}, highlights: {hue: 60, amount: $highlights}}
+  - {op: hsl, orange: {chroma: 0.1}, blue: {hue: -15}, green: {hue: 25, chroma: -0.3}}

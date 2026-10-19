@@ -1,0 +1,14 @@
+version: 1
+name: night_city
+category: cinematic
+description: Neon night, deep blue shadows, warm lights, rich colour and grain
+parameters:
+  grain: {default: 0.015, min: 0.0, max: 0.05, label: Grain}
+operations:
+  - {op: white_balance, warmth: -10}
+  - {op: contrast, amount: 0.2}
+  - {op: split_tone, shadows: {hue: 240, amount: 0.35}, highlights: {hue: 55, amount: 0.25}}
+  - {op: vibrance, amount: 0.2}
+  - {op: hsl, blue: {chroma: 0.2}, purple: {chroma: 0.15}}
+  - {op: vignette, amount: -0.4, midpoint: 0.35}
+  - {op: grain, amount: $grain}
