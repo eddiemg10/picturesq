@@ -12,7 +12,7 @@ from picturesq.cli.decode import decode_project
 from picturesq.cli.doctor import run_doctor
 from picturesq.cli.export import MachineOptions, render_project
 from picturesq.cli.normalise import normalise_project
-from picturesq.config import dump_schema, project_schema
+from picturesq.config import dump_schema, look_schema, project_schema
 from picturesq.pipeline.workers import parse_memory_budget
 
 app = typer.Typer(
@@ -209,19 +209,21 @@ def export(
 
 
 class SchemaKind(StrEnum):
-    """Which file's schema `picturesq schema` prints (look files follow in M3)."""
+    """Which file's schema `picturesq schema` prints."""
 
     project = "project"
+    look = "look"
 
 
 @app.command()
 def schema(
     kind: Annotated[
-        SchemaKind, typer.Argument(help="Which file: project (picturesq.yaml).")
+        SchemaKind,
+        typer.Argument(help="Which file: project (picturesq.yaml) or look (a look file)."),
     ] = SchemaKind.project,
 ) -> None:
-    """Print the JSON Schema for picturesq.yaml."""
-    sys.stdout.write(dump_schema(project_schema()))
+    """Print the JSON Schema for picturesq.yaml or for a look file."""
+    sys.stdout.write(dump_schema(look_schema() if kind is SchemaKind.look else project_schema()))
 
 
 @app.command()

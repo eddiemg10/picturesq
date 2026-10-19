@@ -1,5 +1,17 @@
 """Config models (project, look file, overrides), YAML load/save, JSON schema export."""
 
+from picturesq.config.look import (
+    CATEGORIES,
+    Look,
+    LookFile,
+    LookFileError,
+    LookParameter,
+    LookParameterError,
+    find_look,
+    load_look_file,
+    load_looks,
+    look_library,
+)
 from picturesq.config.project import (
     CONFIG_FILENAME,
     BlueRenderingConfig,
@@ -20,7 +32,7 @@ from picturesq.config.project import (
     SharpenConfig,
     WhiteBalanceConfig,
 )
-from picturesq.config.schema import dump_schema, project_schema
+from picturesq.config.schema import dump_schema, look_schema, project_schema
 from picturesq.config.yaml_io import (
     ConfigError,
     dump_project_config,
@@ -29,6 +41,7 @@ from picturesq.config.yaml_io import (
 )
 
 __all__ = [
+    "CATEGORIES",
     "CONFIG_FILENAME",
     "BlueRenderingConfig",
     "ChromaNoiseReductionConfig",
@@ -39,6 +52,11 @@ __all__ = [
     "ExposureConfig",
     "GradeConfig",
     "LocalContrastConfig",
+    "Look",
+    "LookFile",
+    "LookFileError",
+    "LookParameter",
+    "LookParameterError",
     "NormaliseConfig",
     "NormaliseOverrides",
     "OutliersConfig",
@@ -50,7 +68,12 @@ __all__ = [
     "WhiteBalanceConfig",
     "dump_project_config",
     "dump_schema",
+    "find_look",
+    "load_look_file",
+    "load_looks",
     "load_project_config",
+    "look_library",
+    "look_schema",
     "project_schema",
     "save_project_config",
 ]
