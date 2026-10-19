@@ -453,7 +453,7 @@
     },
     "ToneCurveOperation": {
       "additionalProperties": false,
-      "description": "Bend brightness with a smooth curve through a few points, keeping colour ratios.\n\nEach point is ``[input, output]`` in EV of luminance relative to mid grey (0.18):\n``[2, 1.5]`` puts what was 2 stops above mid grey 1.5 stops above it (softer\nhighlights). The curve is monotone cubic (no overshoot between points); beyond the\nfirst and last points it continues at slope 1, so it shifts the far tones but never\nclips them. Intensity moves each point's output toward its input (the identity, the\nneutral curve). Scene-linear, before the display transform, which still rolls\nhighlights off.",
+      "description": "Bend brightness with a smooth curve through a few points, keeping colour ratios.\n\nEach point is ``[input, output]`` in EV of luminance relative to mid grey (0.18):\n``[2, 1.5]`` puts what was 2 stops above mid grey 1.5 stops above it (softer\nhighlights). The curve is monotone cubic (no overshoot between points); beyond the\nfirst and last points it continues straight, at the slope between the two end points,\nso softened highlights stay soft. Intensity moves each point's output toward its input\n(the identity, the neutral curve). Scene-linear, before the display transform, which\nstill rolls highlights off.",
       "properties": {
         "op": {
           "const": "tone_curve",
