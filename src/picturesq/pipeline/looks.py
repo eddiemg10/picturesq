@@ -1,6 +1,6 @@
 """Resolving the looks a project's photos are graded with (reads the look library)."""
 
-from picturesq.config import ProjectConfig, find_look
+from picturesq.config import LookChoice, ProjectConfig, find_look
 from picturesq.config.look import Look
 from picturesq.photo import ResolvedLook
 
@@ -13,8 +13,14 @@ def resolve_look(
     Raises LookFileError for an unknown look, LookParameterError for bad parameter values.
     """
     choice = config.photo_look(name)
-    if choice is None:
-        return None
+    return None if choice is None else resolve_choice(choice, library)
+
+
+def resolve_choice(choice: LookChoice, library: dict[str, Look] | None = None) -> ResolvedLook:
+    """``choice`` (a look, intensity and parameter values), resolved from the library.
+
+    Raises LookFileError for an unknown look, LookParameterError for bad parameter values.
+    """
     look = find_look(choice.name, library)
     operations = tuple(look.resolve(choice.parameters))
     parameters = {
