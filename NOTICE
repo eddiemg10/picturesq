@@ -1,0 +1,6 @@
+picturesq is MIT-licensed (see LICENSE), except for the third-party LUT files bundled in
+src/picturesq/grade/looks/, which are CC BY 4.0. Their authors, sources and changes are
+listed in src/picturesq/grade/looks/CREDITS.md.
+
+Film simulations from GlassMeter by Glass Works (glass-works.ai).
+LUTs by slay — slaycamera.com.

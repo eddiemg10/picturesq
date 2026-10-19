@@ -1,0 +1,6 @@
+version: 1
+name: portrait_film
+category: warm
+description: Soft, warm portrait film, gentle contrast and kind skin (LUT by GlassMeter, CC BY 4.0)
+operations:
+  - {op: lut, file: luts/portrait_film.cube, input_space: srgb}
