@@ -105,9 +105,10 @@ function pumpThumbs() {
 
 // --- the large preview: only the latest request matters --------------------------------
 
-const large = { busy: false, next: null, shown: null };
+const large = { busy: false, next: null, shown: null, want: null, photo: null };
 
 function showLarge(url) {
+  large.want = url;
   if (url === large.shown && !large.busy) return;
   if (large.busy) {
     large.next = url;
@@ -124,8 +125,11 @@ function showLarge(url) {
     else $("busy").hidden = true;
   };
   image.onload = () => {
-    $("large").src = url;
-    large.shown = url;
+    // A slower, older request (the previous photo) never replaces a newer one.
+    if (large.want === url) {
+      $("large").src = url;
+      large.shown = url;
+    }
     done();
   };
   image.onerror = () => {
@@ -217,7 +221,19 @@ function renderViewer() {
   const p = photo(ui.active);
   $("photo-name").textContent = p ? p.name : "no photos";
   $("photo-flags").textContent = p ? p.flags.map((f) => f.message).join(" · ") : "";
-  if (p) showLarge(previewUrl(p.name, "large"));
+  if (!p) return;
+  if (large.photo !== p.name) {
+    large.photo = p.name;
+    // Show the new photo at once from its strip thumbnail (already loaded), so the old
+    // photo doesn't stay up for the seconds the large preview takes; then sharpen it.
+    const li = [...$("photos").children].find((el) => el.dataset.name === p.name);
+    const thumb = li && li.querySelector("img");
+    if (thumb && thumb.complete && thumb.naturalWidth > 0) {
+      $("large").src = thumb.src;
+      large.shown = thumb.src;
+    }
+  }
+  showLarge(previewUrl(p.name, "large"));
 }
 
 function renderPanel() {
@@ -264,16 +280,23 @@ function renderLooks() {
       tiles.push({ key: look.key, label: look.key, variant: `look:${look.key}`, description: look.description });
     }
   }
-  $("looks").replaceChildren(
+  // Reuse the tiles: each keeps showing its image until the new photo's has loaded.
+  const box = $("looks");
+  const existing = new Map([...box.children].map((div) => [div.dataset.variant, div]));
+  box.replaceChildren(
     ...tiles.map((tile) => {
-      const div = document.createElement("div");
-      div.className = "look";
+      let div = existing.get(tile.variant);
+      if (!div) {
+        div = document.createElement("div");
+        div.className = "look";
+        div.dataset.variant = tile.variant;
+        div.title = tile.description || "Neutral render plus adjustments";
+        div.innerHTML = `<img alt=""><span>${escapeHtml(tile.label)}</span>`;
+        div.onclick = () => chooseLook(tile.key);
+      }
       const chosen = tile.key === null ? !current : current && current.name === tile.key;
       div.classList.toggle("chosen", Boolean(chosen));
-      div.title = tile.description || "Neutral render plus adjustments";
-      div.innerHTML = `<img alt=""><span>${escapeHtml(tile.label)}</span>`;
       if (name) loadThumb(div.querySelector("img"), previewUrl(name, "thumb", tile.variant), true);
-      div.onclick = () => chooseLook(tile.key);
       return div;
     }),
   );
@@ -290,6 +313,10 @@ function chooseLook(key) {
 function renderLookControls() {
   const box = $("look-controls");
   const current = editedLook();
+  // Room for intensity, the most parameters any look has and the follow button, so the
+  // sliders below stay put from photo to photo.
+  const most = Math.max(0, ...ui.state.looks.map((l) => Object.keys(l.parameters).length));
+  box.style.setProperty("--rows", most + 2);
   box.replaceChildren();
   if (!current) return;
   const info = lookInfo(current.name);
