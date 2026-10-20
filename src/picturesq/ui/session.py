@@ -272,7 +272,9 @@ class Session:
                         raise EditError(f"no photo named {name!r} in this project")
                     entry = _photo_entry(photos, name)
                     if change.get("reset"):
-                        entry.clear()
+                        # Metadata (the capture time) is not a grade: reset keeps it.
+                        for key in [key for key in entry if key != "metadata"]:
+                            del entry[key]
                     grade = entry.setdefault("grade", {})
                     if "look" in change:
                         project_look = self.config.grade.look
@@ -603,7 +605,7 @@ def _prune(photos: dict[str, Any], name: str) -> None:
         if key.casefold() != name.casefold():
             continue
         entry = photos[key]
-        for section in ("grade", "normalise"):
+        for section in ("grade", "normalise", "metadata"):
             part = entry.get(section)
             if isinstance(part, dict):
                 for inner in list(part):

@@ -30,6 +30,12 @@ from picturesq.export import (
 )
 from picturesq.export.sharpen import sharpened_rows
 from picturesq.grade import display_operations, grade, has_display_operations
+from picturesq.metadata import (
+    CaptureTimeError,
+    camera_capture_time,
+    photo_capture_time,
+    with_capture_time,
+)
 from picturesq.normalise import WhiteBalanceOverrideError, normalise
 from picturesq.photo import UNNAMED, PhotoContext
 from picturesq.pipeline.looks import resolve_look
@@ -220,6 +226,8 @@ def export_photo(
     result = PhotoResult(name=original.name)
     try:
         capture = read_capture_exif(original)
+        when = photo_capture_time(config, original.name, camera_capture_time(capture))
+        capture = with_capture_time(capture, when)
         original_sha256 = sha256_file(original)
         photo = photo_context(original, config)
         image = render_scene(decode_original(original, config.decode), config, photo)
@@ -243,11 +251,12 @@ def export_photo(
                 output=name,
                 config=config,
                 look=photo.look,
+                capture_time=when,
             )
             write_sidecar(sidecar_path(path), document)
             result.outputs[name] = path
         del image
-    except (DecodeError, OSError, WhiteBalanceOverrideError) as error:
+    except (DecodeError, OSError, WhiteBalanceOverrideError, CaptureTimeError) as error:
         result.error = str(error)
     result.seconds = time.perf_counter() - photo_started
     return result

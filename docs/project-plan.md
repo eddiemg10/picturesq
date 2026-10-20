@@ -240,6 +240,11 @@ operations:
 | `picturesq looks [--category cold] [--json]` | List the look library with each look's parameters |
 | `picturesq ui PROJECT [--port 8765] [--no-open]` | Start the local web UI on localhost (opens the browser): photo strip, large preview, look tiles per photo, intensity / parameters / adjustments, per-photo normalise sliders, copy and paste a grade, export. Every change is saved to `picturesq.yaml` as it is made; edits to that file from elsewhere (an agent) reach the browser within a second (the server polls the file's modification time, so watchfiles isn't needed) |
 | `picturesq export PROJECT [--output web]` | Render originals and write enabled outputs |
+| `picturesq metadata show PROJECT [--json]` | Each photo's camera time, the corrected capture time its exports carry, and why (shifted, set for this photo, unchanged) |
+| `picturesq metadata shift PROJECT (--photo NAME --actual "2026-10-17 20:05" \| --by -1d2h30m \| --clear)` | Set `metadata.time_shift`: from one photo whose real time you know, or directly; saves `picturesq.yaml` |
+| `picturesq metadata zone PROJECT (+01:00 \| --clear)` | Set `metadata.time_zone` (the `OffsetTime*` tags) |
+| `picturesq metadata time PROJECT NAME ("2026-10-17 20:05" \| --clear)` | Set one photo's `metadata.capture_time` |
+| `picturesq metadata apply PROJECT [--output web] [--out DIR]` | Rewrite the dates in exports already written, without re-rendering: only the JPEG's EXIF block is replaced (the image data stays byte for byte) and the sidecars are updated |
 | `picturesq schema [project\|look]` | Print the JSON Schema (`look` in M3) |
 | `picturesq doctor` | Check the environment: versions (LibRaw and its features, Python libraries), CPU, the threads and block size chosen and why, memory available, the memory budget and how many photos run at once, terminal graphics (a guess); exits 1 on any error |
 

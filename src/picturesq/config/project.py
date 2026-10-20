@@ -6,11 +6,20 @@ transform), export and per-photo override sections. Settings are added in the mi
 that implement them, so the config never offers a setting the pipeline ignores.
 """
 
+from datetime import datetime
 from typing import Annotated, Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 from picturesq.colour.transfer import SRGB_GREY_ENCODED, SRGB_GREY_SLOPE_PER_EV
+from picturesq.config.time_shift import TIME_SHIFT_PATTERN, format_time_shift, parse_time_shift
 
 CONFIG_FILENAME = "picturesq.yaml"
 
@@ -591,6 +600,65 @@ class ExportConfig(_Model):
         return self
 
 
+def _canonical_shift(value: str) -> str:
+    return format_time_shift(parse_time_shift(value))
+
+
+def _whole_second_naive(value: datetime) -> datetime:
+    if value.tzinfo is not None:
+        raise ValueError("write the time as the clock showed it, without a zone (see time_zone)")
+    return value.replace(microsecond=0)
+
+
+def _check_time_zone(value: str) -> str:
+    hours, minutes = int(value[1:3]), int(value[4:6])
+    if hours > 14 or (hours == 14 and minutes):
+        raise ValueError("a time zone is at most +14:00 or -14:00 from UTC")
+    return value
+
+
+TimeShift = Annotated[
+    str, StringConstraints(pattern=TIME_SHIFT_PATTERN), AfterValidator(_canonical_shift)
+]
+TimeZone = Annotated[
+    str, StringConstraints(pattern=r"^[+-]\d\d:[0-5]\d$"), AfterValidator(_check_time_zone)
+]
+CaptureTimeValue = Annotated[datetime, AfterValidator(_whole_second_naive)]
+
+
+class MetadataConfig(_Model):
+    """Corrections to the dates and times written into exports (originals are never changed)."""
+
+    time_shift: TimeShift = Field(
+        default="+0d 00:00:00",
+        description=(
+            "Added to every photo's capture time, to fix a camera whose clock was wrong. A sign, "
+            "days, then hours:minutes:seconds, e.g. +9598d 10:05:00 or -0d 01:00:00. "
+            "`picturesq metadata shift` works it out from one photo whose real time you know."
+        ),
+    )
+    time_zone: TimeZone | None = Field(
+        default=None,
+        description=(
+            "The time zone the corrected capture times are in, as an offset from UTC (+01:00). "
+            "Written as OffsetTime, OffsetTimeOriginal and OffsetTimeDigitized. null leaves the "
+            "camera's own offset tags alone."
+        ),
+    )
+
+
+class MetadataOverrides(_Model):
+    """One photo's metadata overrides."""
+
+    capture_time: CaptureTimeValue | None = Field(
+        default=None,
+        description=(
+            "The time this photo was taken, as the local clock showed it (2026-10-17T20:05:00). "
+            "Wins over the project's time_shift."
+        ),
+    )
+
+
 class NormaliseOverrides(_Model):
     """One photo's normalise overrides; an unset value keeps the project's or computed one.
 
@@ -675,6 +743,7 @@ class PhotoOverrides(_Model):
 
     normalise: NormaliseOverrides = Field(default_factory=NormaliseOverrides)
     grade: GradeOverrides = Field(default_factory=GradeOverrides)
+    metadata: MetadataOverrides = Field(default_factory=MetadataOverrides)
 
     @property
     def sets_white_balance(self) -> bool:
@@ -693,6 +762,7 @@ class ProjectConfig(_Model):
     normalise: NormaliseConfig = Field(default_factory=NormaliseConfig)
     grade: GradeConfig = Field(default_factory=GradeConfig)
     export: ExportConfig = Field(default_factory=ExportConfig)
+    metadata: MetadataConfig = Field(default_factory=MetadataConfig)
     photos: dict[str, PhotoOverrides] = Field(
         default_factory=dict,
         description=(
