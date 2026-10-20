@@ -142,7 +142,15 @@ def test_document_records_only_this_photos_overrides() -> None:
             "grade": {
                 "look": None,
                 "adjustments": dict.fromkeys(
-                    ["exposure", "warmth", "tint", "contrast", "saturation", "vibrance"]
+                    [
+                        "exposure",
+                        "highlights",
+                        "warmth",
+                        "tint",
+                        "contrast",
+                        "saturation",
+                        "vibrance",
+                    ]
                 ),
             },
         }

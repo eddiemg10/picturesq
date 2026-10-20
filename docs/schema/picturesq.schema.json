@@ -20,6 +20,21 @@
           "description": "Replaces exposure.",
           "title": "Exposure"
         },
+        "highlights": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replaces highlights.",
+          "title": "Highlights"
+        },
         "warmth": {
           "anyOf": [
             {
@@ -109,6 +124,14 @@
           "maximum": 3.0,
           "minimum": -3.0,
           "title": "Exposure",
+          "type": "number"
+        },
+        "highlights": {
+          "default": 0.0,
+          "description": "Bright areas only: negative darkens them (keeping their detail), positive brightens.",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Highlights",
           "type": "number"
         },
         "warmth": {

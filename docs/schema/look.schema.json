@@ -282,6 +282,72 @@
       "title": "GrainOperation",
       "type": "object"
     },
+    "HighlightsOperation": {
+      "additionalProperties": false,
+      "description": "Darken (or brighten) the bright areas only, keeping their detail.\n\nBrightness is judged on a smooth **base** of log luminance (an edge-aware blur over\n``radius`` of the long edge), so a whole LED screen is one bright area and the text on\nit is detail on top. Where the base is above ``start_ev`` (stops above mid grey) it is\ncompressed: each stop above becomes ``1 + amount * 0.8`` stops, easing in over the\nfirst 1.5 stops. Every pixel of an area gets the same gain on R, G and B, so its detail\nand colour ratios are kept; nothing whose base is below the start changes.",
+      "properties": {
+        "op": {
+          "const": "highlights",
+          "default": "highlights",
+          "title": "Op",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Negative darkens the bright areas, positive brightens.",
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "neutral": 0.0,
+              "title": "Amount",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "start_ev": {
+          "anyOf": [
+            {
+              "default": 1.5,
+              "description": "Base brightness, in stops above mid grey, below which nothing changes.",
+              "maximum": 6.0,
+              "minimum": -1.0,
+              "title": "Start Ev",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "radius": {
+          "anyOf": [
+            {
+              "default": 0.06,
+              "description": "Size of the areas brightness is judged over, as a fraction of the long edge.",
+              "exclusiveMinimum": 0.0,
+              "maximum": 0.25,
+              "title": "Radius",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "HighlightsOperation",
+      "type": "object"
+    },
     "HslOperation": {
       "additionalProperties": false,
       "description": "Change hue, chroma and brightness of colours by hue band (Oklab).\n\nEach pixel belongs to the two bands its hue sits between, weighted smoothly (weights\nsum to 1, so there are no seams). Greys have no hue: the change fades in with chroma\nand is full from ``HSL_FULL_CHROMA``.",
@@ -808,6 +874,7 @@
             "exposure": "#/$defs/ExposureOperation",
             "fade": "#/$defs/FadeOperation",
             "grain": "#/$defs/GrainOperation",
+            "highlights": "#/$defs/HighlightsOperation",
             "hsl": "#/$defs/HslOperation",
             "lut": "#/$defs/LutOperation",
             "saturation": "#/$defs/SaturationOperation",
@@ -852,6 +919,9 @@
           },
           {
             "$ref": "#/$defs/VignetteOperation"
+          },
+          {
+            "$ref": "#/$defs/HighlightsOperation"
           },
           {
             "$ref": "#/$defs/GrainOperation"
