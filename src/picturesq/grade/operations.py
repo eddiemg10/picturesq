@@ -34,6 +34,9 @@ from picturesq.colour.transfer import (
     srgb_encode,
 )
 from picturesq.config.operations import (
+    HIGHLIGHTS_EDGE_EV,
+    HIGHLIGHTS_FULL_CHANGE,
+    HIGHLIGHTS_SOFTNESS_EV,
     HSL_FULL_CHROMA,
     HUE_BANDS,
     SPLIT_TONE_BALANCE,
@@ -46,6 +49,7 @@ from picturesq.config.operations import (
     ExposureOperation,
     FadeOperation,
     GrainOperation,
+    HighlightsOperation,
     HslOperation,
     LutOperation,
     Operation,
@@ -57,6 +61,7 @@ from picturesq.config.operations import (
     VignetteOperation,
     WhiteBalanceOperation,
 )
+from picturesq.grade.local_contrast import log_luminance, luminance_base
 
 Pixels = Callable[[FloatArray], object]
 """Changes a block of pixels (Nx3) in place."""
@@ -372,6 +377,37 @@ def vignette(image: FloatArray, operation: VignetteOperation) -> FloatArray:
     return image
 
 
+def highlights_ev(base: FloatArray, operation: HighlightsOperation) -> FloatArray:
+    """The change in EV for pixels whose base brightness is ``base`` (stops from mid grey),
+    in place: ``amount * 0.8`` times the stops above ``start_ev``, through a knee that eases
+    in over ``2 * HIGHLIGHTS_SOFTNESS_EV`` stops. Exactly 0 at and below the start."""
+    knee = np.float32(HIGHLIGHTS_SOFTNESS_EV)
+    np.subtract(base, np.float32(operation.start_ev), out=base)
+    np.maximum(base, np.float32(0.0), out=base)
+    # Above the knee: x - knee; inside it: x**2 / (4 * knee) (same value and slope at 2 knee).
+    eased = np.square(np.minimum(base, 2.0 * knee)) / (4.0 * knee)
+    np.subtract(base, 2.0 * knee, out=base)
+    np.maximum(base, np.float32(0.0), out=base)
+    np.add(base, eased, out=base)
+    np.multiply(base, np.float32(operation.amount * HIGHLIGHTS_FULL_CHANGE), out=base)
+    return base
+
+
+def highlights(image: FloatArray, operation: HighlightsOperation) -> FloatArray:
+    """Multiply ``image`` by ``2**highlights_ev`` of its luminance base, in place."""
+    height, width = image.shape[:2]
+    base = luminance_base(image, operation.radius, HIGHLIGHTS_EDGE_EV)
+
+    def change(top: int, bottom: int) -> None:
+        block = image[top:bottom]
+        gain = highlights_ev(base.rows(log_luminance(block), top), operation)
+        np.exp2(gain, out=gain)
+        np.multiply(block, gain[..., None], out=block)
+
+    parallel.run(partial(change, *rows) for rows in parallel.row_blocks(height, width))
+    return image
+
+
 GRAIN_SMOOTHING = 0.7
 """Blur of the grain field, in cells: grain cells blend into each other instead of
 being hard squares."""
@@ -518,6 +554,7 @@ _FUNCTIONS: dict[type[Operation], Callable[[FloatArray, Any], FloatArray]] = {
     SplitToneOperation: split_tone,
     ChannelMixerOperation: channel_mixer,
     VignetteOperation: vignette,
+    HighlightsOperation: highlights,
     GrainOperation: grain,
     LutOperation: lut,
 }

@@ -99,6 +99,7 @@
 | **hue band** | One of eight overlapping hue ranges (`red`, `orange`, `yellow`, `green`, `aqua`, `blue`, `purple`, `magenta`) the `hsl` operation changes separately; neighbouring bands blend smoothly. |
 | **split toning** | Tinting the shadows toward one hue and the highlights toward another (`split_tone`), e.g. cool shadows and warm highlights. |
 | **channel mixer** | Black and white by mixing R, G and B into one grey with chosen weights (`channel_mixer`); more red darkens blue skies, like a red filter on film. |
+| **highlights** (operation, adjustment) | Darkening (or brightening) only the bright areas of a photo, judged on a smooth base of its brightness, so their detail is kept and mid tones and shadows don't change (`highlights`). |
 | **vignette** | Darkening (or lightening) toward the corners (`vignette`), the same at any resolution. |
 | **grain** | Film-like noise added after the display transform (`grain`), seeded from the photo so it's the same on every run, and the same pattern on proxies and every output. |
 | **gamut fit** | Bringing an out-of-gamut colour into the display gamut by reducing its chroma at constant Oklab hue and lightness. |
