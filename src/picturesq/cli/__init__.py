@@ -12,6 +12,7 @@ from picturesq.cli.decode import decode_project
 from picturesq.cli.doctor import run_doctor
 from picturesq.cli.export import MachineOptions, render_project
 from picturesq.cli.looks import list_looks
+from picturesq.cli.metadata import metadata_app
 from picturesq.cli.normalise import normalise_project
 from picturesq.cli.preview import preview_project
 from picturesq.cli.ui import serve_project
@@ -23,6 +24,7 @@ app = typer.Typer(
     help="Turn a folder of RAW photos into consistently edited exports.",
     no_args_is_help=True,
 )
+app.add_typer(metadata_app, name="metadata")
 
 ProjectArg = Annotated[str, typer.Argument(help="Project folder containing RAW originals.")]
 OutOption = Annotated[

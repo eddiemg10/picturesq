@@ -679,6 +679,57 @@
       "title": "LookChoice",
       "type": "object"
     },
+    "MetadataConfig": {
+      "additionalProperties": false,
+      "description": "Corrections to the dates and times written into exports (originals are never changed).",
+      "properties": {
+        "time_shift": {
+          "default": "+0d 00:00:00",
+          "description": "Added to every photo's capture time, to fix a camera whose clock was wrong. A sign, days, then hours:minutes:seconds, e.g. +9598d 10:05:00 or -0d 01:00:00. `picturesq metadata shift` works it out from one photo whose real time you know.",
+          "pattern": "^[+-]\\d+d ([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$",
+          "title": "Time Shift",
+          "type": "string"
+        },
+        "time_zone": {
+          "anyOf": [
+            {
+              "pattern": "^[+-]\\d\\d:[0-5]\\d$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The time zone the corrected capture times are in, as an offset from UTC (+01:00). Written as OffsetTime, OffsetTimeOriginal and OffsetTimeDigitized. null leaves the camera's own offset tags alone.",
+          "title": "Time Zone"
+        }
+      },
+      "title": "MetadataConfig",
+      "type": "object"
+    },
+    "MetadataOverrides": {
+      "additionalProperties": false,
+      "description": "One photo's metadata overrides.",
+      "properties": {
+        "capture_time": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The time this photo was taken, as the local clock showed it (2026-10-17T20:05:00). Wins over the project's time_shift.",
+          "title": "Capture Time"
+        }
+      },
+      "title": "MetadataOverrides",
+      "type": "object"
+    },
     "NormaliseConfig": {
       "additionalProperties": false,
       "description": "Stage 2 settings: per-photo exposure, noise reduction, and the checks that flag photos.",
@@ -863,6 +914,9 @@
         },
         "grade": {
           "$ref": "#/$defs/GradeOverrides"
+        },
+        "metadata": {
+          "$ref": "#/$defs/MetadataOverrides"
         }
       },
       "title": "PhotoOverrides",
@@ -990,6 +1044,9 @@
     },
     "export": {
       "$ref": "#/$defs/ExportConfig"
+    },
+    "metadata": {
+      "$ref": "#/$defs/MetadataConfig"
     },
     "photos": {
       "additionalProperties": {
