@@ -4,6 +4,7 @@
 const $ = (id) => document.getElementById(id);
 const ADJUSTMENTS = [
   { key: "exposure", label: "Exposure", min: -3, max: 3, step: 0.05, unit: " EV" },
+  { key: "highlights", label: "Highlights", min: -1, max: 1, step: 0.01, unit: "" },
   { key: "warmth", label: "Warmth", min: -50, max: 50, step: 1, unit: "" },
   { key: "tint", label: "Tint", min: -30, max: 30, step: 1, unit: "" },
   { key: "contrast", label: "Contrast", min: -0.5, max: 0.5, step: 0.01, unit: "" },

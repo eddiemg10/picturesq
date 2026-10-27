@@ -10,6 +10,7 @@ from picturesq.config import AdjustmentsConfig, ProjectConfig
 from picturesq.config.operations import (
     ContrastOperation,
     ExposureOperation,
+    HighlightsOperation,
     Operation,
     SaturationOperation,
     VibranceOperation,
@@ -29,6 +30,7 @@ def adjustment_operations(adjustments: AdjustmentsConfig) -> list[Operation]:
     return [
         ExposureOperation(ev=adjustments.exposure),
         WhiteBalanceOperation(warmth=adjustments.warmth, tint=adjustments.tint),
+        HighlightsOperation(amount=adjustments.highlights),
         ContrastOperation(amount=adjustments.contrast),
         SaturationOperation(amount=adjustments.saturation),
         VibranceOperation(amount=adjustments.vibrance),

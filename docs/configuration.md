@@ -61,6 +61,7 @@ grade:
   look: null
   adjustments:
     exposure: 0.0
+    highlights: 0.0
     warmth: 0.0
     tint: 0.0
     contrast: 0.0
@@ -321,11 +322,12 @@ Which look the photos are graded with (see [Look files](#look-files); `picturesq
 
 #### `grade.adjustments`
 
-The same six controls for every look, applied after the look's scene operations and before local contrast, so "a bit warmer" means the same on every look. All `0` changes nothing.
+The same seven controls for every look, applied after the look's scene operations and before local contrast, so "a bit warmer" means the same on every look. All `0` changes nothing.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `exposure` | number, −3–3 | `0.0` | Exposure change in stops. |
+| `highlights` | number, −1–1 | `0.0` | The bright areas only (an LED screen, a window): negative darkens them and keeps their detail, positive brightens them. Mid tones and shadows don't change. It is the `highlights` operation with its defaults; `-0.5` is a clear pull, `-1` the most. |
 | `warmth` | number, −50–50 | `0.0` | Warmth in mired: positive is warmer (yellower), negative cooler. 10 is a gentle change. |
 | `tint` | number, −30–30 | `0.0` | Positive is magenta, negative green. |
 | `contrast` | number, −0.5–0.5 | `0.0` | Contrast around mid grey, in stops: `0.1` makes every stop 1.1 stops. Colours keep their hue and saturation. |
@@ -444,7 +446,7 @@ Each photo:
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `look` | mapping or `null` | `null` | Replaces the project's `grade.look` for this photo (name, intensity and parameters together; see `grade.look`). Intensity `0` grades this photo with no look. `null` follows the project. |
-| `adjustments` | mapping | `{}` | This photo's adjustments: each key set (`exposure`, `warmth`, `tint`, `contrast`, `saturation`, `vibrance`, same ranges as `grade.adjustments`) replaces the project's value; unset (`null`) ones follow the project. |
+| `adjustments` | mapping | `{}` | This photo's adjustments: each key set (`exposure`, `highlights`, `warmth`, `tint`, `contrast`, `saturation`, `vibrance`, same ranges as `grade.adjustments`) replaces the project's value; unset (`null`) ones follow the project. |
 
 Each export's sidecar records the photo's overrides under `config.photos`, and the look it was graded with under `look` (name, intensity, every parameter's value and the look file's SHA-256), so the sidecar alone says how the photo was rendered.
 
@@ -572,6 +574,16 @@ Black and white from a mix of R, G and B.
 | `amount` | number, −3–1 | `0` | Change at the corners in stops; negative darkens. |
 | `midpoint` | number, 0–1 | — | Where it starts, as a distance from the centre (corners are 1). Default `0.5`. |
 | `roundness` | number, 0–1 | — | `1` is a circle, `0` an ellipse with the frame's shape. Default `1`. |
+
+#### `highlights` (scene)
+
+Darkens (or brightens) the bright areas only, keeping their detail. Brightness is judged on a smooth version of the photo (an edge-aware blur), so a whole LED screen counts as one bright area and the text on it stays readable detail. Below `start_ev` nothing changes; above it, each stop of that smooth brightness becomes `1 + 0.8 × amount` stops, easing in over the first 1.5 stops; R, G and B get the same gain, so colours keep their hue.
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, −1–1 | `0` | Negative darkens the bright areas, positive brightens them. At `-1` each stop above the start becomes 0.2 stops. |
+| `start_ev` | number, −1–6 | — | Where it starts, in stops above mid grey (of the smooth brightness); nothing below it changes. Default `1.5`. |
+| `radius` | number, 0–0.25 | — | Size of the areas brightness is judged over, as a fraction of the long edge. Default `0.06`. Smaller follows small lights more closely but flattens detail inside them. |
 
 #### `fade` (display)
 

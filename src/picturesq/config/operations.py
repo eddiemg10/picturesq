@@ -365,6 +365,45 @@ class VignetteOperation(Operation):
     )
 
 
+HIGHLIGHTS_FULL_CHANGE = 0.8
+"""At ``amount`` -1, each stop of base brightness above the start becomes 0.2 stops
+(1 - 0.8); at +1, 1.8 stops."""
+HIGHLIGHTS_SOFTNESS_EV = 0.75
+"""Half the width in stops of the knee above ``start_ev``: the change eases in over 1.5
+stops (smooth, not a corner)."""
+HIGHLIGHTS_EDGE_EV = 1.0
+"""Steps in brightness larger than this (stops) bound the areas the base is judged over."""
+
+
+class HighlightsOperation(Operation):
+    """Darken (or brighten) the bright areas only, keeping their detail.
+
+    Brightness is judged on a smooth **base** of log luminance (an edge-aware blur over
+    ``radius`` of the long edge), so a whole LED screen is one bright area and the text on
+    it is detail on top. Where the base is above ``start_ev`` (stops above mid grey) it is
+    compressed: each stop above becomes ``1 + amount * 0.8`` stops, easing in over the
+    first 1.5 stops. Every pixel of an area gets the same gain on R, G and B, so its detail
+    and colour ratios are kept; nothing whose base is below the start changes.
+    """
+
+    op: Literal["highlights"] = "highlights"
+    amount: float = scaled(
+        0.0, ge=-1.0, le=1.0, description="Negative darkens the bright areas, positive brightens."
+    )
+    start_ev: float = Field(
+        default=1.5,
+        ge=-1.0,
+        le=6.0,
+        description="Base brightness, in stops above mid grey, below which nothing changes.",
+    )
+    radius: float = Field(
+        default=0.06,
+        gt=0.0,
+        le=0.25,
+        description="Size of the areas brightness is judged over, as a fraction of the long edge.",
+    )
+
+
 class GrainOperation(Operation):
     """Film-like grain, display-referred: the same offset on R, G and B (monochrome grain).
 
@@ -451,6 +490,7 @@ AnyOperation = Annotated[
     | SplitToneOperation
     | ChannelMixerOperation
     | VignetteOperation
+    | HighlightsOperation
     | GrainOperation
     | LutOperation,
     Field(discriminator="op"),
@@ -469,6 +509,7 @@ OPERATION_TYPES: tuple[type[Operation], ...] = (
     SplitToneOperation,
     ChannelMixerOperation,
     VignetteOperation,
+    HighlightsOperation,
     GrainOperation,
     LutOperation,
 )
