@@ -236,8 +236,8 @@ operations:
 | `picturesq run PROJECT` | Whole pipeline: decode → normalise → grade → export (creates `picturesq.yaml` with defaults if missing) |
 | `picturesq decode PROJECT [--full-res]` | Decode originals, build proxies (+ optional 16-bit TIFFs; `--full-res` not yet implemented) |
 | `picturesq normalise PROJECT [--strict] [--png FILE]` | On proxies: per photo the exposure, stats, white balance check and flags, one line each and a summary; writes `.picturesq/stats/<stem>.json` and `summary.json`; `--strict` exits 3 if any photo is flagged; `--png` also writes a contact sheet of the normalised photos (flagged ones in amber) |
-| `picturesq preview PROJECT [--category cold] [--png FILE]` | Contact sheet of photos × looks: in the terminal, or as a PNG |
-| `picturesq looks [--category cold]` | List the look library |
+| `picturesq preview PROJECT [--category cold] [--look cold/nordic …] [--png FILE]` | Contact sheet from proxies: per photo the neutral render, its current grade, then each look (at the photo's own intensity and parameters if it's its look, else 100 %); writes `.picturesq/previews/sheet.png` or `--png`. Showing it in the terminal: #122 |
+| `picturesq looks [--category cold] [--json]` | List the look library with each look's parameters |
 | `picturesq ui PROJECT` | Start the local web UI (opens the browser) |
 | `picturesq export PROJECT [--output web]` | Render originals and write enabled outputs |
 | `picturesq schema [project\|look]` | Print the JSON Schema (`look` in M3) |
