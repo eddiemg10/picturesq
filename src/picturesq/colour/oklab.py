@@ -92,19 +92,46 @@ def fit_gamut_oklab(lab: FloatArray) -> FloatArray:
         return np.clip(rgb, 0.0, 1.0, out=rgb)
     pixels = lab[outside].copy()
     np.clip(pixels[:, 0], 0.0, 1.0, out=pixels[:, 0])
-    low = np.zeros(len(pixels), dtype=lab.dtype)
-    high = np.ones(len(pixels), dtype=lab.dtype)
-    trial = np.empty_like(pixels)
+    # Scaling chroma by s moves each cube-root LMS value linearly, l' = L + s k, so each
+    # RGB channel is a cubic in s: rgb(s) = M (L + s k)^3 = c0 + c1 s + c2 s^2 + c3 s^3.
+    # Bisecting on the cubic gives what bisecting on full Oklab conversions does, without a
+    # matrix product and a cube per step (5-10x faster where many pixels are out of gamut,
+    # e.g. blue stage lights).
+    # One plane per channel and coefficient: numpy reductions over a length-3 axis are slow.
+    lightness = pixels[:, 0].astype(np.float64)
+    chroma_ab = pixels[:, 1:].astype(np.float64)
+    to_lms = _OKLAB_TO_LMS.astype(np.float64)
+    to_rgb = _LMS_TO_REC709.astype(np.float64)
+    coefficients = np.zeros((3, 4, len(pixels)))  # channel, power of s, pixel
+    for j in range(3):
+        base = lightness * to_lms[j, 0]
+        k = chroma_ab @ to_lms[j, 1:]
+        terms = (base**3, 3.0 * base**2 * k, 3.0 * base * k**2, k**3)
+        for i in range(3):
+            for power, term in enumerate(terms):
+                coefficients[i, power] += to_rgb[i, j] * term
+    low = np.zeros(len(pixels))
+    high = np.ones(len(pixels))
+    value = np.empty(len(pixels))
+    fits = np.empty(len(pixels), dtype=bool)
+    lower, upper = -GAMUT_TOLERANCE, 1.0 + GAMUT_TOLERANCE
     for _ in range(GAMUT_FIT_STEPS):
         scale = 0.5 * (low + high)
-        trial[:, 0] = pixels[:, 0]
-        np.multiply(pixels[:, 1:], scale[:, None], out=trial[:, 1:])
-        candidate = oklab_to_rec709(trial)
-        # The same tolerance as the inside test: a pixel just outside it then fits to where
-        # one just inside is clipped (no jump that float rounding could flip).
-        fits = ((candidate >= -GAMUT_TOLERANCE) & (candidate <= 1.0 + GAMUT_TOLERANCE)).all(axis=-1)
-        low = np.where(fits, scale, low)
-        high = np.where(fits, high, scale)
+        fits[:] = True
+        for c0, c1, c2, c3 in coefficients:
+            np.multiply(c3, scale, out=value)
+            value += c2
+            value *= scale
+            value += c1
+            value *= scale
+            value += c0
+            # The same tolerance as the inside test: a pixel just outside it then fits to
+            # where one just inside is clipped (no jump that float rounding could flip).
+            fits &= value >= lower
+            fits &= value <= upper
+        np.copyto(low, scale, where=fits)
+        np.copyto(high, scale, where=~fits)
+    low = low.astype(lab.dtype)
     pixels[:, 1:] *= low[:, None]
     rgb[outside] = oklab_to_rec709(pixels)
     return np.clip(rgb, 0.0, 1.0, out=rgb)
