@@ -1,0 +1,14 @@
+version: 1
+name: faded_summer
+category: warm
+description: Sun-bleached film, warm highlights over soft teal shadows, faded blacks
+parameters:
+  fade: {default: 0.07, min: 0.0, max: 0.15, label: Fade}
+operations:
+  - {op: white_balance, warmth: 12}
+  - {op: contrast, amount: -0.08}
+  - {op: split_tone, shadows: {hue: 195, amount: 0.12}, highlights: {hue: 80, amount: 0.15}}
+  - {op: saturation, amount: -0.1}
+  - {op: hsl, green: {hue: 10, chroma: -0.15}}
+  - {op: fade, amount: $fade}
+  - {op: grain, amount: 0.012}
