@@ -13,7 +13,7 @@ Built-in look files are package data in ``picturesq/grade/looks/<category>/<name
 import hashlib
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, Self
@@ -29,7 +29,8 @@ from pydantic import (
     model_validator,
 )
 
-from picturesq.config.operations import AnyOperation, Operation
+from picturesq.colour.lut import CubeError, Lut, parse_cube
+from picturesq.config.operations import AnyOperation, LutOperation, Operation
 
 Category = Literal["bw", "cold", "warm", "cinematic"]
 CATEGORIES: Final[tuple[Category, ...]] = ("bw", "cold", "warm", "cinematic")
@@ -165,14 +166,26 @@ class LookFileError(Exception):
 
 @dataclass(frozen=True)
 class Look:
-    """A loaded look: its file's contents and the SHA-256 of its bytes (for sidecars)."""
+    """A loaded look: its file's contents, the LUTs its ``lut`` operations use, and the
+    SHA-256 of the look file's bytes followed by its LUT files' (for sidecars), so a
+    changed LUT changes the hash too."""
 
     file: LookFile
     sha256: str
+    luts: Mapping[str, Lut] = field(default_factory=dict)
 
     @property
     def key(self) -> str:
         return self.file.key
+
+    def resolve(self, values: Mapping[str, float] | None = None) -> list[Operation]:
+        """:meth:`LookFile.resolve`, with each ``lut`` operation's table loaded."""
+        return [
+            operation.with_table(self.luts[operation.file])
+            if isinstance(operation, LutOperation)
+            else operation
+            for operation in self.file.resolve(values)
+        ]
 
 
 def load_look_file(path: Path) -> Look:
@@ -193,7 +206,20 @@ def load_look_file(path: Path) -> Look:
             for item in error.errors()
         )
         raise LookFileError(f"look file {path.name} is invalid: {problems}") from None
-    return Look(file=look, sha256=hashlib.sha256(data).hexdigest())
+    digest = hashlib.sha256(data)
+    luts: dict[str, Lut] = {}
+    files = sorted({op["file"] for op in look.operations if op.get("op") == "lut"})
+    for file in files:
+        lut_path = path.parent / file
+        try:
+            lut_bytes = lut_path.read_bytes()
+            luts[file] = parse_cube(lut_bytes.decode("utf-8"))
+        except OSError as error:
+            raise LookFileError(f"{path.name}: cannot read its LUT {file}: {error}") from None
+        except (UnicodeDecodeError, CubeError) as error:
+            raise LookFileError(f"{path.name}: its LUT {file} is invalid: {error}") from None
+        digest.update(lut_bytes)
+    return Look(file=look, sha256=digest.hexdigest(), luts=luts)
 
 
 BUILT_IN_LOOKS: Final = Path(__file__).parents[1] / "grade" / "looks"
