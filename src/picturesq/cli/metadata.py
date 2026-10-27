@@ -17,6 +17,7 @@ from picturesq.metadata import (
     CaptureTime,
     CaptureTimeError,
     camera_capture_time,
+    parse_clock_time,
     photo_capture_time,
     shift_from_reference,
 )
@@ -43,19 +44,11 @@ def _folder(project_arg: str) -> Path:
     return project
 
 
-def parse_clock_time(text: str) -> datetime:
-    """``2026-10-17 20:05`` or ``2026-10-17T20:05:00`` -> a datetime without a zone."""
+def _clock_time(text: str) -> datetime:
     try:
-        value = datetime.fromisoformat(text.strip())
-    except ValueError:
-        raise fail(
-            f"{text!r} is not a date and time; write it like 2026-10-17 20:05", EXIT_INVALID
-        ) from None
-    if value.tzinfo is not None:
-        raise fail(
-            "write the time as the clock showed it, without a zone (see `zone`)", EXIT_INVALID
-        )
-    return value.replace(microsecond=0)
+        return parse_clock_time(text)
+    except ValueError as error:
+        raise fail(str(error), EXIT_INVALID) from None
 
 
 def _show(value: datetime | None) -> str:
@@ -90,15 +83,7 @@ def _rows(project: Path, config: ProjectConfig) -> list[_Row]:
             when = photo_capture_time(config, original.name, camera)
         except CaptureTimeError as error:
             raise fail(f"{original.name}: {error}", EXIT_ERROR) from None
-        if camera is None and when.corrected is None:
-            how = "no time recorded"
-        elif config.photo(original.name).metadata.capture_time is not None:
-            how = "set for this photo"
-        elif when.corrected != camera:
-            how = "shifted"
-        else:
-            how = "unchanged"
-        rows.append(_Row(original.name, when, how))
+        rows.append(_Row(original.name, when, when.how))
     return rows
 
 
@@ -189,7 +174,7 @@ def shift(
         camera = _camera_time(original)
         if camera is None:
             raise fail(f"{original.name} records no capture time to compare with", EXIT_ERROR)
-        real = parse_clock_time(actual)
+        real = _clock_time(actual)
         value = shift_from_reference(camera, real)
         typer.echo(f"{original.name}: camera says {_show(camera)}, actually {_show(real)}")
     config = project_config(folder, create=False)
@@ -241,7 +226,7 @@ def time(
         raise fail("give the time, or --clear", EXIT_INVALID)
     original = _find_original(folder, photo)
     config = project_config(folder, create=False)
-    value = None if capture_time is None else parse_clock_time(capture_time)
+    value = None if capture_time is None else _clock_time(capture_time)
     current = config.photo(original.name)
     key = next(
         (k for k in config.photos if k.casefold() == original.name.casefold()), original.name

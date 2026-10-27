@@ -48,8 +48,7 @@ async function load() {
   render();
 }
 
-async function commit(change) {
-  const target = ui.scope === "project" ? "project" : [...ui.selected];
+async function commit(change, target = ui.scope === "project" ? "project" : [...ui.selected]) {
   try {
     ui.state = await api("/api/edit", {
       method: "POST",
@@ -221,6 +220,7 @@ function renderStrip() {
 function renderViewer() {
   const p = photo(ui.active);
   $("photo-name").textContent = p ? p.name : "no photos";
+  $("photo-time").textContent = p && p.capture.corrected ? showTime(p.capture.corrected) : "";
   $("photo-flags").textContent = p ? p.flags.map((f) => f.message).join(" · ") : "";
   if (!p) return;
   if (large.photo !== p.name) {
@@ -253,6 +253,96 @@ function renderPanel() {
   renderLookControls();
   renderAdjustments();
   if (photosScope) renderNormalise();
+  renderMetadata();
+}
+
+// --- date and time: corrections to the capture times exports carry (originals unchanged)
+
+function showTime(iso) {
+  return iso ? iso.replace("T", " ") : "none recorded";
+}
+
+function element(tag, props = {}, ...children) {
+  const el = Object.assign(document.createElement(tag), props);
+  el.append(...children);
+  return el;
+}
+
+function button(text, title, onclick) {
+  return element("button", { type: "button", textContent: text, title, onclick });
+}
+
+function renderMetadata() {
+  const box = $("metadata");
+  const meta = ui.state.metadata;
+  const shifted = meta.time_shift !== "+0d 00:00:00";
+  const p = photo(ui.active);
+  const rows = [];
+  if (p && ui.scope === "photos") {
+    const c = p.capture;
+    rows.push(
+      element(
+        "dl", {},
+        element("dt", { textContent: "Camera" }), element("dd", { textContent: showTime(c.camera) }),
+        element("dt", { textContent: "Exports" }),
+        element("dd", { textContent: `${showTime(c.corrected)} (${c.how})` }),
+      ),
+    );
+    const input = element("input", { type: "datetime-local", step: 1, id: "taken-at" });
+    input.value = c.corrected || c.camera || "";
+    const taken = () => input.value.length === 16 ? `${input.value}:00` : input.value;
+    rows.push(element("div", { className: "row" }, element("label", { htmlFor: "taken-at", textContent: "Taken at" }), input));
+    const actions = element("div", { className: "row" });
+    if (c.camera) {
+      actions.append(
+        button("Shift every photo", "Set the project's time shift so this photo reads the time above; every photo moves by the same amount",
+          () => commit({ metadata: { reference: { photo: p.name, actual: taken() } } }, "project")),
+      );
+    }
+    actions.append(
+      button("This photo only", "Give this photo its own capture time (wins over the shift)",
+        () => commit({ metadata: { capture_time: taken() } }, [p.name])),
+    );
+    if (c.own) {
+      actions.append(button("Clear", "Remove this photo's own capture time", () => commit({ metadata: { capture_time: null } }, [p.name])));
+    }
+    rows.push(actions);
+  }
+  const shift = element("input", { type: "text", id: "time-shift", value: meta.time_shift, placeholder: "+1h, -1d2h30m" });
+  const zone = element("input", { type: "text", id: "time-zone", value: meta.time_zone || "", placeholder: "as recorded" });
+  rows.push(
+    element("div", { className: "row" },
+      element("label", { htmlFor: "time-shift", textContent: "Time shift", title: "Added to every photo's camera time" }), shift,
+      button("Set", "Save the time shift", () => commit({ metadata: { time_shift: shift.value.trim() } }, "project")),
+    ),
+    element("div", { className: "row" },
+      element("label", { htmlFor: "time-zone", textContent: "Time zone", title: "Offset from UTC written to exports, e.g. +01:00; empty leaves the camera's" }), zone,
+      button("Set", "Save the time zone", () => commit({ metadata: { time_zone: zone.value.trim() || null } }, "project")),
+    ),
+  );
+  const tools = element("div", { className: "row" });
+  if (shifted) tools.append(button("Remove shift", "Exports carry the camera's times again", () => commit({ metadata: { time_shift: null } }, "project")));
+  tools.append(button("Update exports", "Rewrite the dates in exports already written (no re-render)", applyMetadata));
+  rows.push(tools);
+  rows.push(element("p", { className: "muted small", textContent: "Originals are never changed. New exports carry these times; Update exports fixes ones already written." }));
+  box.replaceChildren(...rows);
+}
+
+async function applyMetadata() {
+  const outputs = [...$("export-outputs").querySelectorAll("input:checked")].map((i) => i.value);
+  try {
+    const result = await api("/api/metadata/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ outputs }),
+    });
+    if (result.failed.length) notice(`dates: ${result.failed.length} failed: ${result.failed[0]}`, true);
+    else if (!result.exports) notice("no exports yet: the next export carries these times");
+    else if (!result.rewritten) notice(`dates: all ${result.exports} export(s) already correct`);
+    else notice(`dates: ${result.rewritten} of ${result.exports} export(s) rewritten`);
+  } catch (error) {
+    notice(error.message, true);
+  }
 }
 
 function renderCategories() {

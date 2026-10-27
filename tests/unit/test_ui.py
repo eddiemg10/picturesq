@@ -4,9 +4,12 @@ from pathlib import Path
 
 import pytest
 import yaml
+from PIL.ExifTags import Base
 from starlette.testclient import TestClient
 
 from picturesq.config import CONFIG_FILENAME, load_project_config
+from picturesq.decode import CaptureExif
+from picturesq.ui import session as session_module
 from picturesq.ui.app import create_app
 from picturesq.ui.session import EditError, Session
 
@@ -141,3 +144,111 @@ def test_api_preview_rejects_bad_requests(project: Path) -> None:
     assert client.get("/api/preview/NOPE.DNG").status_code == 404
     assert client.get("/api/preview/A.DNG?size=huge").status_code == 400
     assert client.get("/api/preview/A.DNG?variant=look:cold/missing").status_code == 400
+
+
+# --- date and time ------------------------------------------------------------------------
+
+CAMERA_TIMES = {"A.DNG": "2000:07:07 10:00:00", "B.DNG": "2000:07:07 11:30:00"}
+"""C.DNG records no time, like a camera that never wrote one."""
+
+
+@pytest.fixture
+def timed(project: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    def read(path: Path) -> CaptureExif:
+        when = CAMERA_TIMES.get(path.name)
+        return CaptureExif(exif={} if when is None else {Base.DateTimeOriginal: when})
+
+    monkeypatch.setattr(session_module, "read_capture_exif", read)
+    return project
+
+
+def _capture(session: Session, name: str) -> dict:
+    return next(p for p in session.state()["photos"] if p["name"] == name)["capture"]
+
+
+def test_state_reports_camera_and_corrected_times(timed: Path) -> None:
+    session = Session.open(timed)
+    assert _capture(session, "A.DNG") == {
+        "camera": "2000-07-07T10:00:00",
+        "corrected": "2000-07-07T10:00:00",
+        "how": "unchanged",
+        "own": False,
+    }
+    assert _capture(session, "C.DNG")["how"] == "no time recorded"
+    assert session.state()["metadata"] == {"time_shift": "+0d 00:00:00", "time_zone": None}
+
+
+def test_shift_from_one_photo_moves_every_photo(timed: Path) -> None:
+    session = Session.open(timed)
+    reference = {"photo": "A.DNG", "actual": "2026-10-17T20:05"}
+    session.edit({"target": "project", "metadata": {"reference": reference}})
+    assert _saved(timed)["metadata"]["time_shift"] == "+9598d 10:05:00"
+    assert _capture(session, "A.DNG")["corrected"] == "2026-10-17T20:05:00"
+    assert _capture(session, "B.DNG") == {
+        "camera": "2000-07-07T11:30:00",
+        "corrected": "2026-10-17T21:35:00",
+        "how": "shifted",
+        "own": False,
+    }
+    assert _capture(session, "C.DNG")["corrected"] is None  # nothing to shift
+
+
+def test_time_shift_and_zone_directly(timed: Path) -> None:
+    session = Session.open(timed)
+    session.edit(
+        {"target": "project", "metadata": {"time_shift": "-1d2h30m", "time_zone": "+01:00"}}
+    )
+    assert _saved(timed)["metadata"] == {"time_shift": "-1d 02:30:00", "time_zone": "+01:00"}
+    session.edit({"target": "project", "metadata": {"time_shift": None, "time_zone": None}})
+    assert _saved(timed)["metadata"] == {"time_shift": "+0d 00:00:00", "time_zone": None}
+
+
+def test_photo_capture_time_survives_reset_until_cleared(timed: Path) -> None:
+    session = Session.open(timed)
+    session.edit(
+        {
+            "target": ["C.DNG"],
+            "metadata": {"capture_time": "2026-10-18 09:30"},
+            "adjustments": {"tint": 3},
+        }
+    )
+    assert _saved(timed)["photos"]["C.DNG"]["metadata"] == {"capture_time": "2026-10-18T09:30:00"}
+    assert _capture(session, "C.DNG")["how"] == "set for this photo"
+    assert _capture(session, "C.DNG")["own"] is True
+    session.edit({"target": ["C.DNG"], "reset": True})
+    assert _saved(timed)["photos"] == {
+        "C.DNG": {"metadata": {"capture_time": "2026-10-18T09:30:00"}}
+    }
+    session.edit({"target": ["C.DNG"], "metadata": {"capture_time": None}})
+    assert _saved(timed)["photos"] == {}
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        {"time_shift": "soon"},
+        {"time_zone": "+25:00"},
+        {"reference": {"photo": "C.DNG", "actual": "2026-10-17 20:05"}},  # no camera time
+        {"reference": {"photo": "A.DNG", "actual": "yesterday"}},
+        {"reference": {"photo": "Z.DNG", "actual": "2026-10-17 20:05"}},
+    ],
+)
+def test_invalid_project_metadata_edits_save_nothing(timed: Path, metadata: dict) -> None:
+    session = Session.open(timed)
+    with pytest.raises(EditError):
+        session.edit({"target": "project", "metadata": metadata})
+    assert not (timed / CONFIG_FILENAME).exists()
+
+
+def test_a_capture_time_with_a_zone_is_refused(timed: Path) -> None:
+    session = Session.open(timed)
+    with pytest.raises(EditError, match="without a zone"):
+        session.edit({"target": ["A.DNG"], "metadata": {"capture_time": "2026-10-17T20:05+01:00"}})
+    assert not (timed / CONFIG_FILENAME).exists()
+
+
+def test_api_rewrites_export_dates(timed: Path) -> None:
+    client = TestClient(create_app(Session.open(timed)))
+    response = client.post("/api/metadata/apply", json={"outputs": ["web"]})
+    assert response.json() == {"exports": 0, "rewritten": 0, "failed": []}
+    assert client.post("/api/metadata/apply", json={"outputs": ["nope"]}).status_code == 400

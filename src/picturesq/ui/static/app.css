@@ -87,6 +87,15 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .slider.set label { color: var(--text); }
 .slider.set label::after { content: " •"; color: var(--accent); }
 
+.metadata dl { display: grid; grid-template-columns: 92px 1fr; gap: 4px 8px; margin: 0 0 8px; font-size: 12px; }
+.metadata dt { color: var(--muted); }
+.metadata dd { margin: 0; font-variant-numeric: tabular-nums; }
+.metadata .row { display: flex; gap: 6px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+.metadata input[type="text"], .metadata input[type="datetime-local"] {
+  font: inherit; color: var(--text); background: #222; border: 1px solid var(--line);
+  border-radius: 4px; padding: 3px 6px; min-width: 0; flex: 1; }
+.metadata label { color: var(--muted); font-size: 12px; width: 92px; flex: none; }
+
 .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 18px; }
 .yaml { margin-top: 18px; }
 .yaml summary { cursor: pointer; color: var(--muted); }
