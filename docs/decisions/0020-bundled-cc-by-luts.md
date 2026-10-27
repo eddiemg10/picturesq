@@ -1,6 +1,6 @@
 # ADR-0020: Bundle CC BY 4.0 LUTs, with credits
 
-**Status:** Proposed · 2026-10-20 · Amends ADR-0007 (decision 4) · Issue #146
+**Status:** Accepted · 2026-10-27 (proposed 2026-10-20) · Amends ADR-0007 (decision 4) · Issue #146
 
 ## Context
 ADR-0007 decided to bundle no third-party assets, so the tree carried no licence obligations
