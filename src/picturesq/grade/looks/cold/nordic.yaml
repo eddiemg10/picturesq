@@ -1,0 +1,13 @@
+version: 1
+name: nordic
+category: cold
+description: Muted and cool, blue shadows, clean whites, slightly lifted blacks
+parameters:
+  shadow_tint: {default: 0.3, min: 0.0, max: 0.8, label: Shadow tint}
+  fade: {default: 0.04, min: 0.0, max: 0.12, label: Fade}
+operations:
+  - {op: white_balance, warmth: -12}
+  - {op: contrast, amount: 0.1}
+  - {op: split_tone, shadows: {hue: 235, amount: $shadow_tint}, highlights: {hue: 90, amount: 0.05}}
+  - {op: saturation, amount: -0.18}
+  - {op: fade, amount: $fade}
