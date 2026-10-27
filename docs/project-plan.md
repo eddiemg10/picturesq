@@ -121,9 +121,9 @@ Dropped after measurement (ADR-0010): key detection with per-key targets and the
 ### 4.3 Grade
 - **Per photo:** one look + intensity + adjustments (project default, with optional per-photo override).
 - **Look file:** metadata (name, category, description), **parameters** exposed to the UI, and an ordered list of **operations**.
-- **Operations (v1):** scene-linear: `exposure`, `white_balance`, `contrast` (log-space pivot), `tone_curve`, `saturation`, `vibrance` (OkLCh chroma), `hsl` (hue bands), `split_tone`, `fade`, `channel_mixer` (B/W), `grain` (seeded), `vignette`. Display-referred (after AgX): `lut` (with a declared input space).
+- **Operations (v1):** scene-linear: `exposure`, `white_balance`, `contrast` (log-space pivot), `tone_curve`, `saturation`, `vibrance` (OkLCh chroma), `hsl` (hue bands), `split_tone`, `channel_mixer` (B/W), `vignette`. Display-referred (after AgX): `lut` (with a declared input space), `fade` (a lift on sRGB values), `grain` (seeded).
 - **Intensity:** every operation parameter that sets how much it does declares its neutral value; `effective = neutral + intensity × (value − neutral)`; pivots and hues are kept. For `lut`, intensity blends the LUT output with its input. 0 % = exactly the neutral render (an operation left neutral is skipped, tested); range 0–150 % ([ADR-0019](decisions/0019-grade-operations-and-intensity.md)).
-- **Order:** look scene-linear operations → adjustments → local contrast → display transform (per output) → display-referred operations (`lut`, `grain`), ADR-0019.
+- **Order:** look scene-linear operations → adjustments → local contrast → display transform (per output) → display-referred operations (`lut`, `fade`, `grain`), ADR-0019.
 - **Adjustments:** exposure, warmth, tint, contrast, saturation, vibrance. The same for every look, applied after the look's scene-linear operations.
 - **Look library:** built-in looks at `picturesq/grade/looks/<category>/<name>.yaml` (3–4 per category in v1). User-installed looks and `.cube` files later (user look files are deferred; user `.cube` files are wrapped in a look file).
 

@@ -21,13 +21,16 @@ from picturesq.colour.temperature import (
     white_balance_matrix,
     xy_to_kelvin_tint,
 )
-from picturesq.colour.transfer import EV_FLOOR, FloatArray
+from picturesq.colour.transfer import EV_FLOOR, MIDDLE_GREY, FloatArray, srgb_decode, srgb_encode
 from picturesq.config.operations import (
     ContrastOperation,
+    CurvePoint,
     ExposureOperation,
+    FadeOperation,
     Operation,
     SaturationOperation,
     Space,
+    ToneCurveOperation,
     WhiteBalanceOperation,
 )
 
@@ -104,11 +107,104 @@ def saturation(image: FloatArray, operation: SaturationOperation) -> FloatArray:
     return each_block(image, change)
 
 
+CURVE_STEP_EV = 1.0 / 64.0
+"""Spacing of the table a tone curve is evaluated from (the curve is smooth; linear
+interpolation between entries this close is within 1e-4 EV of it, measured: 3e-5)."""
+
+
+TAIL_EV = 40.0
+"""How far past its end points a tone curve's straight tails are tabulated (further than
+any pixel: luminance is floored at 2^-20, about -17.5 EV)."""
+
+
+def _curve_slopes(xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+    """Monotone cubic (PCHIP, Fritsch-Carlson) slopes at the points. At the ends, the end
+    secant: the curve leaves its last point at the slope it arrived with and continues
+    straight, so the tails join without a kink."""
+    h = np.diff(xs)
+    secant = np.diff(ys) / h
+    slopes = np.empty_like(xs)
+    for i in range(1, len(xs) - 1):
+        before, after = secant[i - 1], secant[i]
+        if before * after <= 0.0:
+            slopes[i] = 0.0
+        else:
+            w1, w2 = 2.0 * h[i] + h[i - 1], h[i] + 2.0 * h[i - 1]
+            slopes[i] = (w1 + w2) / (w1 / before + w2 / after)
+    slopes[0], slopes[-1] = secant[0], secant[-1]
+    return slopes
+
+
+def tone_curve_table(points: tuple[CurvePoint, ...]) -> tuple[np.ndarray, np.ndarray]:
+    """``(ev, shift)``: the curve's output minus its input, tabulated over its points and
+    out to ``TAIL_EV`` beyond them, where it continues straight at the end secants (a
+    curve that softens highlights keeps softening them). ``np.interp`` of the table is the
+    curve; one point is a constant shift.
+    """
+    if len(points) == 1:
+        ((x, y),) = points
+        return np.array([x]), np.array([y - x])
+    xs = np.array([x for x, _ in points], dtype=np.float64)
+    ys = np.array([y for _, y in points], dtype=np.float64)
+    slopes = _curve_slopes(xs, ys)
+    grid = np.arange(xs[0], xs[-1] + CURVE_STEP_EV, CURVE_STEP_EV)
+    grid[-1] = xs[-1]
+    i = np.clip(np.searchsorted(xs, grid, side="right") - 1, 0, len(xs) - 2)
+    h = xs[i + 1] - xs[i]
+    t = (grid - xs[i]) / h
+    t2, t3 = t * t, t * t * t
+    curve = (
+        (2 * t3 - 3 * t2 + 1) * ys[i]
+        + (t3 - 2 * t2 + t) * h * slopes[i]
+        + (-2 * t3 + 3 * t2) * ys[i + 1]
+        + (t3 - t2) * h * slopes[i + 1]
+    )
+    low, high = xs[0] - TAIL_EV, xs[-1] + TAIL_EV
+    grid = np.concatenate([[low], grid, [high]])
+    curve = np.concatenate([[ys[0] - TAIL_EV * slopes[0]], curve, [ys[-1] + TAIL_EV * slopes[-1]]])
+    return grid, curve - grid
+
+
+def tone_curve(image: FloatArray, operation: ToneCurveOperation) -> FloatArray:
+    """Move each pixel's luminance along the curve, the same gain on R, G and B, in place."""
+    grid, shift = tone_curve_table(operation.points)
+    grid, shift = grid.astype(np.float32), shift.astype(np.float32)
+    grey = np.float32(MIDDLE_GREY)
+
+    def change(pixels: FloatArray) -> None:
+        gain = pixels @ _LUMINANCE
+        np.maximum(gain, EV_FLOOR, out=gain)
+        np.divide(gain, grey, out=gain)
+        np.log2(gain, out=gain)
+        gain = np.interp(gain, grid, shift).astype(np.float32)
+        np.exp2(gain, out=gain)
+        np.multiply(pixels, gain[:, None], out=pixels)
+
+    return each_block(image, change)
+
+
+def fade(image: FloatArray, operation: FadeOperation) -> FloatArray:
+    """Lift display-referred ``image`` (display-linear, 0 to 1): ``e + amount * (1 - e)``
+    on its sRGB-encoded values, in place."""
+    lift = np.float32(operation.amount)
+    keep = np.float32(1.0 - operation.amount)
+
+    def change(pixels: FloatArray) -> None:
+        srgb_encode(pixels, out=pixels)
+        np.multiply(pixels, keep, out=pixels)
+        np.add(pixels, lift, out=pixels)
+        srgb_decode(pixels, out=pixels)
+
+    return each_block(image, change)
+
+
 _FUNCTIONS: dict[type[Operation], Callable[[FloatArray, Any], FloatArray]] = {
     ExposureOperation: exposure,
     WhiteBalanceOperation: white_balance,
     ContrastOperation: contrast,
     SaturationOperation: saturation,
+    ToneCurveOperation: tone_curve,
+    FadeOperation: fade,
 }
 
 
