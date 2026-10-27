@@ -1,0 +1,6 @@
+version: 1
+name: deep_film
+category: cinematic
+description: Deep contrast, teal shadows, warm skin (LUT by slay, CC BY 4.0)
+operations:
+  - {op: lut, file: luts/deep_film.cube, input_space: srgb}
