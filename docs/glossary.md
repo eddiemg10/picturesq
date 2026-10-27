@@ -30,6 +30,8 @@
 | **parameter** | A named, adjustable value a look exposes to the UI (e.g. *shadow tint*). | knob, setting, control |
 | **intensity** | How strongly a look applies: 0 % = neutral render, 100 % = as designed, up to 150 %. The only word for this. | strength, amount, opacity, mix |
 | **amount** | The magnitude parameter *inside* an operation (`contrast.amount`). Never used for looks. | strength |
+| **neutral value** | The value of an operation's parameter at which the operation does nothing (`contrast.amount: 0`); intensity scales each such value between its neutral value and the look's (ADR-0019). | default (a default needn't be neutral), identity |
+| **warmth** | A white balance shift in mired, positive warmer (yellower): the `white_balance` operation and the warmth adjustment. | temperature (that's the light's kelvin) |
 | **adjustments** | The fixed set of global controls available for every look: exposure, warmth, tint, contrast, saturation, vibrance. | tweaks, fine-tune layer, basics |
 | **override** | A per-photo value that replaces the project default (look, intensity, normalisation values). | exception, manual edit |
 | **output** | A named export target in config, e.g. `web`, `archive` (size, quality, sharpening). | export profile, preset, recipe |

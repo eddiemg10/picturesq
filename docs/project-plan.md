@@ -122,7 +122,8 @@ Dropped after measurement (ADR-0010): key detection with per-key targets and the
 - **Per photo:** one look + intensity + adjustments (project default, with optional per-photo override).
 - **Look file:** metadata (name, category, description), **parameters** exposed to the UI, and an ordered list of **operations**.
 - **Operations (v1):** scene-linear: `exposure`, `white_balance`, `contrast` (log-space pivot), `tone_curve`, `saturation`, `vibrance` (OkLCh chroma), `hsl` (hue bands), `split_tone`, `fade`, `channel_mixer` (B/W), `grain` (seeded), `vignette`. Display-referred (after AgX): `lut` (with a declared input space).
-- **Intensity:** every operation parameter declares its neutral value; `effective = neutral + intensity × (value − neutral)`. For `lut`, intensity blends the LUT output with its input. 0 % = exactly the neutral render (tested); range 0–150 %.
+- **Intensity:** every operation parameter that sets how much it does declares its neutral value; `effective = neutral + intensity × (value − neutral)`; pivots and hues are kept. For `lut`, intensity blends the LUT output with its input. 0 % = exactly the neutral render (an operation left neutral is skipped, tested); range 0–150 % ([ADR-0019](decisions/0019-grade-operations-and-intensity.md)).
+- **Order:** look scene-linear operations → adjustments → local contrast → display transform (per output) → display-referred operations (`lut`, `grain`), ADR-0019.
 - **Adjustments:** exposure, warmth, tint, contrast, saturation, vibrance. The same for every look, applied after the look's scene-linear operations.
 - **Look library:** built-in looks at `picturesq/grade/looks/<category>/<name>.yaml` (3–4 per category in v1). User-installed looks and `.cube` files later (user look files are deferred; user `.cube` files are wrapped in a look file).
 
@@ -219,7 +220,7 @@ parameters:                      # shown in the UI's look panel
   shadow_tint: {default: 0.10, min: 0, max: 0.3, label: Shadow tint}
   fade: {default: 0.05, min: 0, max: 0.2, label: Fade}
 operations:
-  - {op: white_balance, temperature: -400, tint: 0}
+  - {op: white_balance, warmth: -15, tint: 0}   # mired; negative is cooler
   - {op: contrast, amount: 0.15, pivot: 0.18}
   - {op: split_tone, shadows: {hue: 215, amount: $shadow_tint}, highlights: {hue: 45, amount: 0.03}}
   - {op: saturation, amount: -0.15}
