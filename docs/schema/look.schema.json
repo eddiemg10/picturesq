@@ -1,0 +1,948 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "LookParameter": {
+      "additionalProperties": false,
+      "description": "A value a look exposes to the UI, as a slider.",
+      "properties": {
+        "default": {
+          "type": "number",
+          "description": "Value used unless the project sets another.",
+          "title": "Default"
+        },
+        "min": {
+          "description": "Lowest value the slider allows.",
+          "title": "Min",
+          "type": "number"
+        },
+        "max": {
+          "description": "Highest value the slider allows.",
+          "title": "Max",
+          "type": "number"
+        },
+        "label": {
+          "description": "Shown in the UI.",
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "default",
+        "min",
+        "max",
+        "label"
+      ],
+      "title": "LookParameter",
+      "type": "object"
+    },
+    "ChannelMixerOperation": {
+      "additionalProperties": false,
+      "description": "Black and white by mixing R, G and B into one grey (scene-linear, working space).\n\nThe weights are divided by their sum, so a grey stays the same grey and the overall\nbrightness is kept. The defaults are luminance (a neutral conversion); more red darkens\nblue skies and lightens skin, as a red filter does on black and white film. ``amount``\nblends from colour (0) to the mix (1).",
+      "properties": {
+        "op": {
+          "const": "channel_mixer",
+          "default": "channel_mixer",
+          "title": "Op",
+          "type": "string"
+        },
+        "red": {
+          "anyOf": [
+            {
+              "default": 0.2627,
+              "description": "Red weight.",
+              "maximum": 2.0,
+              "minimum": -1.0,
+              "title": "Red",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "green": {
+          "anyOf": [
+            {
+              "default": 0.678,
+              "description": "Green weight.",
+              "maximum": 2.0,
+              "minimum": -1.0,
+              "title": "Green",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "blue": {
+          "anyOf": [
+            {
+              "default": 0.0593,
+              "description": "Blue weight.",
+              "maximum": 2.0,
+              "minimum": -1.0,
+              "title": "Blue",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "How far toward black and white; 1 is fully grey.",
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "neutral": 0.0,
+              "title": "Amount",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "ChannelMixerOperation",
+      "type": "object"
+    },
+    "ContrastOperation": {
+      "additionalProperties": false,
+      "description": "More or less contrast around a pivot, in log space, keeping colour ratios.\n\nLuminance ``Y`` becomes ``pivot * (Y / pivot)**(1 + amount)``: each stop away from the\npivot becomes ``1 + amount`` stops, the same in the shadows and the highlights. R, G\nand B get the same gain, so hue and saturation are kept.",
+      "properties": {
+        "op": {
+          "const": "contrast",
+          "default": "contrast",
+          "title": "Op",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Extra contrast; 0.2 makes tones 20 % steeper in EV.",
+              "maximum": 1.0,
+              "minimum": -0.9,
+              "neutral": 0.0,
+              "title": "Amount",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "pivot": {
+          "anyOf": [
+            {
+              "default": 0.18,
+              "description": "Scene-linear luminance that stays put (0.18 is mid grey).",
+              "exclusiveMinimum": 0.0,
+              "maximum": 1.0,
+              "title": "Pivot",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "ContrastOperation",
+      "type": "object"
+    },
+    "ExposureOperation": {
+      "additionalProperties": false,
+      "description": "Brighten or darken: every channel times ``2**ev``.",
+      "properties": {
+        "op": {
+          "const": "exposure",
+          "default": "exposure",
+          "title": "Op",
+          "type": "string"
+        },
+        "ev": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Exposure change in EV (stops).",
+              "maximum": 4.0,
+              "minimum": -4.0,
+              "neutral": 0.0,
+              "title": "Ev",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "ExposureOperation",
+      "type": "object"
+    },
+    "FadeOperation": {
+      "additionalProperties": false,
+      "description": "Lift the blacks toward grey, the matte look of faded film or prints.\n\nDisplay-referred, a *lift* as in grading tools: on sRGB-encoded values ``e``,\n``e + amount * (1 - e)``. Black becomes ``amount`` (0.05 is 13 of 255), white stays\nwhite, and the change fades out toward white: mid grey goes from 0.46 to 0.49 at 0.05.",
+      "properties": {
+        "op": {
+          "const": "fade",
+          "default": "fade",
+          "title": "Op",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Where black ends up, as an sRGB value (0 to 1).",
+              "maximum": 0.3,
+              "minimum": 0.0,
+              "neutral": 0.0,
+              "title": "Amount",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "FadeOperation",
+      "type": "object"
+    },
+    "GrainOperation": {
+      "additionalProperties": false,
+      "description": "Film-like grain, display-referred: the same offset on R, G and B (monochrome grain).\n\nNoise is generated once per photo (seeded from the photo, so it's the same on every\nrun) on a grid of ``1 / size`` cells along the long edge, then sampled at each pixel's\nposition: proxies, ``web`` and ``archive`` show the same grain pattern at their own\nsize. It is strongest in the mid tones and fades out toward black and white, as on\nfilm.",
+      "properties": {
+        "op": {
+          "const": "grain",
+          "default": "grain",
+          "title": "Op",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Strength: the noise's standard deviation in the mid tones, as an sRGB value.",
+              "maximum": 0.1,
+              "minimum": 0.0,
+              "neutral": 0.0,
+              "title": "Amount",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "size": {
+          "anyOf": [
+            {
+              "default": 0.0005,
+              "description": "Grain size as a fraction of the long edge (0.0005 is 1/2000).",
+              "maximum": 0.005,
+              "minimum": 0.0002,
+              "title": "Size",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "GrainOperation",
+      "type": "object"
+    },
+    "HighlightsOperation": {
+      "additionalProperties": false,
+      "description": "Darken (or brighten) the bright areas only, keeping their detail.\n\nBrightness is judged on a smooth **base** of log luminance (an edge-aware blur over\n``radius`` of the long edge), so a whole LED screen is one bright area and the text on\nit is detail on top. Where the base is above ``start_ev`` (stops above mid grey) it is\ncompressed: each stop above becomes ``1 + amount * 0.8`` stops, easing in over the\nfirst 1.5 stops. Every pixel of an area gets the same gain on R, G and B, so its detail\nand colour ratios are kept; nothing whose base is below the start changes.",
+      "properties": {
+        "op": {
+          "const": "highlights",
+          "default": "highlights",
+          "title": "Op",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Negative darkens the bright areas, positive brightens.",
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "neutral": 0.0,
+              "title": "Amount",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "start_ev": {
+          "anyOf": [
+            {
+              "default": 1.5,
+              "description": "Base brightness, in stops above mid grey, below which nothing changes.",
+              "maximum": 6.0,
+              "minimum": -1.0,
+              "title": "Start Ev",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "radius": {
+          "anyOf": [
+            {
+              "default": 0.06,
+              "description": "Size of the areas brightness is judged over, as a fraction of the long edge.",
+              "exclusiveMinimum": 0.0,
+              "maximum": 0.25,
+              "title": "Radius",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "HighlightsOperation",
+      "type": "object"
+    },
+    "HslOperation": {
+      "additionalProperties": false,
+      "description": "Change hue, chroma and brightness of colours by hue band (Oklab).\n\nEach pixel belongs to the two bands its hue sits between, weighted smoothly (weights\nsum to 1, so there are no seams). Greys have no hue: the change fades in with chroma\nand is full from ``HSL_FULL_CHROMA``.",
+      "properties": {
+        "op": {
+          "const": "hsl",
+          "default": "hsl",
+          "title": "Op",
+          "type": "string"
+        },
+        "red": {
+          "$ref": "#/$defs/HueBand"
+        },
+        "orange": {
+          "$ref": "#/$defs/HueBand"
+        },
+        "yellow": {
+          "$ref": "#/$defs/HueBand"
+        },
+        "green": {
+          "$ref": "#/$defs/HueBand"
+        },
+        "aqua": {
+          "$ref": "#/$defs/HueBand"
+        },
+        "blue": {
+          "$ref": "#/$defs/HueBand"
+        },
+        "purple": {
+          "$ref": "#/$defs/HueBand"
+        },
+        "magenta": {
+          "$ref": "#/$defs/HueBand"
+        }
+      },
+      "title": "HslOperation",
+      "type": "object"
+    },
+    "HueBand": {
+      "additionalProperties": false,
+      "description": "Changes to one hue band's colours.",
+      "properties": {
+        "hue": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Hue shift in degrees (Oklab); + turns red toward yellow, blue toward purple.",
+              "maximum": 45.0,
+              "minimum": -45.0,
+              "neutral": 0.0,
+              "title": "Hue",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "chroma": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Chroma change; -1 removes the band's colour.",
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "neutral": 0.0,
+              "title": "Chroma",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "lightness": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Brightness change in EV (a darker sky: -0.5).",
+              "maximum": 2.0,
+              "minimum": -2.0,
+              "neutral": 0.0,
+              "title": "Lightness",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "HueBand",
+      "type": "object"
+    },
+    "LutOperation": {
+      "additionalProperties": false,
+      "description": "A ``.cube`` LUT, display-referred, in the colour space it was built for.\n\n``file`` is relative to the look file (no ``..``). ``input_space`` says what the LUT\nexpects and returns: ``srgb`` (sRGB primaries and curve, what most creative LUTs are\nmade for) or ``rec709`` (Rec.709 primaries, BT.1886 gamma 2.4). The display transform's\noutput is encoded into that space, looked up, and decoded back. ``amount`` blends the\nLUT's result with its input: intensity scales it like any strength value. The table is\nloaded with the look file (``picturesq.config.look``).",
+      "properties": {
+        "op": {
+          "const": "lut",
+          "default": "lut",
+          "title": "Op",
+          "type": "string"
+        },
+        "file": {
+          "description": "The .cube file, relative to the look file.",
+          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\\.cube$",
+          "title": "File",
+          "type": "string"
+        },
+        "input_space": {
+          "default": "srgb",
+          "description": "What the LUT expects: srgb or rec709 (gamma 2.4).",
+          "enum": [
+            "srgb",
+            "rec709"
+          ],
+          "title": "Input Space",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "default": 1.0,
+              "description": "Blend of the LUT's result with its input; 1 is the LUT as made.",
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "neutral": 0.0,
+              "title": "Amount",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "required": [
+        "file"
+      ],
+      "title": "LutOperation",
+      "type": "object"
+    },
+    "SaturationOperation": {
+      "additionalProperties": false,
+      "description": "Scale every pixel's chroma (Oklab), keeping its lightness and hue.",
+      "properties": {
+        "op": {
+          "const": "saturation",
+          "default": "saturation",
+          "title": "Op",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Chroma change; -1 is greyscale, 0.2 is 20 % more.",
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "neutral": 0.0,
+              "title": "Amount",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "SaturationOperation",
+      "type": "object"
+    },
+    "SplitToneOperation": {
+      "additionalProperties": false,
+      "description": "Tint the shadows toward one hue and the highlights toward another.\n\nThe tint is added in Oklab a/b (lightness kept), in proportion to lightness (so black\nstays black), weighted smoothly by tone: shadows below the crossover, highlights above\nit. The crossover is mid grey, moved by ``balance``.",
+      "properties": {
+        "op": {
+          "const": "split_tone",
+          "default": "split_tone",
+          "title": "Op",
+          "type": "string"
+        },
+        "shadows": {
+          "$ref": "#/$defs/ToneTint"
+        },
+        "highlights": {
+          "$ref": "#/$defs/ToneTint"
+        },
+        "balance": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Moves the crossover: positive gives the shadows' tint more of the tones.",
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "title": "Balance",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "SplitToneOperation",
+      "type": "object"
+    },
+    "ToneCurveOperation": {
+      "additionalProperties": false,
+      "description": "Bend brightness with a smooth curve through a few points, keeping colour ratios.\n\nEach point is ``[input, output]`` in EV of luminance relative to mid grey (0.18):\n``[2, 1.5]`` puts what was 2 stops above mid grey 1.5 stops above it (softer\nhighlights). The curve is monotone cubic (no overshoot between points); beyond the\nfirst and last points it continues straight, at the slope between the two end points,\nso softened highlights stay soft. Intensity moves each point's output toward its input\n(the identity, the neutral curve). Scene-linear, before the display transform, which\nstill rolls highlights off.",
+      "properties": {
+        "op": {
+          "const": "tone_curve",
+          "default": "tone_curve",
+          "title": "Op",
+          "type": "string"
+        },
+        "points": {
+          "default": [],
+          "description": "[input, output] pairs in EV relative to mid grey, inputs increasing, outputs not decreasing. Empty (or every output equal to its input) is the identity.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "anyOf": [
+                  {
+                    "maximum": 12.0,
+                    "minimum": -12.0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^\\$([a-z][a-z0-9_]*)$",
+                    "description": "A parameter of this look, as $name."
+                  }
+                ]
+              },
+              {
+                "anyOf": [
+                  {
+                    "maximum": 12.0,
+                    "minimum": -12.0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^\\$([a-z][a-z0-9_]*)$",
+                    "description": "A parameter of this look, as $name."
+                  }
+                ]
+              }
+            ],
+            "type": "array"
+          },
+          "maxItems": 16,
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "title": "ToneCurveOperation",
+      "type": "object"
+    },
+    "ToneTint": {
+      "additionalProperties": false,
+      "description": "A tint for one end of the tones: the hue it moves toward, and how far.",
+      "properties": {
+        "hue": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Oklab hue angle, degrees.",
+              "exclusiveMaximum": 360.0,
+              "minimum": 0.0,
+              "title": "Hue",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "How strong the tint is; 1 adds 0.1 of Oklab chroma at mid grey.",
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "neutral": 0.0,
+              "title": "Amount",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "ToneTint",
+      "type": "object"
+    },
+    "VibranceOperation": {
+      "additionalProperties": false,
+      "description": "Raise (or lower) the chroma of muted colours more than of colourful ones.\n\nOklab chroma ``C`` is scaled by ``1 + amount * (1 - C / VIBRANCE_FULL_CHROMA)``\n(no change at or above that chroma), lightness and hue kept: muted colours and skin\n(chroma ~0.08) gain colour, colours that are already saturated stay as they are.",
+      "properties": {
+        "op": {
+          "const": "vibrance",
+          "default": "vibrance",
+          "title": "Op",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Chroma change for the most muted colours; 0.3 is up to 30 % more.",
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "neutral": 0.0,
+              "title": "Amount",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "VibranceOperation",
+      "type": "object"
+    },
+    "VignetteOperation": {
+      "additionalProperties": false,
+      "description": "Darken (or lighten) toward the corners, by the same factor on R, G and B.\n\nDistance is measured from the centre so the corners are at 1; ``roundness`` 1 is a\ncircle, 0 an ellipse with the frame's aspect ratio. Nothing changes inside\n``midpoint``; from there the change eases in to ``amount`` EV at the corners. The same\nat any resolution.",
+      "properties": {
+        "op": {
+          "const": "vignette",
+          "default": "vignette",
+          "title": "Op",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Change at the corners in EV; negative darkens.",
+              "maximum": 1.0,
+              "minimum": -3.0,
+              "neutral": 0.0,
+              "title": "Amount",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "midpoint": {
+          "anyOf": [
+            {
+              "default": 0.5,
+              "description": "Distance (corners = 1) where it starts.",
+              "exclusiveMaximum": 1.0,
+              "minimum": 0.0,
+              "title": "Midpoint",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "roundness": {
+          "anyOf": [
+            {
+              "default": 1.0,
+              "description": "1 is a circle, 0 follows the frame's shape.",
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "title": "Roundness",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "VignetteOperation",
+      "type": "object"
+    },
+    "WhiteBalanceOperation": {
+      "additionalProperties": false,
+      "description": "Warm or cool the photo, and shift it toward magenta or green.\n\nRe-balances as if the light had been ``warmth`` mired bluer than daylight (D65) and\n``tint`` greener, by chromatic adaptation in scene-linear: positive warmth makes the\nphoto warmer, positive tint more magenta. Equal mired steps look about equally strong\nat any colour temperature.",
+      "properties": {
+        "op": {
+          "const": "white_balance",
+          "default": "white_balance",
+          "title": "Op",
+          "type": "string"
+        },
+        "warmth": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Warmth in mired; positive is warmer (yellower).",
+              "maximum": 100.0,
+              "minimum": -100.0,
+              "neutral": 0.0,
+              "title": "Warmth",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        },
+        "tint": {
+          "anyOf": [
+            {
+              "default": 0.0,
+              "description": "Tint on the normalise scale (-1000 x Duv); positive is magenta.",
+              "maximum": 50.0,
+              "minimum": -50.0,
+              "neutral": 0.0,
+              "title": "Tint",
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\$([a-z][a-z0-9_]*)$",
+              "description": "A parameter of this look, as $name."
+            }
+          ]
+        }
+      },
+      "title": "WhiteBalanceOperation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The contents of a look file, ``<category>/<name>.yaml``.",
+  "properties": {
+    "version": {
+      "const": 1,
+      "default": 1,
+      "description": "Look file format version.",
+      "title": "Version",
+      "type": "integer"
+    },
+    "name": {
+      "description": "The look's name within its category, e.g. nordic.",
+      "maxLength": 40,
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "title": "Name",
+      "type": "string"
+    },
+    "category": {
+      "description": "bw, cold, warm or cinematic.",
+      "enum": [
+        "bw",
+        "cold",
+        "warm",
+        "cinematic"
+      ],
+      "title": "Category",
+      "type": "string"
+    },
+    "description": {
+      "description": "One line, for people.",
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "parameters": {
+      "description": "Values the UI exposes; operations use them as $name.",
+      "patternProperties": {
+        "^[a-z][a-z0-9_]*$": {
+          "$ref": "#/$defs/LookParameter"
+        }
+      },
+      "propertyNames": {
+        "maxLength": 40
+      },
+      "title": "Parameters",
+      "type": "object"
+    },
+    "operations": {
+      "description": "The steps, in order; numeric values may be $parameter references.",
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "channel_mixer": "#/$defs/ChannelMixerOperation",
+            "contrast": "#/$defs/ContrastOperation",
+            "exposure": "#/$defs/ExposureOperation",
+            "fade": "#/$defs/FadeOperation",
+            "grain": "#/$defs/GrainOperation",
+            "highlights": "#/$defs/HighlightsOperation",
+            "hsl": "#/$defs/HslOperation",
+            "lut": "#/$defs/LutOperation",
+            "saturation": "#/$defs/SaturationOperation",
+            "split_tone": "#/$defs/SplitToneOperation",
+            "tone_curve": "#/$defs/ToneCurveOperation",
+            "vibrance": "#/$defs/VibranceOperation",
+            "vignette": "#/$defs/VignetteOperation",
+            "white_balance": "#/$defs/WhiteBalanceOperation"
+          },
+          "propertyName": "op"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/ExposureOperation"
+          },
+          {
+            "$ref": "#/$defs/WhiteBalanceOperation"
+          },
+          {
+            "$ref": "#/$defs/ContrastOperation"
+          },
+          {
+            "$ref": "#/$defs/SaturationOperation"
+          },
+          {
+            "$ref": "#/$defs/ToneCurveOperation"
+          },
+          {
+            "$ref": "#/$defs/FadeOperation"
+          },
+          {
+            "$ref": "#/$defs/VibranceOperation"
+          },
+          {
+            "$ref": "#/$defs/HslOperation"
+          },
+          {
+            "$ref": "#/$defs/SplitToneOperation"
+          },
+          {
+            "$ref": "#/$defs/ChannelMixerOperation"
+          },
+          {
+            "$ref": "#/$defs/VignetteOperation"
+          },
+          {
+            "$ref": "#/$defs/HighlightsOperation"
+          },
+          {
+            "$ref": "#/$defs/GrainOperation"
+          },
+          {
+            "$ref": "#/$defs/LutOperation"
+          }
+        ]
+      },
+      "maxItems": 32,
+      "minItems": 1,
+      "title": "Operations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "category",
+    "description",
+    "operations"
+  ],
+  "title": "LookFile",
+  "type": "object"
+}

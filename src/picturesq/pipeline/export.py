@@ -29,9 +29,16 @@ from picturesq.export import (
     write_sidecar,
 )
 from picturesq.export.sharpen import sharpened_rows
-from picturesq.grade import grade
+from picturesq.grade import display_operations, grade, has_display_operations
+from picturesq.metadata import (
+    CaptureTimeError,
+    camera_capture_time,
+    photo_capture_time,
+    with_capture_time,
+)
 from picturesq.normalise import WhiteBalanceOverrideError, normalise
 from picturesq.photo import UNNAMED, PhotoContext
+from picturesq.pipeline.looks import resolve_look
 from picturesq.pipeline.workers import WorkerPlan, photos_to_start
 
 EXPORTS_DIRNAME = "exports"
@@ -61,7 +68,9 @@ def photo_context(original: Path, config: ProjectConfig) -> PhotoContext:
     """What the scene stages need to know about ``original``: its name and, when its
     overrides need it, its photo info.
 
-    The photo info is read only for a white balance override (it starts from the as-shot
+    Its look is resolved from the look library (raising LookFileError or
+    LookParameterError; ``check_looks`` finds those before a run). The photo info is read
+    only for a white balance override (it starts from the as-shot
     white): a few milliseconds for a DNG, but a RAF or ARW is unpacked for it (0.2-1.1 s on
     the CC0 samples), which photos without overrides shouldn't pay. Raises DecodeError
     like ``read_photo_info``. Every render of a project's photo (exports, proxies) builds
@@ -70,7 +79,7 @@ def photo_context(original: Path, config: ProjectConfig) -> PhotoContext:
     info = None
     if config.photo(original.name).sets_white_balance:
         info = read_photo_info(original, config.decode)
-    return PhotoContext(name=original.name, info=info)
+    return PhotoContext(name=original.name, info=info, look=resolve_look(config, original.name))
 
 
 def render_output(
@@ -78,9 +87,11 @@ def render_output(
     output: OutputConfig,
     display: DisplayTransformConfig,
     *,
+    photo: PhotoContext = UNNAMED,
     consume: bool = False,
 ) -> NDArray[np.uint8]:
-    """Resize, display transform, sRGB encode, sharpen and quantise ``image`` for one output.
+    """Resize, display transform, the look's display operations (``photo.look``), sRGB
+    encode, sharpen and quantise ``image`` for one output.
 
     Works in blocks on several cores (``picturesq.parallel``): the display transform and
     sRGB encoding a block of pixels at a time, then sharpening and quantising a block of
@@ -98,11 +109,20 @@ def render_output(
     curve = AgxCurve.from_config(display)
     source, target = sized.reshape(-1, 3), encoded.reshape(-1, 3)
 
-    def encode(block: slice) -> None:
-        agx(source[block], curve, out=target[block])
-        srgb_encode(target[block], out=target[block])
+    blocks = parallel.pixel_blocks(len(source))
+    if has_display_operations(photo):
+        # The display operations need the whole image (grain samples by position), so
+        # the display transform and encoding become two passes; the values are the same.
+        parallel.run(partial(agx, source[block], curve, out=target[block]) for block in blocks)
+        display_operations(encoded, photo)
+        parallel.run(partial(srgb_encode, target[block], out=target[block]) for block in blocks)
+    else:
 
-    parallel.run(partial(encode, block) for block in parallel.pixel_blocks(len(source)))
+        def encode(block: slice) -> None:
+            agx(source[block], curve, out=target[block])
+            srgb_encode(target[block], out=target[block])
+
+        parallel.run(partial(encode, block) for block in blocks)
     height, width = encoded.shape[:2]
     pixels = np.empty(encoded.shape, dtype=np.uint8)
 
@@ -206,6 +226,8 @@ def export_photo(
     result = PhotoResult(name=original.name)
     try:
         capture = read_capture_exif(original)
+        when = photo_capture_time(config, original.name, camera_capture_time(capture))
+        capture = with_capture_time(capture, when)
         original_sha256 = sha256_file(original)
         photo = photo_context(original, config)
         image = render_scene(decode_original(original, config.decode), config, photo)
@@ -214,7 +236,9 @@ def export_photo(
             path = exports_dir / name / f"{original.stem}.jpg"
             # The last output may use up the scene image: nothing reads it afterwards.
             last = index == len(names) - 1
-            pixels = render_output(image, spec, config.grade.display_transform, consume=last)
+            pixels = render_output(
+                image, spec, config.grade.display_transform, photo=photo, consume=last
+            )
             height, width = pixels.shape[:2]
             exif = export_exif(capture, width=width, height=height, software=SOFTWARE)
             write_jpeg(pixels, path, quality=spec.quality, exif=exif)
@@ -226,11 +250,13 @@ def export_photo(
                 original_sha256=original_sha256,
                 output=name,
                 config=config,
+                look=photo.look,
+                capture_time=when,
             )
             write_sidecar(sidecar_path(path), document)
             result.outputs[name] = path
         del image
-    except (DecodeError, OSError, WhiteBalanceOverrideError) as error:
+    except (DecodeError, OSError, WhiteBalanceOverrideError, CaptureTimeError) as error:
         result.error = str(error)
     result.seconds = time.perf_counter() - photo_started
     return result

@@ -1,0 +1,10 @@
+version: 1
+name: silver
+category: bw
+description: Clean, neutral black and white with gentle contrast
+parameters:
+  contrast: {default: 0.12, min: 0.0, max: 0.4, label: Contrast}
+operations:
+  - {op: channel_mixer, red: 0.30, green: 0.59, blue: 0.11, amount: 1.0}
+  - {op: contrast, amount: $contrast}
+  - {op: tone_curve, points: [[-4.0, -4.2], [0.0, 0.0], [2.5, 2.6]]}

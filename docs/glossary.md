@@ -28,8 +28,11 @@
 | **Hald CLUT** | A **LUT** stored as a square image (PNG/TIFF) instead of a `.cube`; used by RawTherapee's Film Simulation Collection. Only ever a source format: convert to `.cube` before use, and keep the collection's licence and attribution with it. | HaldCLUT, preset image |
 | **operation (op)** | One step inside a look file, e.g. `contrast`, `split_tone`, `lut`. | module, node, tool, effect |
 | **parameter** | A named, adjustable value a look exposes to the UI (e.g. *shadow tint*). | knob, setting, control |
+| **parameter reference** | `$name` in place of a number in a look file's operation: the value comes from the look's parameter `name`. | variable, placeholder, binding |
 | **intensity** | How strongly a look applies: 0 % = neutral render, 100 % = as designed, up to 150 %. The only word for this. | strength, amount, opacity, mix |
 | **amount** | The magnitude parameter *inside* an operation (`contrast.amount`). Never used for looks. | strength |
+| **neutral value** | The value of an operation's parameter at which the operation does nothing (`contrast.amount: 0`); intensity scales each such value between its neutral value and the look's (ADR-0019). | default (a default needn't be neutral), identity |
+| **warmth** | A white balance shift in mired, positive warmer (yellower): the `white_balance` operation and the warmth adjustment. | temperature (that's the light's kelvin) |
 | **adjustments** | The fixed set of global controls available for every look: exposure, warmth, tint, contrast, saturation, vibrance. | tweaks, fine-tune layer, basics |
 | **override** | A per-photo value that replaces the project default (look, intensity, normalisation values). | exception, manual edit |
 | **output** | A named export target in config, e.g. `web`, `archive` (size, quality, sharpening). | export profile, preset, recipe |
@@ -42,6 +45,9 @@
 | **stand-in** | A reference set photo covering a scenario until a proper shot exists (`status: stand-in` in the manifest). | placeholder, substitute |
 | **samples** | CC0 RAWs from raw.pixls.us used in CI. | fixtures (fixture = pytest) |
 | **camera JPEG** | The JPEG the camera embedded in the original: the reference our neutral render is compared against (`scripts/compare.py`). Some cameras embed a neighbouring frame; those are left out. | in-camera JPEG, preview |
+| **capture time** | When a photo was taken, as the camera's clock showed it (EXIF `DateTimeOriginal`). The *camera time* is what the original records; the *corrected time* is what the export carries after the `metadata` settings. | date, timestamp, shot time |
+| **time shift** | The signed duration added to every photo's camera time to fix a wrong camera clock (`metadata.time_shift`, e.g. `+9598d 10:05:00`). | offset (that is the time zone), delta, clock correction |
+| **time zone** | The offset from UTC (`+01:00`) of the corrected capture times, written as the `OffsetTime*` EXIF tags (`metadata.time_zone`). | timezone, UTC offset, tz |
 | **sidecar** | The `<photo>.picturesq.json` file written next to each export: picturesq version, the original's SHA-256, the output's settings and the config that rendered it, including the photo's overrides. Enough to reproduce the export. | manifest, metadata file |
 | **capture EXIF** | The original's EXIF that describes the moment of capture (time, camera, lens, exposure), copied into each export by allowlist (ADR-0014). | metadata (too broad) |
 | **golden** | A stored expected output used by a regression test. | snapshot (that's for text/JSON) |
@@ -90,6 +96,15 @@
 | **Duv** | The signed distance of a white from the Planckian locus in the CIE 1960 uv diagram; positive is above it (greener). Used only to define tint. |
 | **mired** | Micro reciprocal degrees, `1e6 / kelvin`. Compare white balances by their mired difference: equal mired steps look about equally different, equal kelvin steps don't. |
 | **chromatic adaptation** | Converting colours seen under one white to those that look the same under another (Bradford). |
+| **hue** | Which colour a pixel is (red, yellow, blue, …), independent of how light or colourful: the angle of its Oklab a/b, in degrees (red ~29, yellow ~110, green ~143, blue ~264). |
+| **saturation** (operation, adjustment) | Scaling every pixel's chroma by the same factor, keeping lightness and hue. (In the white balance check, "nearly neutral" uses chroma ÷ lightness.) |
+| **vibrance** | Raising chroma more for muted colours than for colourful ones, so skin and already-vivid colours change less than with saturation. |
+| **hue band** | One of eight overlapping hue ranges (`red`, `orange`, `yellow`, `green`, `aqua`, `blue`, `purple`, `magenta`) the `hsl` operation changes separately; neighbouring bands blend smoothly. |
+| **split toning** | Tinting the shadows toward one hue and the highlights toward another (`split_tone`), e.g. cool shadows and warm highlights. |
+| **channel mixer** | Black and white by mixing R, G and B into one grey with chosen weights (`channel_mixer`); more red darkens blue skies, like a red filter on film. |
+| **highlights** (operation, adjustment) | Darkening (or brightening) only the bright areas of a photo, judged on a smooth base of its brightness, so their detail is kept and mid tones and shadows don't change (`highlights`). |
+| **vignette** | Darkening (or lightening) toward the corners (`vignette`), the same at any resolution. |
+| **grain** | Film-like noise added after the display transform (`grain`), seeded from the photo so it's the same on every run, and the same pattern on proxies and every output. |
 | **gamut fit** | Bringing an out-of-gamut colour into the display gamut by reducing its chroma at constant Oklab hue and lightness. |
 | **chroma** | How colourful a pixel is, independent of its lightness: the distance from grey in Oklab a/b. |
 | **ringing** | Over- and undershoot that sharp resampling filters (Lanczos) leave beside edges; **anti-ringing** clamps each result to the range of the nearby source pixels. |

@@ -11,8 +11,12 @@ from picturesq import __version__, parallel
 from picturesq.cli.decode import decode_project
 from picturesq.cli.doctor import run_doctor
 from picturesq.cli.export import MachineOptions, render_project
+from picturesq.cli.looks import list_looks
+from picturesq.cli.metadata import metadata_app
 from picturesq.cli.normalise import normalise_project
-from picturesq.config import dump_schema, project_schema
+from picturesq.cli.preview import preview_project
+from picturesq.cli.ui import serve_project
+from picturesq.config import dump_schema, look_schema, project_schema
 from picturesq.pipeline.workers import parse_memory_budget
 
 app = typer.Typer(
@@ -20,6 +24,7 @@ app = typer.Typer(
     help="Turn a folder of RAW photos into consistently edited exports.",
     no_args_is_help=True,
 )
+app.add_typer(metadata_app, name="metadata")
 
 ProjectArg = Annotated[str, typer.Argument(help="Project folder containing RAW originals.")]
 OutOption = Annotated[
@@ -165,22 +170,46 @@ def normalise(
     normalise_project(project, as_json=as_json, strict=strict, png=png)
 
 
-@app.command()
-def preview(project: ProjectArg) -> None:
-    """Render a contact sheet of photos x looks (terminal or PNG)."""
-    _not_implemented("preview", "M3")
+class CategoryName(StrEnum):
+    """A look category, for `picturesq looks --category`."""
+
+    bw = "bw"
+    cold = "cold"
+    warm = "warm"
+    cinematic = "cinematic"
 
 
 @app.command()
-def looks() -> None:
-    """List the look library, by category."""
-    _not_implemented("looks", "M3")
+def looks(
+    category: Annotated[
+        CategoryName | None, typer.Option("--category", help="Only this category.")
+    ] = None,
+    as_json: JsonOption = False,
+) -> None:
+    """List the look library, by category, with each look's parameters.
+
+    With --json, one document: {"looks": [{"look": "category/name", "category": str,
+    "name": str, "description": str, "parameters": {name: {"default", "min", "max",
+    "label"}}, "operations": [op]}]}, in category then name order.
+    """
+    list_looks(None if category is None else category.value, as_json=as_json)
 
 
 @app.command()
-def ui(project: ProjectArg) -> None:
-    """Open the local web UI to choose looks and review photos."""
-    _not_implemented("ui", "M4")
+def ui(
+    project: ProjectArg,
+    port: Annotated[int, typer.Option("--port", min=1, max=65535, help="Port to serve on.")] = 8765,
+    open_browser: Annotated[
+        bool, typer.Option("--open/--no-open", help="Open the UI in the default browser.")
+    ] = True,
+) -> None:
+    """Open the local web UI to choose looks and review photos.
+
+    Serves on localhost only. Every change is saved to picturesq.yaml as you make it; edits
+    to that file from elsewhere (an agent) show up in the browser within a second.
+    Proxies are built on first view if missing (`picturesq decode` builds them up front).
+    """
+    serve_project(project, host="127.0.0.1", port=port, open_browser=open_browser)
 
 
 @app.command()
@@ -208,20 +237,53 @@ def export(
     )
 
 
+@app.command()
+def preview(
+    project: ProjectArg,
+    category: Annotated[
+        CategoryName | None, typer.Option("--category", help="Only this category's looks.")
+    ] = None,
+    look: Annotated[
+        list[str] | None,
+        typer.Option("--look", help="Only this look, as category/name (repeatable)."),
+    ] = None,
+    png: Annotated[
+        Path | None,
+        typer.Option("--png", help="Write the sheet here (default .picturesq/previews/sheet.png)."),
+    ] = None,
+) -> None:
+    """Render a contact sheet of the photos through looks, from proxies, in seconds.
+
+    One row per photo: the neutral render, the photo's current grade (look and adjustments
+    from picturesq.yaml) when it has one, then each look (all, a --category, or the --look
+    ones). A look is shown at the photo's own intensity and parameters if it's the photo's
+    look, else at 100 % with its defaults; the photo's adjustments apply to every look.
+    Builds missing proxies; doesn't create picturesq.yaml. Prints the sheet's path.
+    """
+    preview_project(
+        project,
+        category=None if category is None else category.value,
+        look_names=look,
+        png=png,
+    )
+
+
 class SchemaKind(StrEnum):
-    """Which file's schema `picturesq schema` prints (look files follow in M3)."""
+    """Which file's schema `picturesq schema` prints."""
 
     project = "project"
+    look = "look"
 
 
 @app.command()
 def schema(
     kind: Annotated[
-        SchemaKind, typer.Argument(help="Which file: project (picturesq.yaml).")
+        SchemaKind,
+        typer.Argument(help="Which file: project (picturesq.yaml) or look (a look file)."),
     ] = SchemaKind.project,
 ) -> None:
-    """Print the JSON Schema for picturesq.yaml."""
-    sys.stdout.write(dump_schema(project_schema()))
+    """Print the JSON Schema for picturesq.yaml or for a look file."""
+    sys.stdout.write(dump_schema(look_schema() if kind is SchemaKind.look else project_schema()))
 
 
 @app.command()

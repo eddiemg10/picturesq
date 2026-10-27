@@ -1,0 +1,12 @@
+version: 1
+name: steel
+category: cold
+description: Desaturated, hard and blue-grey, for cities and concrete
+parameters:
+  saturation: {default: -0.45, min: -0.9, max: 0.0, label: Saturation}
+operations:
+  - {op: white_balance, warmth: -8}
+  - {op: saturation, amount: $saturation}
+  - {op: contrast, amount: 0.15}
+  - {op: split_tone, shadows: {hue: 225, amount: 0.25}, highlights: {hue: 205, amount: 0.08}}
+  - {op: vignette, amount: -0.3, midpoint: 0.4}

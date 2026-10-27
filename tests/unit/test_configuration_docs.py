@@ -7,6 +7,7 @@ import pytest
 import yaml
 
 from picturesq.config import (
+    AdjustmentsConfig,
     BlueRenderingConfig,
     ChromaNoiseReductionConfig,
     DecodeConfig,
@@ -14,7 +15,11 @@ from picturesq.config import (
     ExportConfig,
     ExposureConfig,
     GradeConfig,
+    GradeOverrides,
     LocalContrastConfig,
+    LookChoice,
+    MetadataConfig,
+    MetadataOverrides,
     NormaliseConfig,
     NormaliseOverrides,
     OutliersConfig,
@@ -66,6 +71,11 @@ def test_examples_are_valid(block: str) -> None:
         SharpenConfig,
         PhotoOverrides,
         NormaliseOverrides,
+        LookChoice,
+        AdjustmentsConfig,
+        GradeOverrides,
+        MetadataConfig,
+        MetadataOverrides,
     ],
 )
 def test_reference_lists_every_key(model: type[ProjectConfig]) -> None:

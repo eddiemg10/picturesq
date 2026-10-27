@@ -104,3 +104,21 @@ def ev_to_linear(
     np.exp2(image, out=out)
     np.multiply(out, middle_grey, out=out)
     return out
+
+
+BT1886_GAMMA = 2.4
+"""Display gamma of Rec.709 video (ITU-R BT.1886, black level 0)."""
+
+
+def bt1886_encode(image: FloatArray, out: FloatArray | None = None) -> FloatArray:
+    """Display-linear → Rec.709 display-encoded (gamma 2.4; negatives clamped to 0)."""
+    out = _out_like(image, out)
+    np.maximum(image, 0.0, out=out)
+    return np.power(out, 1.0 / BT1886_GAMMA, out=out)
+
+
+def bt1886_decode(image: FloatArray, out: FloatArray | None = None) -> FloatArray:
+    """Rec.709 display-encoded → display-linear (gamma 2.4). Inverse of ``bt1886_encode``."""
+    out = _out_like(image, out)
+    np.maximum(image, 0.0, out=out)
+    return np.power(out, BT1886_GAMMA, out=out)
