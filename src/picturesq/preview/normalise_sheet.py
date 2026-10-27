@@ -1,7 +1,7 @@
 """The contact sheet of a normalised project: does the batch look even?
 
-One panel per photo: its proxy after normalise, rendered neutrally (the grade stage, which is
-the neutral render until looks arrive in M3, then the display transform), captioned with the
+One panel per photo: its proxy after normalise, rendered neutrally (local contrast and the
+display transform: no look or adjustments, whatever the project's), captioned with the
 photo's name, exposure and flags. Flagged photos get an amber border and caption. Written by
 ``picturesq normalise --png``; the layout is the stage sheet's
 (:func:`~picturesq.preview.stage_sheet.compose_sheet`).
@@ -20,8 +20,7 @@ from PIL import Image
 from picturesq.colour.transfer import FloatArray
 from picturesq.config import OutputConfig, ProjectConfig
 from picturesq.export import resize_to_long_edge
-from picturesq.grade import grade
-from picturesq.photo import PhotoContext
+from picturesq.grade import local_contrast
 from picturesq.pipeline.export import render_output
 from picturesq.pipeline.normalise import NormaliseResult
 from picturesq.preview.stage_sheet import Panel, Uint8Array, compose_sheet
@@ -38,18 +37,18 @@ FLAG_COLOUR: Final = (255, 176, 0)
 _FAILED_GREY: Final = 64
 
 
-def render_panel_pixels(
-    image: FloatArray, config: ProjectConfig, photo: PhotoContext
-) -> Uint8Array:
+def render_panel_pixels(image: FloatArray, config: ProjectConfig) -> Uint8Array:
     """Neutral render of a normalised proxy ``image`` for a panel (8-bit sRGB).
 
-    The grade stage and the display transform, as an export would, through a small view
+    The neutral render's grade (local contrast; the project's look and adjustments are left
+    out: this sheet judges normalise) and the display transform, through a small view
     output at panel size (as the stage sheet does). ``image`` is not changed.
     """
     small = resize_to_long_edge(image, WORK_LONG_EDGE)
     if small is image:
-        small = image.copy()  # the grade works in place
-    grade(small, config, photo)
+        small = image.copy()  # local contrast works in place
+    settings = config.grade
+    local_contrast(small, settings.local_contrast, settings.display_transform)
     view = OutputConfig(long_edge=max(PANEL_SIZE))
     return render_output(small, view, config.grade.display_transform, consume=True)
 

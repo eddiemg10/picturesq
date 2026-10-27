@@ -7,10 +7,13 @@ import typer
 from picturesq.config import (
     CONFIG_FILENAME,
     ConfigError,
+    LookFileError,
+    LookParameterError,
     ProjectConfig,
     load_project_config,
     save_project_config,
 )
+from picturesq.pipeline.looks import check_looks
 
 EXIT_ERROR = 1
 EXIT_INVALID = 2
@@ -26,12 +29,18 @@ def fail(message: str, code: int) -> typer.Exit:
 
 
 def load_config_or_exit(project: Path) -> ProjectConfig:
-    """Load ``<project>/picturesq.yaml``; on any config problem print it and exit 2."""
+    """Load ``<project>/picturesq.yaml``; on any config problem print it and exit 2.
+
+    The looks it names are checked too (they exist, and their parameter values are in
+    range), so a typo fails before any photo is rendered.
+    """
     try:
-        return load_project_config(project / CONFIG_FILENAME)
-    except ConfigError as error:
+        config = load_project_config(project / CONFIG_FILENAME)
+        check_looks(config)
+    except (ConfigError, LookFileError, LookParameterError) as error:
         typer.echo(f"error: {error}", err=True)
         raise typer.Exit(code=EXIT_INVALID) from None
+    return config
 
 
 def project_config(project: Path, *, create: bool) -> ProjectConfig:

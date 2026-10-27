@@ -8,7 +8,10 @@ output's settings. The recorded ``config`` is itself a valid config that renders
 the same way. It holds no timestamps or paths, so the same original + config + version
 always gives the same bytes.
 
-Sidecar versions: 1 had no ``config.photos``; 2 adds it.
+It also records the photo's resolved ``look`` (name, intensity, every parameter's value and
+the look file's SHA-256), so a changed look file is detectable.
+
+Sidecar versions: 1 had no ``config.photos``; 2 adds it; 3 adds ``look``.
 """
 
 import hashlib
@@ -19,9 +22,10 @@ from typing import Any, Final
 from picturesq.atomic import atomic_write
 from picturesq.config import ProjectConfig
 from picturesq.config.project import NO_OVERRIDES
+from picturesq.photo import ResolvedLook
 
 SIDECAR_SUFFIX: Final = ".picturesq.json"
-SIDECAR_VERSION: Final = 2
+SIDECAR_VERSION: Final = 3
 _CHUNK: Final = 1 << 20
 
 
@@ -35,9 +39,19 @@ def sha256_file(path: Path) -> str:
 
 
 def sidecar_document(
-    *, version: str, original: Path, original_sha256: str, output: str, config: ProjectConfig
+    *,
+    version: str,
+    original: Path,
+    original_sha256: str,
+    output: str,
+    config: ProjectConfig,
+    look: ResolvedLook | None = None,
 ) -> dict[str, Any]:
-    """The sidecar of ``original``'s export to ``output``, as a JSON-ready dict."""
+    """The sidecar of ``original``'s export to ``output``, as a JSON-ready dict.
+
+    ``look`` is the photo's resolved look: its name, intensity, every parameter's value and
+    the look file's SHA-256 (null for no look).
+    """
     rendered = config.model_dump(mode="json", include={"decode", "normalise", "grade"})
     overrides = config.photo(original.name)
     photos = {} if overrides == NO_OVERRIDES else {original.name: overrides.model_dump(mode="json")}
@@ -48,6 +62,14 @@ def sidecar_document(
         "output": {
             "name": output,
             **config.export.outputs[output].model_dump(mode="json"),
+        },
+        "look": None
+        if look is None
+        else {
+            "name": look.key,
+            "intensity": look.intensity,
+            "parameters": dict(look.parameters),
+            "sha256": look.sha256,
         },
         "config": {"version": config.version, **rendered, "photos": photos},
     }
