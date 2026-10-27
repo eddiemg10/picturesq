@@ -16,7 +16,6 @@ file in the same PR as any dependency change.
 | pillow | Imaging library | Final 8-bit sRGB JPEG export, ICC profile embedding (needs LittleCMS), EXIF and resize. | M1 |
 | tifffile | TIFF reader/writer for numpy | 16-bit RGB TIFF intermediates, written only with `--full-res` (decision D13). Pillow's 16-bit RGB TIFF support is weak. | M1 |
 | starlette + uvicorn | Web framework and server | Local web UI (`picturesq ui`). | M4 |
-| watchfiles | File watcher | Live reload when the YAML config changes. | M4 |
 
 Pillow only touches the final step: everything before it stays in float32 scene-linear, and we
 convert to 8-bit only when handing the array to Pillow.
@@ -27,6 +26,7 @@ convert to 8-bit only when handing the array to Pillow.
 |---|---|
 | pytest | Test runner. |
 | hypothesis | Property-based tests for the colour and normalise maths. |
+| httpx2 | HTTP client behind Starlette's `TestClient`, for the UI's API tests. |
 | colour-science | Test oracle: our colour maths is checked against it. Never imported by `src/`. |
 | types-pyyaml | Type stubs so pyright can check YAML code. |
 | jsonschema | Checks that `picturesq schema` is a valid JSON Schema and that the documented config validates against it. |
