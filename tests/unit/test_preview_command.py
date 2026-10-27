@@ -122,3 +122,26 @@ def test_preview_marks_a_failed_photo(
     assert result.exit_code == 1
     assert "1 photo(s) failed" in result.output
     assert (project / ".picturesq" / "previews" / "sheet.png").is_file()
+
+
+def test_adjustment_edits_move_the_preview_the_right_way() -> None:
+    """The agent workflow: an edit to grade.adjustments shows in the photo's current column."""
+    image = np.full((300, 400, 3), 0.18, dtype=np.float32)
+    image[:, 200:] = [0.30, 0.12, 0.05]  # a warm colour beside the grey
+
+    def current(adjustments: dict[str, float]) -> np.ndarray:
+        config = _config({"photos": {"a.dng": {"grade": {"adjustments": adjustments}}}})
+        (_, variant) = variants(config, "a.dng", [], {})
+        assert variant.current
+        return render_variant(image, config, "a.dng", None, variant).astype(float)
+
+    plain = render_variant(
+        image, _config({}), "a.dng", None, variants(_config({}), "a.dng", [], {})[0]
+    ).astype(float)
+    warmer = current({"warmth": 15})
+    assert (warmer[..., 0] - warmer[..., 2]).mean() > (plain[..., 0] - plain[..., 2]).mean() + 3
+    assert current({"exposure": 0.5}).mean() > plain.mean() + 5
+    less = current({"saturation": -0.6})
+    assert (
+        np.ptp(less[:, 250:350], axis=-1).mean() < 0.6 * np.ptp(plain[:, 250:350], axis=-1).mean()
+    )
