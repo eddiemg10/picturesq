@@ -59,7 +59,7 @@ def curve_slope(display: DisplayTransformConfig) -> tuple[FloatArray, FloatArray
     return _SLOPE_GRID.astype(np.float32), slope.astype(np.float32)
 
 
-def _log_luminance(rgb: FloatArray) -> FloatArray:
+def log_luminance(rgb: FloatArray) -> FloatArray:
     return np.log2(np.maximum(rgb @ _LUMINANCE, EV_FLOOR) / np.float32(MIDDLE_GREY))
 
 
@@ -110,6 +110,23 @@ class BaseUpsampler:
         return total
 
 
+def luminance_base(image: FloatArray, radius: float, edge_ev: float) -> BaseUpsampler:
+    """The smooth base of ``image``'s log luminance (stops from mid grey), ready to read a
+    block of rows at a time: an edge-aware blur of spatial scale ``radius`` (a fraction of
+    the long edge) on a small copy, kept from crossing steps much larger than ``edge_ev``.
+    """
+    height, width = image.shape[:2]
+    scale = min(1.0, SMALL_LONG_EDGE / max(height, width))
+    small_size = (max(1, round(width * scale)), max(1, round(height * scale)))
+    log_luminance = _log_luminance_in_blocks(image)
+    small = Image.fromarray(log_luminance, "F").resize(small_size, Image.Resampling.BOX)
+    del log_luminance
+    small_luminance = np.asarray(small, dtype=np.float32)
+    sigma = max(1.0, radius * max(small_luminance.shape))
+    base_small = edge_aware_blur(small_luminance, sigma, edge_ev)
+    return BaseUpsampler(base_small, small_luminance, height, width, edge_ev)
+
+
 def local_contrast(
     image: FloatArray, config: LocalContrastConfig, display: DisplayTransformConfig
 ) -> FloatArray:
@@ -121,16 +138,7 @@ def local_contrast(
     if not config.enabled:
         return image
     height, width = image.shape[:2]
-    scale = min(1.0, SMALL_LONG_EDGE / max(height, width))
-    small_size = (max(1, round(width * scale)), max(1, round(height * scale)))
-    log_luminance = _log_luminance_in_blocks(image)
-    small = Image.fromarray(log_luminance, "F").resize(small_size, Image.Resampling.BOX)
-    del log_luminance
-    small_luminance = np.asarray(small, dtype=np.float32)
-    sigma = max(1.0, config.radius * max(small_luminance.shape))
-    base_small = edge_aware_blur(small_luminance, sigma, config.edge_ev)
-    upsampler = BaseUpsampler(base_small, small_luminance, height, width, config.edge_ev)
-    del base_small, small_luminance
+    upsampler = luminance_base(image, config.radius, config.edge_ev)
     ev, slope = curve_slope(display)
     floor, amount = np.float32(config.detail_floor), np.float32(config.amount)
     limit = np.float32(config.detail_limit_ev)
@@ -138,7 +146,7 @@ def local_contrast(
 
     def amplify_rows(top: int, bottom: int) -> None:
         block = image[top:bottom]
-        lum = _log_luminance(block)
+        lum = log_luminance(block)
         base = upsampler.rows(lum, top)
         base_slope = np.maximum(np.interp(base, ev, slope).astype(np.float32), np.float32(1e-3))
         # The floor applies above mid grey only: in the toe it would amplify shadow noise.
@@ -164,7 +172,7 @@ def _log_luminance_in_blocks(image: FloatArray) -> FloatArray:
     out = np.empty((height, width), dtype=np.float32)
 
     def rows(top: int, bottom: int) -> None:
-        out[top:bottom] = _log_luminance(image[top:bottom])
+        out[top:bottom] = log_luminance(image[top:bottom])
 
     parallel.run(partial(rows, *block) for block in parallel.row_blocks(height, width))
     return out
