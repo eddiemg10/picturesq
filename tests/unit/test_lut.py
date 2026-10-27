@@ -172,7 +172,9 @@ def test_look_file_loads_its_lut_and_hashes_it(tmp_path: Path) -> None:
     look = load_look_file(path)
     (operation,) = look.resolve()
     assert isinstance(operation, LutOperation) and operation.table is not None
-    expected = hashlib.sha256(path.read_bytes() + cube.encode("utf-8")).hexdigest()
+    # The file's bytes, not the string: on Windows write_text writes \r\n line endings.
+    lut_bytes = (path.parent / "luts" / "filmic.cube").read_bytes()
+    expected = hashlib.sha256(path.read_bytes() + lut_bytes).hexdigest()
     assert look.sha256 == expected
 
 
