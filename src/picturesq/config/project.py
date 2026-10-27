@@ -1,17 +1,25 @@
 """Project config model: the contents of ``<project>/picturesq.yaml``.
 
 v0 holds the decode, normalise (exposure, chroma noise reduction, scene contrast, white
-balance check, outlier ranges), grade (display transform only), export and per-photo
-override sections.
-Looks and adjustments are added in the milestones that implement them, so the config never
-offers a setting the pipeline ignores.
+balance check, outlier ranges), grade (look, adjustments, local contrast, display
+transform), export and per-photo override sections. Settings are added in the milestones
+that implement them, so the config never offers a setting the pipeline ignores.
 """
 
+from datetime import datetime
 from typing import Annotated, Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 from picturesq.colour.transfer import SRGB_GREY_ENCODED, SRGB_GREY_SLOPE_PER_EV
+from picturesq.config.time_shift import TIME_SHIFT_PATTERN, format_time_shift, parse_time_shift
 
 CONFIG_FILENAME = "picturesq.yaml"
 
@@ -501,9 +509,60 @@ class LocalContrastConfig(_Model):
     )
 
 
-class GradeConfig(_Model):
-    """Stage 3 settings. v0: local contrast and the display transform; looks come in M3."""
+LookName = Annotated[str, StringConstraints(pattern=r"^(bw|cold|warm|cinematic)/[a-z][a-z0-9_]*$")]
 
+
+class LookChoice(_Model):
+    """Which look a photo is graded with, how strongly, and its parameter values."""
+
+    name: LookName = Field(description="The look, as category/name (see `picturesq looks`).")
+    intensity: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.5,
+        description="How strongly the look applies: 0 is the neutral render, 1 as designed.",
+    )
+    parameters: dict[str, float] = Field(
+        default_factory=dict,
+        description="Values for the look's parameters; unset ones use the look's defaults.",
+    )
+
+
+class AdjustmentsConfig(_Model):
+    """The controls every look has, applied after the look's scene operations."""
+
+    exposure: float = Field(default=0.0, ge=-3.0, le=3.0, description="Exposure change in EV.")
+    highlights: float = Field(
+        default=0.0,
+        ge=-1.0,
+        le=1.0,
+        description="Bright areas only: negative darkens them (keeping their detail), "
+        "positive brightens.",
+    )
+    warmth: float = Field(
+        default=0.0, ge=-50.0, le=50.0, description="Warmth in mired; positive is warmer."
+    )
+    tint: float = Field(
+        default=0.0, ge=-30.0, le=30.0, description="Tint; positive is magenta, negative green."
+    )
+    contrast: float = Field(
+        default=0.0, ge=-0.5, le=0.5, description="Contrast around mid grey; 0.1 is 10 % more."
+    )
+    saturation: float = Field(
+        default=0.0, ge=-1.0, le=1.0, description="Colour for every colour; -1 is black and white."
+    )
+    vibrance: float = Field(
+        default=0.0, ge=-1.0, le=1.0, description="Colour for muted colours, less for vivid ones."
+    )
+
+
+class GradeConfig(_Model):
+    """Stage 3 settings: the look and adjustments, local contrast and the display transform."""
+
+    look: LookChoice | None = Field(
+        default=None, description="The project's look; none (null) is the neutral render."
+    )
+    adjustments: AdjustmentsConfig = Field(default_factory=AdjustmentsConfig)
     local_contrast: LocalContrastConfig = Field(default_factory=LocalContrastConfig)
     display_transform: DisplayTransformConfig = Field(default_factory=DisplayTransformConfig)
 
@@ -559,6 +618,65 @@ class ExportConfig(_Model):
         return self
 
 
+def _canonical_shift(value: str) -> str:
+    return format_time_shift(parse_time_shift(value))
+
+
+def _whole_second_naive(value: datetime) -> datetime:
+    if value.tzinfo is not None:
+        raise ValueError("write the time as the clock showed it, without a zone (see time_zone)")
+    return value.replace(microsecond=0)
+
+
+def _check_time_zone(value: str) -> str:
+    hours, minutes = int(value[1:3]), int(value[4:6])
+    if hours > 14 or (hours == 14 and minutes):
+        raise ValueError("a time zone is at most +14:00 or -14:00 from UTC")
+    return value
+
+
+TimeShift = Annotated[
+    str, StringConstraints(pattern=TIME_SHIFT_PATTERN), AfterValidator(_canonical_shift)
+]
+TimeZone = Annotated[
+    str, StringConstraints(pattern=r"^[+-]\d\d:[0-5]\d$"), AfterValidator(_check_time_zone)
+]
+CaptureTimeValue = Annotated[datetime, AfterValidator(_whole_second_naive)]
+
+
+class MetadataConfig(_Model):
+    """Corrections to the dates and times written into exports (originals are never changed)."""
+
+    time_shift: TimeShift = Field(
+        default="+0d 00:00:00",
+        description=(
+            "Added to every photo's capture time, to fix a camera whose clock was wrong. A sign, "
+            "days, then hours:minutes:seconds, e.g. +9598d 10:05:00 or -0d 01:00:00. "
+            "`picturesq metadata shift` works it out from one photo whose real time you know."
+        ),
+    )
+    time_zone: TimeZone | None = Field(
+        default=None,
+        description=(
+            "The time zone the corrected capture times are in, as an offset from UTC (+01:00). "
+            "Written as OffsetTime, OffsetTimeOriginal and OffsetTimeDigitized. null leaves the "
+            "camera's own offset tags alone."
+        ),
+    )
+
+
+class MetadataOverrides(_Model):
+    """One photo's metadata overrides."""
+
+    capture_time: CaptureTimeValue | None = Field(
+        default=None,
+        description=(
+            "The time this photo was taken, as the local clock showed it (2026-10-17T20:05:00). "
+            "Wins over the project's time_shift."
+        ),
+    )
+
+
 class NormaliseOverrides(_Model):
     """One photo's normalise overrides; an unset value keeps the project's or computed one.
 
@@ -612,10 +730,41 @@ class NormaliseOverrides(_Model):
     )
 
 
+class AdjustmentOverrides(_Model):
+    """One photo's adjustments; an unset value keeps the project's."""
+
+    exposure: float | None = Field(default=None, ge=-3.0, le=3.0, description="Replaces exposure.")
+    highlights: float | None = Field(
+        default=None, ge=-1.0, le=1.0, description="Replaces highlights."
+    )
+    warmth: float | None = Field(default=None, ge=-50.0, le=50.0, description="Replaces warmth.")
+    tint: float | None = Field(default=None, ge=-30.0, le=30.0, description="Replaces tint.")
+    contrast: float | None = Field(default=None, ge=-0.5, le=0.5, description="Replaces contrast.")
+    saturation: float | None = Field(
+        default=None, ge=-1.0, le=1.0, description="Replaces saturation."
+    )
+    vibrance: float | None = Field(default=None, ge=-1.0, le=1.0, description="Replaces vibrance.")
+
+
+class GradeOverrides(_Model):
+    """One photo's grade overrides."""
+
+    look: LookChoice | None = Field(
+        default=None,
+        description=(
+            "Replaces the project's look for this photo (name, intensity and parameters). "
+            "Intensity 0 grades this photo with no look."
+        ),
+    )
+    adjustments: AdjustmentOverrides = Field(default_factory=AdjustmentOverrides)
+
+
 class PhotoOverrides(_Model):
     """Overrides for one photo, keyed in ``photos:`` by the original's file name."""
 
     normalise: NormaliseOverrides = Field(default_factory=NormaliseOverrides)
+    grade: GradeOverrides = Field(default_factory=GradeOverrides)
+    metadata: MetadataOverrides = Field(default_factory=MetadataOverrides)
 
     @property
     def sets_white_balance(self) -> bool:
@@ -634,6 +783,7 @@ class ProjectConfig(_Model):
     normalise: NormaliseConfig = Field(default_factory=NormaliseConfig)
     grade: GradeConfig = Field(default_factory=GradeConfig)
     export: ExportConfig = Field(default_factory=ExportConfig)
+    metadata: MetadataConfig = Field(default_factory=MetadataConfig)
     photos: dict[str, PhotoOverrides] = Field(
         default_factory=dict,
         description=(
@@ -664,3 +814,19 @@ class ProjectConfig(_Model):
             if key.casefold() == folded:
                 return value
         return NO_OVERRIDES
+
+    def photo_look(self, name: str) -> LookChoice | None:
+        """The look photo ``name`` is graded with: its override, else the project's; None
+        when neither is set or the intensity is 0 (the neutral render)."""
+        choice = self.photo(name).grade.look or self.grade.look
+        if choice is None or choice.intensity == 0.0:
+            return None
+        return choice
+
+    def photo_adjustments(self, name: str) -> AdjustmentsConfig:
+        """Photo ``name``'s adjustments: the project's, with the photo's overrides replacing
+        the values they set."""
+        overrides = self.photo(name).grade.adjustments.model_dump(exclude_none=True)
+        if not overrides:
+            return self.grade.adjustments
+        return self.grade.adjustments.model_copy(update=overrides)

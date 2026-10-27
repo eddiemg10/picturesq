@@ -121,8 +121,9 @@ Dropped after measurement (ADR-0010): key detection with per-key targets and the
 ### 4.3 Grade
 - **Per photo:** one look + intensity + adjustments (project default, with optional per-photo override).
 - **Look file:** metadata (name, category, description), **parameters** exposed to the UI, and an ordered list of **operations**.
-- **Operations (v1):** scene-linear: `exposure`, `white_balance`, `contrast` (log-space pivot), `tone_curve`, `saturation`, `vibrance` (OkLCh chroma), `hsl` (hue bands), `split_tone`, `fade`, `channel_mixer` (B/W), `grain` (seeded), `vignette`. Display-referred (after AgX): `lut` (with a declared input space).
-- **Intensity:** every operation parameter declares its neutral value; `effective = neutral + intensity × (value − neutral)`. For `lut`, intensity blends the LUT output with its input. 0 % = exactly the neutral render (tested); range 0–150 %.
+- **Operations (v1):** scene-linear: `exposure`, `white_balance`, `contrast` (log-space pivot), `tone_curve`, `saturation`, `vibrance` (OkLCh chroma), `hsl` (hue bands), `split_tone`, `channel_mixer` (B/W), `vignette`. Display-referred (after AgX): `lut` (with a declared input space), `fade` (a lift on sRGB values), `grain` (seeded).
+- **Intensity:** every operation parameter that sets how much it does declares its neutral value; `effective = neutral + intensity × (value − neutral)`; pivots and hues are kept. For `lut`, intensity blends the LUT output with its input. 0 % = exactly the neutral render (an operation left neutral is skipped, tested); range 0–150 % ([ADR-0019](decisions/0019-grade-operations-and-intensity.md)).
+- **Order:** look scene-linear operations → adjustments → local contrast → display transform (per output) → display-referred operations (`lut`, `fade`, `grain`), ADR-0019.
 - **Adjustments:** exposure, warmth, tint, contrast, saturation, vibrance. The same for every look, applied after the look's scene-linear operations.
 - **Look library:** built-in looks at `picturesq/grade/looks/<category>/<name>.yaml` (3–4 per category in v1). User-installed looks and `.cube` files later (user look files are deferred; user `.cube` files are wrapped in a look file).
 
@@ -219,7 +220,7 @@ parameters:                      # shown in the UI's look panel
   shadow_tint: {default: 0.10, min: 0, max: 0.3, label: Shadow tint}
   fade: {default: 0.05, min: 0, max: 0.2, label: Fade}
 operations:
-  - {op: white_balance, temperature: -400, tint: 0}
+  - {op: white_balance, warmth: -15, tint: 0}   # mired; negative is cooler
   - {op: contrast, amount: 0.15, pivot: 0.18}
   - {op: split_tone, shadows: {hue: 215, amount: $shadow_tint}, highlights: {hue: 45, amount: 0.03}}
   - {op: saturation, amount: -0.15}
@@ -235,10 +236,15 @@ operations:
 | `picturesq run PROJECT` | Whole pipeline: decode → normalise → grade → export (creates `picturesq.yaml` with defaults if missing) |
 | `picturesq decode PROJECT [--full-res]` | Decode originals, build proxies (+ optional 16-bit TIFFs; `--full-res` not yet implemented) |
 | `picturesq normalise PROJECT [--strict] [--png FILE]` | On proxies: per photo the exposure, stats, white balance check and flags, one line each and a summary; writes `.picturesq/stats/<stem>.json` and `summary.json`; `--strict` exits 3 if any photo is flagged; `--png` also writes a contact sheet of the normalised photos (flagged ones in amber) |
-| `picturesq preview PROJECT [--category cold] [--png FILE]` | Contact sheet of photos × looks: in the terminal, or as a PNG |
-| `picturesq looks [--category cold]` | List the look library |
-| `picturesq ui PROJECT` | Start the local web UI (opens the browser) |
+| `picturesq preview PROJECT [--category cold] [--look cold/nordic …] [--png FILE]` | Contact sheet from proxies: per photo the neutral render, its current grade, then each look (at the photo's own intensity and parameters if it's its look, else 100 %); writes `.picturesq/previews/sheet.png` or `--png`. Showing it in the terminal: #122 |
+| `picturesq looks [--category cold] [--json]` | List the look library with each look's parameters |
+| `picturesq ui PROJECT [--port 8765] [--no-open]` | Start the local web UI on localhost (opens the browser): photo strip, large preview, look tiles per photo, intensity / parameters / adjustments, per-photo normalise sliders, copy and paste a grade, export. Every change is saved to `picturesq.yaml` as it is made; edits to that file from elsewhere (an agent) reach the browser within a second (the server polls the file's modification time, so watchfiles isn't needed) |
 | `picturesq export PROJECT [--output web]` | Render originals and write enabled outputs |
+| `picturesq metadata show PROJECT [--json]` | Each photo's camera time, the corrected capture time its exports carry, and why (shifted, set for this photo, unchanged) |
+| `picturesq metadata shift PROJECT (--photo NAME --actual "2026-10-17 20:05" \| --by -1d2h30m \| --clear)` | Set `metadata.time_shift`: from one photo whose real time you know, or directly; saves `picturesq.yaml` |
+| `picturesq metadata zone PROJECT (+01:00 \| --clear)` | Set `metadata.time_zone` (the `OffsetTime*` tags) |
+| `picturesq metadata time PROJECT NAME ("2026-10-17 20:05" \| --clear)` | Set one photo's `metadata.capture_time` |
+| `picturesq metadata apply PROJECT [--output web] [--out DIR]` | Rewrite the dates in exports already written, without re-rendering: only the JPEG's EXIF block is replaced (the image data stays byte for byte) and the sidecars are updated |
 | `picturesq schema [project\|look]` | Print the JSON Schema (`look` in M3) |
 | `picturesq doctor` | Check the environment: versions (LibRaw and its features, Python libraries), CPU, the threads and block size chosen and why, memory available, the memory budget and how many photos run at once, terminal graphics (a guess); exits 1 on any error |
 
@@ -326,7 +332,7 @@ Stats JSON, WB disagreement flag, overrides, flags, outliers, `normalise` comman
 
 ### M3 — Grade: look engine, look library, previews
 Operations, look file schema + intensity, `lut` operation (oracle-tested), adjustments, 12–16 built-in looks, `preview` and `looks` commands (output sharpening landed in M1).
-**Concepts:** tone curves, Oklab/OkLCh, what a `.cube` LUT is, split toning, unsharp mask.
+**Concepts:** tone curves, Oklab/OkLCh, what a `.cube` LUT is, split toning, unsharp mask ([primer](primers/m3-grade.md)).
 **Exit:** an agent makes a described change via config and the preview reflects it.
 
 ### M4 — UI
@@ -369,8 +375,7 @@ Inspiration-image → draft look; sky segmentation (SegFormer, ADE20K) + sky-onl
 | pyyaml | YAML I/O | M1 |
 | pillow | JPEG export, ICC profile, resize | M1 |
 | tifffile | 16-bit TIFF | M1 |
-| starlette + uvicorn | UI | M4 |
-| watchfiles | config live reload | M4 |
+| starlette + uvicorn | UI | M4 (#144) |
 | *(decide in M1)* opencv-python-headless | fast blur/resize, only if Pillow/numpy is too slow | — |
 
 Dev: pytest, hypothesis, pytest-benchmark, colour-science (oracle), ruff, pyright, pre-commit, playwright (M4).

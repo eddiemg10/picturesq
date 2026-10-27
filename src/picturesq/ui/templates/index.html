@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>picturesq</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="bar">
+    <span class="brand">picturesq</span>
+    <span id="project" class="project"></span>
+    <span id="notice" class="notice" hidden></span>
+    <span class="spacer"></span>
+    <div class="export">
+      <span id="export-outputs"></span>
+      <button id="export-button" type="button">Export</button>
+      <span id="export-status" class="muted"></span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="strip" aria-label="Photos">
+      <div class="strip-tools">
+        <button id="select-all" type="button" title="Select every photo (a)">Select all</button>
+        <label class="muted"><input id="flagged-first" type="checkbox"> Flagged first</label>
+      </div>
+      <ol id="photos" class="photos"></ol>
+    </aside>
+
+    <section class="viewer" aria-label="Preview">
+      <div class="viewer-tools">
+        <span id="photo-name" class="photo-name"></span>
+        <span id="photo-flags" class="flags"></span>
+        <span class="spacer"></span>
+        <button id="before" type="button" title="Hold to see the neutral render (\)">Hold for before</button>
+      </div>
+      <div class="stage">
+        <img id="large" alt="">
+        <div id="busy" class="busy" hidden>rendering…</div>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="Grade">
+      <div class="scope" role="radiogroup" aria-label="Editing">
+        <button id="scope-photos" type="button" role="radio">Selected photos</button>
+        <button id="scope-project" type="button" role="radio">Whole project</button>
+      </div>
+      <p id="scope-note" class="muted small"></p>
+
+      <h2>Look</h2>
+      <div id="categories" class="categories"></div>
+      <div id="looks" class="looks"></div>
+
+      <div id="look-controls"></div>
+
+      <h2>Adjustments</h2>
+      <div id="adjustments"></div>
+
+      <div id="normalise-section">
+        <h2>Normalise <span class="muted small">this photo</span></h2>
+        <div id="normalise"></div>
+      </div>
+
+      <div class="actions">
+        <button id="copy" type="button" title="Copy this photo's look and adjustments (c)">Copy grade</button>
+        <button id="paste" type="button" title="Paste onto the selected photos (v)" disabled>Paste to selected</button>
+        <button id="reset" type="button" title="Remove the selected photos' overrides">Reset photos</button>
+      </div>
+      <details class="yaml">
+        <summary>picturesq.yaml</summary>
+        <pre id="yaml"></pre>
+      </details>
+    </aside>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

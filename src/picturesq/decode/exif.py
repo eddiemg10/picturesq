@@ -93,7 +93,8 @@ def _keep(directory: Mapping[int, Any], allowed: frozenset[int]) -> dict[int, An
     return {tag: value for tag, value in kept.items() if value != "" and value is not None}
 
 
-def _from_exif(exif: Image.Exif) -> CaptureExif:
+def capture_from_exif(exif: Image.Exif) -> CaptureExif:
+    """The allowlisted values of an EXIF block Pillow has parsed."""
     return CaptureExif(image=_keep(exif, IMAGE_TAGS), exif=_keep(exif.get_ifd(IFD.Exif), EXIF_TAGS))
 
 
@@ -102,7 +103,7 @@ def _from_tiff(path: Path) -> CaptureExif:
         exif = Image.Exif()
         exif.load_from_fp(file)
         # The EXIF directory is read lazily, from the open file.
-        return _from_exif(exif)
+        return capture_from_exif(exif)
 
 
 def _from_camera_jpeg(path: Path) -> CaptureExif:
@@ -111,7 +112,7 @@ def _from_camera_jpeg(path: Path) -> CaptureExif:
     if thumb.format != ThumbFormat.JPEG:
         return CaptureExif()
     with Image.open(io.BytesIO(thumb.data)) as image:
-        return _from_exif(image.getexif())
+        return capture_from_exif(image.getexif())
 
 
 def read_capture_exif(path: Path) -> CaptureExif:

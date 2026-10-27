@@ -1,6 +1,7 @@
 """YAML load/save for config models. Writes are atomic (ADR-0004)."""
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import ValidationError
@@ -43,11 +44,28 @@ def load_project_config(path: Path) -> ProjectConfig:
         raise ConfigError(_format_validation_error(path, error)) from None
 
 
+def _without_unset(value: Any) -> Any:
+    """``value`` with None entries and the mappings they leave empty removed."""
+    if not isinstance(value, dict):
+        return value
+    kept = {key: _without_unset(inner) for key, inner in value.items() if inner is not None}
+    return {key: inner for key, inner in kept.items() if inner != {}}
+
+
 def dump_project_config(config: ProjectConfig) -> str:
-    """Serialise to YAML, keys in model order."""
-    return yaml.safe_dump(
-        config.model_dump(mode="json"), sort_keys=False, allow_unicode=True, width=100
-    )
+    """Serialise to YAML, keys in model order.
+
+    Every project setting is written (defaults included, so the file documents them), but
+    a photo's overrides only say what they override: an unset override (None) is left out,
+    and a photo that overrides nothing is dropped.
+    """
+    data = config.model_dump(mode="json")
+    data["photos"] = {
+        name: entry
+        for name, entry in ((name, _without_unset(e)) for name, e in data["photos"].items())
+        if entry
+    }
+    return yaml.safe_dump(data, sort_keys=False, allow_unicode=True, width=100)
 
 
 def save_project_config(config: ProjectConfig, path: Path) -> None:

@@ -1,0 +1,13 @@
+version: 1
+name: frost
+category: cold
+description: Bright, airy and icy, soft contrast, clear cyan-blues
+parameters:
+  warmth: {default: -25.0, min: -50.0, max: 0.0, label: Coolness}
+operations:
+  - {op: white_balance, warmth: $warmth, tint: -2}
+  - {op: exposure, ev: 0.2}
+  - {op: contrast, amount: -0.06}
+  - {op: tone_curve, points: [[-4.0, -3.7], [0.0, 0.0]]}
+  - {op: saturation, amount: -0.2}
+  - {op: hsl, blue: {hue: -8, chroma: 0.15}, aqua: {chroma: 0.15}}

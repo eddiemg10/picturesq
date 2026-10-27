@@ -15,7 +15,7 @@ The machine-readable version of this page is the JSON Schema: `picturesq schema`
 
 Every export records the config that rendered it in its **sidecar** (`exports/<output>/<photo>.picturesq.json`); the sidecar's `config` section is a valid `picturesq.yaml`.
 
-> **Status:** config format version `1`, pre-alpha. This page documents what exists today (`decode`, `normalise`, `grade.local_contrast`, `grade.display_transform`, `export`, `photos`). Sections for looks and adjustments are added as those stages ship.
+> **Status:** config format version `1`, pre-alpha. This page documents what exists today: `decode`, `normalise`, `grade` (look, adjustments, local contrast, display transform), `export`, `photos`, and the [look file](#look-files) format.
 
 ## Defaults
 
@@ -59,6 +59,15 @@ normalise:
     max_median_ev: 3.0
     max_clipped: 0.02
 grade:
+  look: null
+  adjustments:
+    exposure: 0.0
+    highlights: 0.0
+    warmth: 0.0
+    tint: 0.0
+    contrast: 0.0
+    saturation: 0.0
+    vibrance: 0.0
   local_contrast:
     enabled: true
     detail_floor: 0.8
@@ -110,10 +119,26 @@ export:
   enabled:
   - web
   - archive
+metadata:
+  time_shift: +0d 00:00:00
+  time_zone: null
 photos: {}
 ```
 
 ## Examples
+
+Grade every photo with a look at 80 %, a little warmer, and one photo with another look:
+
+```yaml
+grade:
+  look: {name: cold/nordic, intensity: 0.8, parameters: {fade: 0.06}}
+  adjustments: {warmth: 8}
+photos:
+  DJI_0042.DNG:
+    grade:
+      look: {name: bw/silver, intensity: 1.0}
+      adjustments: {exposure: 0.3}
+```
 
 Write only web-sized JPEGs:
 
@@ -180,6 +205,17 @@ photos:
     normalise: {exposure_ev: 2.7}
 ```
 
+Fix a camera whose clock said 2000-07-07 when it was really 2026-10-17, and give one photo its exact time:
+
+```yaml
+metadata:
+  time_shift: +9598d 10:05:00
+  time_zone: +01:00
+photos:
+  DJI_20261017_0042.DNG:
+    metadata: {capture_time: '2026-10-17T20:05:00'}
+```
+
 ## Reference
 
 ### Top level
@@ -191,6 +227,7 @@ photos:
 | `normalise` | mapping | see below | Per-photo corrections (exposure, colour noise reduction, scene contrast) and the checks that flag photos for review. |
 | `grade` | mapping | see below | How images are rendered for display. Today only the display transform. |
 | `export` | mapping | see below | Which files `picturesq export` writes. |
+| `metadata` | mapping | see below | Corrections to the dates and times written into exports. |
 | `photos` | mapping of file name → overrides | `{}` | Per-photo overrides. See [`photos`](#photos). |
 
 ### `decode`
@@ -285,8 +322,34 @@ After normalise, a photo whose stats fall outside these ranges is flagged as an 
 
 | Key | Type | Default | Description |
 |---|---|---|---|
+| `look` | mapping or `null` | `null` | The project's look, below; `null` is the neutral render. |
+| `adjustments` | mapping | all `0` | Controls every look has, below. |
 | `local_contrast` | mapping | see below | Keeps detail (clouds, distant hills) where the display transform would flatten it. |
 | `display_transform` | mapping | see below | The AgX-style display transform that turns scene light into display values, rolling highlights off toward white instead of clipping them. |
+
+#### `grade.look`
+
+Which look the photos are graded with (see [Look files](#look-files); `picturesq looks` lists them). Its scene operations run before local contrast and the display transform, its display operations (`fade`, `grain`) after it, for each output.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `name` | `category/name` | (required) | The look, e.g. `cold/nordic`. An unknown name is an error (exit 2) before anything is rendered. |
+| `intensity` | number, 0–1.5 | `1.0` | How strongly the look applies: `0` is exactly the neutral render, `1` the look as designed, `1.5` half as much again. It scales each operation's strength, not a blend of two images ([ADR-0019](decisions/0019-grade-operations-and-intensity.md)). |
+| `parameters` | mapping of name to number | `{}` | Values for the look's parameters (its sliders); unset ones use the look's defaults. An unknown name or a value outside the parameter's range is an error. |
+
+#### `grade.adjustments`
+
+The same seven controls for every look, applied after the look's scene operations and before local contrast, so "a bit warmer" means the same on every look. All `0` changes nothing.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `exposure` | number, −3–3 | `0.0` | Exposure change in stops. |
+| `highlights` | number, −1–1 | `0.0` | The bright areas only (an LED screen, a window): negative darkens them and keeps their detail, positive brightens them. Mid tones and shadows don't change. It is the `highlights` operation with its defaults; `-0.5` is a clear pull, `-1` the most. |
+| `warmth` | number, −50–50 | `0.0` | Warmth in mired: positive is warmer (yellower), negative cooler. 10 is a gentle change. |
+| `tint` | number, −30–30 | `0.0` | Positive is magenta, negative green. |
+| `contrast` | number, −0.5–0.5 | `0.0` | Contrast around mid grey, in stops: `0.1` makes every stop 1.1 stops. Colours keep their hue and saturation. |
+| `saturation` | number, −1–1 | `0.0` | Colour for every colour, lightness kept: `-1` is black and white. |
+| `vibrance` | number, −1–1 | `0.0` | Colour for muted colours, less for vivid ones (skin changes less than with `saturation`). |
 
 #### `grade.local_contrast`
 
@@ -358,6 +421,25 @@ Each output:
 
 Exports are written to `<project>/exports/<output name>/`.
 
+### `metadata`
+
+A camera whose clock was never set (a DJI Pocket 4 after a battery reset says 2000-07-07) stamps every photo with a wrong date, and photo libraries and social apps sort by it. Originals are never changed, so the correction lives here and is written into the exports' EXIF: `DateTimeOriginal`, `DateTimeDigitized` and `DateTime`, plus `OffsetTime`, `OffsetTimeOriginal` and `OffsetTimeDigitized` when `time_zone` is set. With the defaults nothing changes. Each export's sidecar records the camera's time and the corrected one under `metadata`.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `time_shift` | text | `+0d 00:00:00` | Added to every photo's capture time. A sign, then days (`9598d`), then `HH:MM:SS`, exact to the second: `+9598d 10:05:00` moves a photo from 2000-07-07 to 2026-10-17 (the same sign convention as a clock correction: positive is later). Easiest to set with `picturesq metadata shift --photo NAME --actual "2026-10-17 20:05"`, which works it out from one photo whose real time you know. |
+| `time_zone` | `±HH:MM` or `null` | `null` | The zone the corrected times are in, as an offset from UTC (`+01:00`), written as the `OffsetTime*` tags. EXIF times carry no zone of their own. `null` leaves the camera's offset tags alone. |
+
+```yaml
+metadata:
+  time_shift: +9598d 10:05:00
+  time_zone: +01:00
+```
+
+A photo whose original records no capture time is not shifted (there is nothing to shift); give it one with `photos.<name>.metadata.capture_time`. A shift is at the project level because a wrong clock is wrong by the same amount for every photo until someone resets it; if the camera was reset part way through, use the per-photo capture time for the other photos.
+
+`picturesq metadata` edits these settings and can rewrite exports already on disk: see the [project plan](project-plan.md#7-cli-specification).
+
 ### `photos`
 
 Per-photo **overrides**, written by the UI (or an agent) when one photo needs something different from the project's settings. Keys are the original's file name (`DJI_0042.DNG`), matched ignoring case; a photo with no entry uses the project's settings. An entry for a file that isn't in the project is kept (it may be added later).
@@ -374,11 +456,15 @@ photos:
     normalise: {scene_contrast: 0.5}   # a foggy scene: extra contrast for this photo only
 ```
 
+The UI writes only what a photo overrides: unset values are left out, and a photo whose last override is removed disappears from `photos`.
+
 Each photo:
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `normalise` | mapping | `{}` | This photo's normalise overrides, below. |
+| `grade` | mapping | `{}` | This photo's look and adjustments, below. |
+| `metadata` | mapping | `{}` | This photo's capture time, below. |
 
 `photos.<name>.normalise`:
 
@@ -392,7 +478,182 @@ Each photo:
 
 `wb_kelvin` and `tint` together describe one white; set either alone and the other keeps its as-shot value (`picturesq` reads the as-shot white from the original's header). A photo whose original records no usable as-shot white can't be re-balanced: with either set, its export fails with an error naming it, and the other photos carry on.
 
-Each export's sidecar records the photo's overrides under `config.photos`, so the sidecar alone says how the photo was rendered.
+`photos.<name>.grade`:
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `look` | mapping or `null` | `null` | Replaces the project's `grade.look` for this photo (name, intensity and parameters together; see `grade.look`). Intensity `0` grades this photo with no look. `null` follows the project. |
+| `adjustments` | mapping | `{}` | This photo's adjustments: each key set (`exposure`, `highlights`, `warmth`, `tint`, `contrast`, `saturation`, `vibrance`, same ranges as `grade.adjustments`) replaces the project's value; unset (`null`) ones follow the project. |
+
+`photos.<name>.metadata`:
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `capture_time` | date and time, or `null` | `null` | When this photo was taken, as the camera's clock should have shown it: `2026-10-17T20:05:00` (a space instead of the `T` also works; no zone, see `metadata.time_zone`). It *replaces* the camera's time and wins over `metadata.time_shift`. `null` follows the project. |
+
+Each export's sidecar records the photo's overrides under `config.photos` (those that change the picture; the capture time is recorded under `metadata`), and the look it was graded with under `look` (name, intensity, every parameter's value and the look file's SHA-256), so the sidecar alone says how the photo was rendered.
+
+## Look files
+
+A **look** (e.g. `cold/nordic`) is defined by a **look file**: YAML with the look's metadata, the **parameters** it shows in the UI, and the **operations** it applies, in order. The built-in ones are in `src/picturesq/grade/looks/<category>/<name>.yaml`. `picturesq schema look` prints the look file's JSON Schema; [`docs/schema/look.schema.json`](schema/look.schema.json) is a copy.
+
+```yaml
+version: 1
+name: nordic
+category: cold                   # bw | cold | warm | cinematic
+description: Muted, cool shadows, clean whites, lifted blacks
+parameters:
+  shadow_tint: {default: 0.3, min: 0.0, max: 0.8, label: Shadow tint}
+  fade: {default: 0.04, min: 0.0, max: 0.12, label: Fade}
+operations:
+  - {op: white_balance, warmth: -12}
+  - {op: contrast, amount: 0.12}
+  - {op: split_tone, shadows: {hue: 230, amount: $shadow_tint}, highlights: {hue: 70, amount: 0.1}}
+  - {op: saturation, amount: -0.15}
+  - {op: fade, amount: $fade}
+```
+
+| Key | Type | Description |
+|---|---|---|
+| `version` | `1` | Look file format version. |
+| `name` | name | The look's name within its category; must match the file name. |
+| `category` | `bw` \| `cold` \| `warm` \| `cinematic` | Must match the folder. Projects refer to the look as `category/name`. |
+| `description` | text, up to 200 characters | One line, for people. |
+| `parameters` | mapping of name to parameter | Values the UI shows as sliders. Each has `default`, `min`, `max` (`min ≤ default ≤ max`) and `label`. |
+| `operations` | list, 1–32 | The steps, in order. Any number in an operation can be a **parameter reference** `$name` instead. |
+
+**Validation:** every `$name` must be a parameter, every parameter must be used, and every operation must be valid with all its parameters at their default, at their `min` and at their `max`. Unknown keys and unknown `op` names are errors, as in `picturesq.yaml`.
+
+**Intensity** (how strongly a look applies, 0–150 %) scales each operation's strength values between their **neutral value** (where the operation does nothing) and the look's value; values that say where or which (a pivot, a hue) are kept. So `exposure: {ev: 1}` at 50 % is +0.5 EV, and at 0 % every operation is skipped: exactly the neutral render ([ADR-0019](decisions/0019-grade-operations-and-intensity.md)). Below, the strength values are those with a neutral value.
+
+**Order:** the look's scene operations run on scene light, then adjustments, then local contrast and the display transform; the look's display operations run after the display transform, for each output (`fade`, `grain`, `lut`).
+
+### Operations
+
+#### `exposure` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `ev` | number, −4–4 | `0` | Exposure change in stops: `1` doubles the light. |
+
+#### `white_balance` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `warmth` | number, −100–100 | `0` | Warmth in mired; positive is warmer (yellower), negative cooler. 10–20 is a gentle change. |
+| `tint` | number, −50–50 | `0` | Tint on the same scale as `photos.<name>.normalise.tint`; positive is magenta, negative green. |
+
+#### `contrast` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, −0.9–1 | `0` | Extra contrast around `pivot`, in stops: `0.2` makes every stop away from it 1.2 stops. The same gain on R, G and B, so colours keep their hue and saturation. |
+| `pivot` | number, 0–1 | — | Scene luminance that stays put. Default `0.18` (mid grey). |
+
+#### `saturation` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, −1–1 | `0` | Chroma change for every colour, lightness and hue kept: `-1` is black and white, `0.2` is 20 % more colour. |
+
+#### `vibrance` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, −1–1 | `0` | Chroma change for muted colours, fading to none for colourful ones (Oklab chroma 0.25 and up), so skin and vivid colours change less than with `saturation`. |
+
+#### `tone_curve` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `points` | list of `[input, output]`, up to 16 | each output = its input | Brightness in stops relative to mid grey: `[2, 1.5]` moves what was 2 stops above mid grey to 1.5 stops (softer highlights). Inputs must increase, outputs must not decrease, all within ±12. The curve is smooth and never overshoots; beyond the first and last points it continues straight at the slope between the two end points, so softened highlights stay soft. Colours keep their hue and saturation. Intensity moves each output toward its input. |
+
+#### `hsl` (scene)
+
+Changes colours by **hue band**: `red`, `orange` (skin), `yellow`, `green`, `aqua`, `blue` (sky), `purple`, `magenta`. Neighbouring bands blend smoothly, and greys aren't changed. Each band is a mapping:
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `hue` | number, −45–45 | `0` | Hue shift in degrees: positive turns red toward yellow, blue toward purple. |
+| `chroma` | number, −1–1 | `0` | Chroma change; `-1` removes the band's colour. |
+| `lightness` | number, −2–2 | `0` | Brightness change in stops (a darker sky: `-0.5`). |
+
+| Key | Type | Description |
+|---|---|---|
+| `red` | band | Reds (Oklab hue around 25°). |
+| `orange` | band | Oranges and skin (55°). |
+| `yellow` | band | Yellows (100°). |
+| `green` | band | Greens and foliage (140°). |
+| `aqua` | band | Cyans (195°). |
+| `blue` | band | Blues and sky (255°). |
+| `purple` | band | Purples (295°). |
+| `magenta` | band | Magentas (330°). |
+
+#### `split_tone` (scene)
+
+Tints the shadows toward one hue and the highlights toward another, lightness kept; black stays black.
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `shadows` | `{hue, amount}` | `amount: 0` | `hue`: 0–360 (Oklab hue: about 25 red, 55 orange, 100 yellow, 140 green, 195 cyan, 255 blue). `amount`: 0–1; `1` adds a strong tint (0.1 Oklab chroma at mid grey). |
+| `highlights` | `{hue, amount}` | `amount: 0` | The same, for the highlights. |
+| `balance` | number, −1–1 | — | Where shadows end and highlights start: positive gives the shadows' tint more of the tones. Default `0` (mid grey). |
+
+#### `channel_mixer` (scene)
+
+Black and white from a mix of R, G and B.
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `red` | number, −1–2 | — | Red weight. Default `0.2627`. More red darkens blue skies and lightens skin (a red filter). |
+| `green` | number, −1–2 | — | Green weight. Default `0.678`. |
+| `blue` | number, −1–2 | — | Blue weight. Default `0.0593`. The weights are divided by their sum (at least 0.1), so greys stay the same grey. |
+| `amount` | number, 0–1 | `0` | How far toward black and white; `1` is fully grey. |
+
+#### `vignette` (scene)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, −3–1 | `0` | Change at the corners in stops; negative darkens. |
+| `midpoint` | number, 0–1 | — | Where it starts, as a distance from the centre (corners are 1). Default `0.5`. |
+| `roundness` | number, 0–1 | — | `1` is a circle, `0` an ellipse with the frame's shape. Default `1`. |
+
+#### `highlights` (scene)
+
+Darkens (or brightens) the bright areas only, keeping their detail. Brightness is judged on a smooth version of the photo (an edge-aware blur), so a whole LED screen counts as one bright area and the text on it stays readable detail. Below `start_ev` nothing changes; above it, each stop of that smooth brightness becomes `1 + 0.8 × amount` stops, easing in over the first 1.5 stops; R, G and B get the same gain, so colours keep their hue.
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, −1–1 | `0` | Negative darkens the bright areas, positive brightens them. At `-1` each stop above the start becomes 0.2 stops. |
+| `start_ev` | number, −1–6 | — | Where it starts, in stops above mid grey (of the smooth brightness); nothing below it changes. Default `1.5`. |
+| `radius` | number, 0–0.25 | — | Size of the areas brightness is judged over, as a fraction of the long edge. Default `0.06`. Smaller follows small lights more closely but flattens detail inside them. |
+
+#### `fade` (display)
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, 0–0.3 | `0` | Lifts black to this sRGB value (`0.05` is 13 of 255), white stays white: the matte look of faded film. |
+
+#### `grain` (display)
+
+Film-like grain, the same on every run and the same pattern in every output.
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `amount` | number, 0–0.1 | `0` | Strength in the mid tones, as an sRGB value; it fades out toward black and white. `0.02` is subtle. |
+| `size` | number, 0.0002–0.005 | — | Grain size as a fraction of the long edge. Default `0.0005` (1/2000). |
+
+#### `lut` (display)
+
+A 3D (or 1D) LUT in a `.cube` file, applied after the display transform. A LUT only means something in the colour space it was made for, so the operation says which. Ship the `.cube` next to the look file; its bytes are part of the look's hash in each sidecar.
+
+| Key | Type | Neutral | Description |
+|---|---|---|---|
+| `file` | path ending `.cube` | — | Relative to the look file's folder, e.g. `luts/filmic.cube`; no `..`. Read when the look loads: a missing or malformed file is an error naming it (and the line). |
+| `input_space` | `srgb` \| `rec709` | — | What the LUT expects and returns: `srgb` (sRGB primaries and curve; most creative LUTs) or `rec709` (Rec.709 primaries, gamma 2.4). Default `srgb`. |
+| `amount` | number, 0–1 | `0` | Blend of the LUT's result with its input. Default `1` (the LUT as made); intensity scales it like any strength value. |
+
+Values between the LUT's grid points are interpolated **tetrahedrally**, which keeps greys grey if the LUT does ([learning log](learning-log.md)).
 
 ## Validation and errors
 
@@ -418,4 +679,4 @@ picturesq checks the whole file before doing any work:
 
 - **Writes are atomic.** picturesq writes to a temporary file and renames it over `picturesq.yaml`, so a crash never leaves a half-written file.
 - **Comments are not preserved.** The file is rewritten by the UI and CLI, so put notes elsewhere.
-- **JSON Schema:** `picturesq schema` will print a schema for editor autocompletion and agents (coming in [#13](https://github.com/eddiemg10/picturesq/issues/13)).
+- **JSON Schema:** `picturesq schema` prints the schema of `picturesq.yaml` and `picturesq schema look` that of a look file, for editor autocompletion and agents.

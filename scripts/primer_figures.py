@@ -24,7 +24,7 @@ M2 (m2-normalise.md), from half-size decodes (to keep memory low):
   after chroma and luma noise reduction, and the whole photo at output size.
 
 Usage:
-    uv run python scripts/primer_figures.py [--out-dir docs/primers/images] [--only m1|m2]
+    uv run python scripts/primer_figures.py [--out-dir docs/primers/images] [--only m1|m2|m3]
 """
 
 from __future__ import annotations
@@ -478,6 +478,87 @@ def noise_figure(sample: Path) -> Image.Image:
     return grid(panels, columns=3, caption=caption)
 
 
+def intensity_figure(sample: Path) -> Image.Image:
+    """The DJI sample through cold/nordic at 0, 50, 100 and 150 % (preview renders)."""
+    from picturesq.config import AdjustmentsConfig, LookChoice, look_library
+    from picturesq.pipeline.looks import resolve_choice
+    from picturesq.preview.look_sheet import Variant, render_variant
+
+    config = ProjectConfig()
+    scene = normalise(decode_original(sample, config.decode, half_size=True), config)
+    library = look_library()
+    panels = []
+    for intensity in (0.0, 0.5, 1.0, 1.5):
+        look = resolve_choice(LookChoice(name="cold/nordic", intensity=intensity), library)
+        variant = Variant("", look, AdjustmentsConfig())
+        pixels = render_variant(scene, config, sample.name, None, variant)
+        panels.append((f"cold/nordic {round(intensity * 100)} %", fit(pixels, (360, 270))))
+    return grid(panels, 4, "Intensity scales each operation's strength: 0 % is the neutral render.")
+
+
+def tone_curve_figure() -> Image.Image:
+    """EV in vs EV out: identity, contrast 0.2 and a soft-highlights tone curve."""
+    from picturesq.config.operations import ContrastOperation, ToneCurveOperation
+    from picturesq.grade.operations import apply_operation
+
+    evs = np.linspace(-6.0, 6.0, 241)
+    curves = {
+        "identity": (evs, MUTED),
+        "contrast 0.2": (None, (40, 110, 200)),
+        "tone_curve [[0,0],[2,1.5],[4,2.5]]": (None, ACCENT),
+    }
+    operations = {
+        "contrast 0.2": ContrastOperation(amount=0.2),
+        "tone_curve [[0,0],[2,1.5],[4,2.5]]": ToneCurveOperation(
+            points=((0.0, 0.0), (2.0, 1.5), (4.0, 2.5))
+        ),
+    }
+    for name, operation in operations.items():
+        greys = np.repeat((MIDDLE_GREY * 2.0**evs)[:, None], 3, axis=1).astype(np.float32)[None]
+        out = apply_operation(greys, operation)[0, :, 1]
+        curves[name] = (np.log2(out / MIDDLE_GREY), curves[name][1])
+    size, pad = 480, 50
+    image = Image.new("RGB", (size + 2 * pad + 260, size + 2 * pad), BACKGROUND)
+    draw = ImageDraw.Draw(image)
+
+    def at(x: float, y: float) -> tuple[float, float]:
+        return pad + (x + 6) / 12 * size, pad + (6 - y) / 12 * size
+
+    for tick in range(-6, 7, 2):
+        draw.line([at(tick, -6), at(tick, 6)], fill=(225, 225, 225))
+        draw.line([at(-6, tick), at(6, tick)], fill=(225, 225, 225))
+        draw.text((at(tick, -6)[0] - 6, size + pad + 6), f"{tick:+d}", fill=MUTED, font=font(12))
+        draw.text((pad - 30, at(-6, tick)[1] - 7), f"{tick:+d}", fill=MUTED, font=font(12))
+    for index, (name, (values, colour)) in enumerate(curves.items()):
+        draw.line([at(x, y) for x, y in zip(evs, values, strict=True)], fill=colour, width=3)
+        draw.text((size + 2 * pad, pad + 24 * index), name, fill=colour, font=font(14))
+    draw.text((pad, 12), "scene EV in (x) vs EV out (y), mid grey = 0", fill=TEXT, font=font(14))
+    return image
+
+
+def hue_band_figure() -> Image.Image:
+    """The eight hsl hue bands: an Oklab hue strip with each band's centre marked."""
+    from picturesq.colour.oklab import oklab_to_rec709
+    from picturesq.config.operations import HUE_BANDS
+
+    width, height = 720, 60
+    hues = np.radians(np.linspace(0.0, 360.0, width, endpoint=False))
+    lab = np.stack([np.full(width, 0.72), 0.12 * np.cos(hues), 0.12 * np.sin(hues)], -1)
+    rgb = np.clip(oklab_to_rec709(lab.astype(np.float32)), 0.0, 1.0)
+    strip = quantise(srgb_encode(rgb))[None].repeat(height, axis=0)
+    image = Image.new("RGB", (width + 2 * MARGIN, height + 70), BACKGROUND)
+    image.paste(Image.fromarray(strip), (MARGIN, 30))
+    draw = ImageDraw.Draw(image)
+    draw.text(
+        (MARGIN, 6), "Oklab hue 0-360 at lightness 0.72, chroma 0.12", fill=TEXT, font=font(14)
+    )
+    for name, centre in HUE_BANDS.items():
+        x = MARGIN + centre / 360.0 * width
+        draw.line([(x, 30), (x, 30 + height)], fill=TEXT, width=1)
+        draw.text((x - 18, 36 + height), name, fill=TEXT, font=font(12))
+    return image
+
+
 def check_sample(path: Path) -> None:
     manifest = json.loads((ROOT / "reference" / "samples.json").read_text())
     entry = next(s for s in manifest["samples"] if s["name"] == path.name)
@@ -492,7 +573,7 @@ def main() -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--out-dir", type=Path, default=ROOT / "docs" / "primers" / "images")
-    parser.add_argument("--only", choices=("m1", "m2"), help="render one primer's figures")
+    parser.add_argument("--only", choices=("m1", "m2", "m3"), help="render one primer's figures")
     args = parser.parse_args()
     samples_dir = Path(os.environ.get("PICTURESQ_SAMPLES", ROOT / "reference" / "samples"))
     sample, wb_sample, noise_sample = (
@@ -513,6 +594,10 @@ def main() -> int:
         figures["m2-white-balance.jpg"], white = white_balance_figure(wb_sample)
         print("white balance:", {k: round(v) for k, v in white.items()})
         figures["m2-noise.jpg"] = noise_figure(noise_sample)
+    if args.only in (None, "m3"):
+        figures["m3-intensity.jpg"] = intensity_figure(sample)
+        figures["m3-tone-curves.jpg"] = tone_curve_figure()
+        figures["m3-hue-bands.jpg"] = hue_band_figure()
     for name, figure in figures.items():
         path = args.out_dir / name
         # Fixed settings and no EXIF, so re-running gives the same bytes.

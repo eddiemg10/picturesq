@@ -1,6 +1,183 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
+    "AdjustmentOverrides": {
+      "additionalProperties": false,
+      "description": "One photo's adjustments; an unset value keeps the project's.",
+      "properties": {
+        "exposure": {
+          "anyOf": [
+            {
+              "maximum": 3.0,
+              "minimum": -3.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replaces exposure.",
+          "title": "Exposure"
+        },
+        "highlights": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replaces highlights.",
+          "title": "Highlights"
+        },
+        "warmth": {
+          "anyOf": [
+            {
+              "maximum": 50.0,
+              "minimum": -50.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replaces warmth.",
+          "title": "Warmth"
+        },
+        "tint": {
+          "anyOf": [
+            {
+              "maximum": 30.0,
+              "minimum": -30.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replaces tint.",
+          "title": "Tint"
+        },
+        "contrast": {
+          "anyOf": [
+            {
+              "maximum": 0.5,
+              "minimum": -0.5,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replaces contrast.",
+          "title": "Contrast"
+        },
+        "saturation": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replaces saturation.",
+          "title": "Saturation"
+        },
+        "vibrance": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replaces vibrance.",
+          "title": "Vibrance"
+        }
+      },
+      "title": "AdjustmentOverrides",
+      "type": "object"
+    },
+    "AdjustmentsConfig": {
+      "additionalProperties": false,
+      "description": "The controls every look has, applied after the look's scene operations.",
+      "properties": {
+        "exposure": {
+          "default": 0.0,
+          "description": "Exposure change in EV.",
+          "maximum": 3.0,
+          "minimum": -3.0,
+          "title": "Exposure",
+          "type": "number"
+        },
+        "highlights": {
+          "default": 0.0,
+          "description": "Bright areas only: negative darkens them (keeping their detail), positive brightens.",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Highlights",
+          "type": "number"
+        },
+        "warmth": {
+          "default": 0.0,
+          "description": "Warmth in mired; positive is warmer.",
+          "maximum": 50.0,
+          "minimum": -50.0,
+          "title": "Warmth",
+          "type": "number"
+        },
+        "tint": {
+          "default": 0.0,
+          "description": "Tint; positive is magenta, negative green.",
+          "maximum": 30.0,
+          "minimum": -30.0,
+          "title": "Tint",
+          "type": "number"
+        },
+        "contrast": {
+          "default": 0.0,
+          "description": "Contrast around mid grey; 0.1 is 10 % more.",
+          "maximum": 0.5,
+          "minimum": -0.5,
+          "title": "Contrast",
+          "type": "number"
+        },
+        "saturation": {
+          "default": 0.0,
+          "description": "Colour for every colour; -1 is black and white.",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Saturation",
+          "type": "number"
+        },
+        "vibrance": {
+          "default": 0.0,
+          "description": "Colour for muted colours, less for vivid ones.",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Vibrance",
+          "type": "number"
+        }
+      },
+      "title": "AdjustmentsConfig",
+      "type": "object"
+    },
     "BlueRenderingConfig": {
       "additionalProperties": false,
       "description": "Render blues (skies) the way camera JPEGs do: deeper, more colourful, a little cyan.\n\nA camera-matching adjustment in the display transform (ADR-0012), not a creative look.\nMeasured against the DJI Pocket 4's and DJI drone's JPEGs, an accurate render of a blue\nsky is paler, lighter and ~4 degrees more purple than the camera's; the defaults are fitted\nto those JPEGs (and checked on held-out photos). Other makers differ (Fujifilm's skies\nare close to accurate), so this is the one place the neutral render leans toward DJI's\nlook. Set ``enabled: false`` for a colorimetric sky.\n\nApplied in display-referred Oklab: a pixel's weight is a raised-cosine window in hue\naround ``hue`` (zero beyond ``hue_width``) times a ramp in chroma from ``chroma_start``\nto ``chroma_full``, so greys, whites and other hues are untouched.",
@@ -388,8 +565,23 @@
     },
     "GradeConfig": {
       "additionalProperties": false,
-      "description": "Stage 3 settings. v0: local contrast and the display transform; looks come in M3.",
+      "description": "Stage 3 settings: the look and adjustments, local contrast and the display transform.",
       "properties": {
+        "look": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LookChoice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The project's look; none (null) is the neutral render."
+        },
+        "adjustments": {
+          "$ref": "#/$defs/AdjustmentsConfig"
+        },
         "local_contrast": {
           "$ref": "#/$defs/LocalContrastConfig"
         },
@@ -398,6 +590,29 @@
         }
       },
       "title": "GradeConfig",
+      "type": "object"
+    },
+    "GradeOverrides": {
+      "additionalProperties": false,
+      "description": "One photo's grade overrides.",
+      "properties": {
+        "look": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LookChoice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replaces the project's look for this photo (name, intensity and parameters). Intensity 0 grades this photo with no look."
+        },
+        "adjustments": {
+          "$ref": "#/$defs/AdjustmentOverrides"
+        }
+      },
+      "title": "GradeOverrides",
       "type": "object"
     },
     "LocalContrastConfig": {
@@ -460,6 +675,90 @@
         }
       },
       "title": "LocalContrastConfig",
+      "type": "object"
+    },
+    "LookChoice": {
+      "additionalProperties": false,
+      "description": "Which look a photo is graded with, how strongly, and its parameter values.",
+      "properties": {
+        "name": {
+          "description": "The look, as category/name (see `picturesq looks`).",
+          "pattern": "^(bw|cold|warm|cinematic)/[a-z][a-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "intensity": {
+          "default": 1.0,
+          "description": "How strongly the look applies: 0 is the neutral render, 1 as designed.",
+          "maximum": 1.5,
+          "minimum": 0.0,
+          "title": "Intensity",
+          "type": "number"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Values for the look's parameters; unset ones use the look's defaults.",
+          "title": "Parameters",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "LookChoice",
+      "type": "object"
+    },
+    "MetadataConfig": {
+      "additionalProperties": false,
+      "description": "Corrections to the dates and times written into exports (originals are never changed).",
+      "properties": {
+        "time_shift": {
+          "default": "+0d 00:00:00",
+          "description": "Added to every photo's capture time, to fix a camera whose clock was wrong. A sign, days, then hours:minutes:seconds, e.g. +9598d 10:05:00 or -0d 01:00:00. `picturesq metadata shift` works it out from one photo whose real time you know.",
+          "pattern": "^[+-]\\d+d ([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$",
+          "title": "Time Shift",
+          "type": "string"
+        },
+        "time_zone": {
+          "anyOf": [
+            {
+              "pattern": "^[+-]\\d\\d:[0-5]\\d$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The time zone the corrected capture times are in, as an offset from UTC (+01:00). Written as OffsetTime, OffsetTimeOriginal and OffsetTimeDigitized. null leaves the camera's own offset tags alone.",
+          "title": "Time Zone"
+        }
+      },
+      "title": "MetadataConfig",
+      "type": "object"
+    },
+    "MetadataOverrides": {
+      "additionalProperties": false,
+      "description": "One photo's metadata overrides.",
+      "properties": {
+        "capture_time": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The time this photo was taken, as the local clock showed it (2026-10-17T20:05:00). Wins over the project's time_shift.",
+          "title": "Capture Time"
+        }
+      },
+      "title": "MetadataOverrides",
       "type": "object"
     },
     "NormaliseConfig": {
@@ -643,6 +942,12 @@
       "properties": {
         "normalise": {
           "$ref": "#/$defs/NormaliseOverrides"
+        },
+        "grade": {
+          "$ref": "#/$defs/GradeOverrides"
+        },
+        "metadata": {
+          "$ref": "#/$defs/MetadataOverrides"
         }
       },
       "title": "PhotoOverrides",
@@ -770,6 +1075,9 @@
     },
     "export": {
       "$ref": "#/$defs/ExportConfig"
+    },
+    "metadata": {
+      "$ref": "#/$defs/MetadataConfig"
     },
     "photos": {
       "additionalProperties": {
