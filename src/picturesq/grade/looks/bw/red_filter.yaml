@@ -1,0 +1,10 @@
+version: 1
+name: red_filter
+category: bw
+description: Dramatic black and white, darker skies and lighter skin, like a red filter on film
+parameters:
+  contrast: {default: 0.25, min: 0.0, max: 0.5, label: Contrast}
+operations:
+  - {op: channel_mixer, red: 0.75, green: 0.30, blue: -0.05, amount: 1.0}
+  - {op: contrast, amount: $contrast}
+  - {op: tone_curve, points: [[-5.0, -5.6], [-2.0, -2.3], [0.0, 0.0], [3.0, 3.0]]}

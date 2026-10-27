@@ -284,3 +284,31 @@ def test_wheel_contains_the_built_in_looks(tmp_path: Path) -> None:
     names = set(zipfile.ZipFile(wheel).namelist())
     for path in BUILT_IN_LOOKS.glob("*/*.yaml"):
         assert f"picturesq/grade/looks/{path.parent.name}/{path.name}" in names
+
+
+@pytest.mark.parametrize("key", list(look_library()))
+def test_built_in_look_renders(key: str) -> None:
+    """Every built-in look changes a scene, stays finite, and is exactly neutral at 0 %."""
+    import numpy as np
+
+    from picturesq.config import ProjectConfig
+    from picturesq.grade import display_operations, grade
+    from picturesq.photo import PhotoContext
+    from picturesq.pipeline.looks import resolve_look
+
+    rng = np.random.default_rng(0)
+    scene = rng.lognormal(np.log(0.18), 1.2, (60, 80, 3)).astype(np.float32)
+    results = []
+    for intensity in (0.0, 1.0, 1.5):
+        config = ProjectConfig.model_validate(
+            {"grade": {"look": {"name": key, "intensity": intensity}}}
+        )
+        photo = PhotoContext(name="a.dng", look=resolve_look(config, "a.dng"))
+        image = grade(scene.copy(), config, photo)
+        display = np.clip(image / (1.0 + image), 0.0, 1.0)  # any display-referred values
+        results.append(display_operations(display, photo))
+        assert np.isfinite(results[-1]).all()
+    neutral_config = ProjectConfig()
+    neutral = grade(scene.copy(), neutral_config, PhotoContext(name="a.dng"))
+    np.testing.assert_array_equal(results[0], np.clip(neutral / (1.0 + neutral), 0.0, 1.0))
+    assert np.abs(results[1] - results[0]).max() > 0.01
