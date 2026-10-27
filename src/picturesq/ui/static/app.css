@@ -41,6 +41,12 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .layout { display: grid; grid-template-columns: 220px 1fr 340px; height: calc(100% - 44px); }
 .strip { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
 .strip-tools { display: flex; gap: 8px; align-items: center; padding: 8px; border-bottom: 1px solid var(--line); }
+.review { display: flex; gap: 8px; align-items: center; justify-content: space-between;
+  padding: 6px 8px; border-bottom: 1px solid var(--line); min-height: 37px; }
+.review button { padding: 2px 8px; font-size: 12px; border-color: var(--flag); color: var(--flag); }
+.flag-list { margin: 0 0 8px; padding: 0; list-style: none; font-size: 12px; }
+.flag-list li { color: var(--flag); margin: 2px 0; }
+.flag-list li.error { color: var(--error); }
 .photos { list-style: none; margin: 0; padding: 8px; overflow-y: auto; flex: 1; display: grid; gap: 8px; align-content: start; }
 .photos li { position: relative; cursor: pointer; border: 2px solid transparent; border-radius: 4px; }
 .photos li img { display: block; width: 100%; border-radius: 2px; background: #222; aspect-ratio: 16 / 9; object-fit: contain; }

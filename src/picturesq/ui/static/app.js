@@ -21,7 +21,7 @@ const ui = {
   scope: "photos",
   category: "all",
   clipboard: null,
-  flaggedFirst: false,
+  flaggedFirst: true,
 };
 
 // --- API ------------------------------------------------------------------------------
@@ -41,7 +41,7 @@ async function load() {
     notice(error.message, true);
     return;
   }
-  const names = ui.state.photos.map((p) => p.name);
+  const names = orderedPhotos().map((p) => p.name);
   if (!names.includes(ui.active)) ui.active = names[0] || null;
   ui.selected = new Set([...ui.selected].filter((n) => names.includes(n)));
   if (ui.active && ui.selected.size === 0) ui.selected.add(ui.active);
@@ -167,16 +167,60 @@ function render() {
   if (!ui.state) return;
   $("project").textContent = ui.state.project;
   renderStrip();
+  renderReview();
   renderViewer();
   renderPanel();
   renderExportOutputs();
   fetch("/api/config").then((r) => r.text()).then((text) => ($("yaml").textContent = text));
 }
 
+// --- normalisation review: photos normalise couldn't fix on its own come first -----------
+
+function flagged(p) {
+  return p.flags.length > 0 || Boolean(p.error);
+}
+
+function renderReview() {
+  const photos = ui.state.photos;
+  const waiting = photos.filter((p) => !p.analysed).length;
+  const count = photos.filter(flagged).length;
+  const parts = [];
+  if (count) parts.push(`${count} flagged`);
+  if (waiting) parts.push(`analysing ${photos.length - waiting}/${photos.length}`);
+  if (!parts.length) parts.push(photos.length ? "nothing flagged" : "");
+  $("review-status").textContent = parts.join(" · ");
+  $("next-flagged").hidden = count === 0;
+}
+
+function nextFlagged() {
+  const order = orderedPhotos();
+  const start = order.findIndex((p) => p.name === ui.active);
+  for (let i = 1; i <= order.length; i += 1) {
+    const p = order[(start + i) % order.length];
+    if (flagged(p)) return goTo(p.name);
+  }
+}
+
+// Photos analysed in the background: their flags and measured exposure are new, their
+// previews aren't. Redraw what shows flags; leave the panel alone while a control is in use.
+async function refreshAnalysis() {
+  try {
+    ui.state = await api("/api/state");
+  } catch (error) {
+    return;
+  }
+  renderStrip();
+  renderReview();
+  const p = photo(ui.active);
+  $("photo-flags").textContent = p ? p.flags.map((f) => f.message).join(" · ") : "";
+  const busy = document.activeElement && document.activeElement.tagName === "INPUT";
+  if (ui.scope === "photos" && !busy) renderNormalise();
+}
+
 function orderedPhotos() {
   const photos = [...ui.state.photos];
   if (ui.flaggedFirst) {
-    photos.sort((a, b) => (b.flags.length > 0) - (a.flags.length > 0));
+    photos.sort((a, b) => flagged(b) - flagged(a));
   }
   return photos;
 }
@@ -477,6 +521,12 @@ function renderNormalise() {
   const box = $("normalise");
   box.replaceChildren();
   if (!p) return;
+  if (flagged(p)) {
+    const list = element("ul", { className: "flag-list" });
+    if (p.error) list.append(element("li", { className: "error", textContent: p.error }));
+    for (const f of p.flags) list.append(element("li", { textContent: `${f.flag}: ${f.message}` }));
+    box.appendChild(list);
+  }
   const set = p.normalise;
   const exposure = "exposure_ev" in set ? set.exposure_ev : p.exposure_ev ?? ui.state.exposure_offset_ev;
   box.appendChild(
@@ -565,11 +615,13 @@ function step(delta) {
   const order = orderedPhotos().map((p) => p.name);
   const index = order.indexOf(ui.active);
   const next = order[Math.min(order.length - 1, Math.max(0, index + delta))];
-  if (next && next !== ui.active) {
-    pick(next, null);
-    const li = [...$("photos").children].find((el) => el.dataset.name === next);
-    if (li) li.scrollIntoView({ block: "nearest" });
-  }
+  if (next && next !== ui.active) goTo(next);
+}
+
+function goTo(name) {
+  pick(name, null);
+  const li = [...$("photos").children].find((el) => el.dataset.name === name);
+  if (li) li.scrollIntoView({ block: "nearest" });
 }
 
 // --- export ---------------------------------------------------------------------------
@@ -632,6 +684,7 @@ $("scope-photos").onclick = () => { ui.scope = "photos"; renderPanel(); };
 $("scope-project").onclick = () => { ui.scope = "project"; renderPanel(); };
 $("select-all").onclick = () => { ui.selected = new Set(ui.state.photos.map((p) => p.name)); render(); };
 $("flagged-first").onchange = (e) => { ui.flaggedFirst = e.target.checked; renderStrip(); };
+$("next-flagged").onclick = nextFlagged;
 $("export-button").onclick = startExport;
 $("copy").onclick = () => {
   const p = photo(ui.active);
@@ -655,6 +708,7 @@ document.addEventListener("keydown", (event) => {
   else if (event.key === "c" && !event.ctrlKey && !event.metaKey) $("copy").click();
   else if (event.key === "v" && !event.ctrlKey && !event.metaKey) $("paste").click();
   else if (event.key === "a" && !event.ctrlKey && !event.metaKey) $("select-all").click();
+  else if (event.key === "f" && !event.ctrlKey && !event.metaKey) nextFlagged();
 });
 document.addEventListener("keyup", (event) => { if (event.key === "\\") holdBefore(false); });
 
@@ -664,6 +718,7 @@ events.onmessage = (message) => {
   const data = JSON.parse(message.data);
   if (data.error) notice(`picturesq.yaml: ${data.error}`, true);
   else if (ui.state && data.revision !== ui.state.revision) load();
+  else if (ui.state && data.analysed !== ui.state.analysed) refreshAnalysis();
 };
 
 load().then(pollExport);

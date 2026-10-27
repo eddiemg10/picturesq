@@ -23,7 +23,11 @@
     <aside class="strip" aria-label="Photos">
       <div class="strip-tools">
         <button id="select-all" type="button" title="Select every photo (a)">Select all</button>
-        <label class="muted"><input id="flagged-first" type="checkbox"> Flagged first</label>
+        <label class="muted"><input id="flagged-first" type="checkbox" checked> Flagged first</label>
+      </div>
+      <div class="review">
+        <span id="review-status" class="muted small"></span>
+        <button id="next-flagged" type="button" title="Go to the next flagged photo (f)" hidden>Next flagged</button>
       </div>
       <ol id="photos" class="photos"></ol>
     </aside>

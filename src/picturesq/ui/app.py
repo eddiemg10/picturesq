@@ -7,8 +7,9 @@ Routes:
 - ``GET /api/preview/{photo}?size=thumb|large&variant=current|neutral|none|look:<key>``
   (``&draft=<json>`` for an unsaved look/adjustments while a slider moves): a JPEG.
 - ``POST /api/edit``: one edit (``Session.edit``), saved to ``picturesq.yaml``.
-- ``GET /api/events``: server-sent events, ``{"revision": n}`` whenever the config changes,
-  from the UI or from an agent editing the file.
+- ``GET /api/events``: server-sent events, ``{"revision": n, "analysed": m, "error": ...}``
+  whenever the config changes (from the UI or from an agent editing the file) or a photo
+  has been normalised (its flags are known).
 - ``GET /api/config``: the YAML as saved.
 - ``POST /api/export`` (``{"outputs": [...]}``) and ``GET /api/export``: run
   ``picturesq export`` in a separate process and report its progress.
@@ -171,7 +172,7 @@ def create_app(session: Session) -> Starlette:
 
     async def events(request: Request) -> Response:
         async def stream() -> AsyncIterator[str]:
-            seen = -1
+            seen = (-1, -1)
             error: str | None = None
             while not await request.is_disconnected():
                 try:
@@ -179,9 +180,10 @@ def create_app(session: Session) -> Starlette:
                     message = None
                 except ConfigError as problem:
                     message = str(problem)
-                if session.revision != seen or message != error:
-                    seen, error = session.revision, message
-                    payload = {"revision": seen, "error": error}
+                now = (session.revision, session.analysed)
+                if now != seen or message != error:
+                    seen, error = now, message
+                    payload = {"revision": now[0], "analysed": now[1], "error": error}
                     yield f"data: {json.dumps(payload)}\n\n"
                 await asyncio.sleep(POLL_SECONDS)
 
