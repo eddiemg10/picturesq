@@ -45,6 +45,9 @@
 | **stand-in** | A reference set photo covering a scenario until a proper shot exists (`status: stand-in` in the manifest). | placeholder, substitute |
 | **samples** | CC0 RAWs from raw.pixls.us used in CI. | fixtures (fixture = pytest) |
 | **camera JPEG** | The JPEG the camera embedded in the original: the reference our neutral render is compared against (`scripts/compare.py`). Some cameras embed a neighbouring frame; those are left out. | in-camera JPEG, preview |
+| **capture time** | When a photo was taken, as the camera's clock showed it (EXIF `DateTimeOriginal`). The *camera time* is what the original records; the *corrected time* is what the export carries after the `metadata` settings. | date, timestamp, shot time |
+| **time shift** | The signed duration added to every photo's camera time to fix a wrong camera clock (`metadata.time_shift`, e.g. `+9598d 10:05:00`). | offset (that is the time zone), delta, clock correction |
+| **time zone** | The offset from UTC (`+01:00`) of the corrected capture times, written as the `OffsetTime*` EXIF tags (`metadata.time_zone`). | timezone, UTC offset, tz |
 | **sidecar** | The `<photo>.picturesq.json` file written next to each export: picturesq version, the original's SHA-256, the output's settings and the config that rendered it, including the photo's overrides. Enough to reproduce the export. | manifest, metadata file |
 | **capture EXIF** | The original's EXIF that describes the moment of capture (time, camera, lens, exposure), copied into each export by allowlist (ADR-0014). | metadata (too broad) |
 | **golden** | A stored expected output used by a regression test. | snapshot (that's for text/JSON) |

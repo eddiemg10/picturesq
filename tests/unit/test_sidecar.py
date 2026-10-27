@@ -159,7 +159,7 @@ def test_document_records_only_this_photos_overrides() -> None:
     recorded = ProjectConfig.model_validate(with_overrides)
     assert recorded.photo("img.dng") == config.photo("img.dng")
     assert document("plain.dng")["config"]["photos"] == {}
-    assert document("plain.dng")["sidecar_version"] == 3
+    assert document("plain.dng")["sidecar_version"] == 4
 
 
 def test_run_records_overrides_and_reads_photo_info_only_when_needed(

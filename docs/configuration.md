@@ -118,6 +118,9 @@ export:
   enabled:
   - web
   - archive
+metadata:
+  time_shift: +0d 00:00:00
+  time_zone: null
 photos: {}
 ```
 
@@ -201,6 +204,17 @@ photos:
     normalise: {exposure_ev: 2.7}
 ```
 
+Fix a camera whose clock said 2000-07-07 when it was really 2026-10-17, and give one photo its exact time:
+
+```yaml
+metadata:
+  time_shift: +9598d 10:05:00
+  time_zone: +01:00
+photos:
+  DJI_20261017_0042.DNG:
+    metadata: {capture_time: '2026-10-17T20:05:00'}
+```
+
 ## Reference
 
 ### Top level
@@ -212,6 +226,7 @@ photos:
 | `normalise` | mapping | see below | Per-photo corrections (exposure, colour noise reduction, scene contrast) and the checks that flag photos for review. |
 | `grade` | mapping | see below | How images are rendered for display. Today only the display transform. |
 | `export` | mapping | see below | Which files `picturesq export` writes. |
+| `metadata` | mapping | see below | Corrections to the dates and times written into exports. |
 | `photos` | mapping of file name → overrides | `{}` | Per-photo overrides. See [`photos`](#photos). |
 
 ### `decode`
@@ -404,6 +419,25 @@ Each output:
 
 Exports are written to `<project>/exports/<output name>/`.
 
+### `metadata`
+
+A camera whose clock was never set (a DJI Pocket 4 after a battery reset says 2000-07-07) stamps every photo with a wrong date, and photo libraries and social apps sort by it. Originals are never changed, so the correction lives here and is written into the exports' EXIF: `DateTimeOriginal`, `DateTimeDigitized` and `DateTime`, plus `OffsetTime`, `OffsetTimeOriginal` and `OffsetTimeDigitized` when `time_zone` is set. With the defaults nothing changes. Each export's sidecar records the camera's time and the corrected one under `metadata`.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `time_shift` | text | `+0d 00:00:00` | Added to every photo's capture time. A sign, then days (`9598d`), then `HH:MM:SS`, exact to the second: `+9598d 10:05:00` moves a photo from 2000-07-07 to 2026-10-17 (the same sign convention as a clock correction: positive is later). Easiest to set with `picturesq metadata shift --photo NAME --actual "2026-10-17 20:05"`, which works it out from one photo whose real time you know. |
+| `time_zone` | `±HH:MM` or `null` | `null` | The zone the corrected times are in, as an offset from UTC (`+01:00`), written as the `OffsetTime*` tags. EXIF times carry no zone of their own. `null` leaves the camera's offset tags alone. |
+
+```yaml
+metadata:
+  time_shift: +9598d 10:05:00
+  time_zone: +01:00
+```
+
+A photo whose original records no capture time is not shifted (there is nothing to shift); give it one with `photos.<name>.metadata.capture_time`. A shift is at the project level because a wrong clock is wrong by the same amount for every photo until someone resets it; if the camera was reset part way through, use the per-photo capture time for the other photos.
+
+`picturesq metadata` edits these settings and can rewrite exports already on disk: see the [project plan](project-plan.md#7-cli-specification).
+
 ### `photos`
 
 Per-photo **overrides**, written by the UI (or an agent) when one photo needs something different from the project's settings. Keys are the original's file name (`DJI_0042.DNG`), matched ignoring case; a photo with no entry uses the project's settings. An entry for a file that isn't in the project is kept (it may be added later).
@@ -428,6 +462,7 @@ Each photo:
 |---|---|---|---|
 | `normalise` | mapping | `{}` | This photo's normalise overrides, below. |
 | `grade` | mapping | `{}` | This photo's look and adjustments, below. |
+| `metadata` | mapping | `{}` | This photo's capture time, below. |
 
 `photos.<name>.normalise`:
 
@@ -448,7 +483,13 @@ Each photo:
 | `look` | mapping or `null` | `null` | Replaces the project's `grade.look` for this photo (name, intensity and parameters together; see `grade.look`). Intensity `0` grades this photo with no look. `null` follows the project. |
 | `adjustments` | mapping | `{}` | This photo's adjustments: each key set (`exposure`, `highlights`, `warmth`, `tint`, `contrast`, `saturation`, `vibrance`, same ranges as `grade.adjustments`) replaces the project's value; unset (`null`) ones follow the project. |
 
-Each export's sidecar records the photo's overrides under `config.photos`, and the look it was graded with under `look` (name, intensity, every parameter's value and the look file's SHA-256), so the sidecar alone says how the photo was rendered.
+`photos.<name>.metadata`:
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `capture_time` | date and time, or `null` | `null` | When this photo was taken, as the camera's clock should have shown it: `2026-10-17T20:05:00` (a space instead of the `T` also works; no zone, see `metadata.time_zone`). It *replaces* the camera's time and wins over `metadata.time_shift`. `null` follows the project. |
+
+Each export's sidecar records the photo's overrides under `config.photos` (those that change the picture; the capture time is recorded under `metadata`), and the look it was graded with under `look` (name, intensity, every parameter's value and the look file's SHA-256), so the sidecar alone says how the photo was rendered.
 
 ## Look files
 
