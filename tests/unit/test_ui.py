@@ -116,9 +116,13 @@ def test_an_edit_from_outside_is_picked_up(project: Path) -> None:
 
     stat = path.stat()
     os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
+    assert session.outside_revision == 0  # the UI's own saves aren't from outside
     assert session.reload()
     assert session.revision > revision
     assert session.config.grade.adjustments.contrast == 0.2
+    assert session.state()["outside_revision"] == session.revision
+    session.edit({"target": "project", "adjustments": {"contrast": 0.3}})
+    assert 0 < session.outside_revision < session.revision
 
 
 def test_api_state_edit_and_config(project: Path) -> None:

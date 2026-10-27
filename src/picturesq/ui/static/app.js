@@ -712,12 +712,22 @@ document.addEventListener("keydown", (event) => {
 });
 document.addEventListener("keyup", (event) => { if (event.key === "\\") holdBefore(false); });
 
+// The last change came from outside the UI (an agent, or a shell): say so, so a slider
+// that moved by itself isn't a mystery. Last write wins; the UI's own saves say nothing.
+const OUTSIDE_EDIT = "picturesq.yaml changed outside the UI; reloaded";
+
+function announceOutsideEdit() {
+  if (!ui.state || ui.state.outside_revision !== ui.state.revision) return;
+  notice(OUTSIDE_EDIT);
+  setTimeout(() => { if ($("notice").textContent === OUTSIDE_EDIT) notice(null); }, 8000);
+}
+
 // An agent (or another tab) editing picturesq.yaml: reload when the revision moves.
 const events = new EventSource("/api/events");
 events.onmessage = (message) => {
   const data = JSON.parse(message.data);
   if (data.error) notice(`picturesq.yaml: ${data.error}`, true);
-  else if (ui.state && data.revision !== ui.state.revision) load();
+  else if (ui.state && data.revision !== ui.state.revision) load().then(announceOutsideEdit);
   else if (ui.state && data.analysed !== ui.state.analysed) refreshAnalysis();
 };
 

@@ -184,6 +184,9 @@ class Session:
     config: ProjectConfig = field(default_factory=ProjectConfig)
     library: dict[str, Look] = field(default_factory=dict)
     revision: int = 0
+    outside_revision: int = 0
+    """The revision of the last change made outside the UI (an agent editing the file); 0
+    if none. ``outside_revision == revision``: the config shown came from outside."""
     analysed: int = 0
     """Increases whenever a photo is normalised (or fails to be): its flags, measured
     exposure and errors in :meth:`state` may have changed, though no preview has."""
@@ -240,6 +243,8 @@ class Session:
             self.config = config
             self._refresh_originals()
             self.revision += 1
+            if not force:
+                self.outside_revision = self.revision
             return True
 
     def _refresh_originals(self) -> None:
@@ -641,6 +646,7 @@ class Session:
             return {
                 "project": self.project.resolve().name,
                 "revision": self.revision,
+                "outside_revision": self.outside_revision,
                 "analysed": self.analysed,
                 "config_exists": self._mtime is not None,
                 "look": _choice_dict(config.grade.look),
