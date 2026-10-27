@@ -66,10 +66,25 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: 
   padding: 16px; min-height: 0; }
 /* The image box always fills the stage and the photo is fitted inside it: switching
    between portrait and landscape photos never moves or resizes anything. */
-.stage img { position: absolute; inset: 16px; width: calc(100% - 32px); height: calc(100% - 32px);
+.stage > img { position: absolute; inset: 16px; width: calc(100% - 32px); height: calc(100% - 32px);
   object-fit: contain; }
 .busy { position: absolute; top: 24px; right: 24px; background: rgba(0, 0, 0, 0.6); padding: 3px 8px;
   border-radius: 3px; color: var(--muted); font-size: 12px; }
+
+/* Photo x look grid: rows are photos, columns their current grade then each look. */
+.grid { position: absolute; inset: 0; overflow: auto; padding: 12px; background: var(--bg); }
+.grid table { border-collapse: separate; border-spacing: 6px; }
+.grid th { font-size: 11px; font-weight: 600; color: var(--muted); text-align: left; white-space: nowrap;
+  position: sticky; top: 0; background: var(--bg); z-index: 1; padding: 2px 0; }
+.grid thead th button { padding: 2px 6px; font-size: 11px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.grid th.photo { position: sticky; left: 0; z-index: 2; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+.grid tbody th.photo { cursor: pointer; }
+.grid td { padding: 0; }
+.grid .cell { width: 160px; cursor: pointer; border: 2px solid transparent; border-radius: 4px; display: block; }
+.grid .cell img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: contain; background: #222; border-radius: 2px; }
+.grid .cell:hover { border-color: var(--muted); }
+.grid .cell.chosen { border-color: var(--accent); }
+.grid .current { border-style: dashed; border-color: var(--line); cursor: default; }
 
 .panel { border-left: 1px solid var(--line); padding: 10px 14px 40px; overflow-y: auto; }
 .scope { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }

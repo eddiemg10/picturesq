@@ -22,6 +22,7 @@ const ui = {
   category: "all",
   clipboard: null,
   flaggedFirst: true,
+  grid: false,
 };
 
 // --- API ------------------------------------------------------------------------------
@@ -168,6 +169,7 @@ function render() {
   $("project").textContent = ui.state.project;
   renderStrip();
   renderReview();
+  renderGrid();
   renderViewer();
   renderPanel();
   renderExportOutputs();
@@ -211,6 +213,7 @@ async function refreshAnalysis() {
   }
   renderStrip();
   renderReview();
+  if (ui.grid) renderGrid();
   const p = photo(ui.active);
   $("photo-flags").textContent = p ? p.flags.map((f) => f.message).join(" · ") : "";
   const busy = document.activeElement && document.activeElement.tagName === "INPUT";
@@ -278,7 +281,7 @@ function renderViewer() {
       large.shown = thumb.src;
     }
   }
-  showLarge(previewUrl(p.name, "large"));
+  if (!ui.grid) showLarge(previewUrl(p.name, "large"));
 }
 
 function renderPanel() {
@@ -400,21 +403,27 @@ function renderCategories() {
       b.onclick = () => {
         ui.category = c;
         renderPanel();
+        renderGrid();
       };
       return b;
     }),
   );
 }
 
-function renderLooks() {
-  const current = editedLook();
-  const name = ui.active;
+function lookTiles() {
   const tiles = [{ key: null, label: "No look", variant: "none" }];
   for (const look of ui.state.looks) {
     if (ui.category === "all" || look.category === ui.category) {
       tiles.push({ key: look.key, label: look.key, variant: `look:${look.key}`, description: look.description });
     }
   }
+  return tiles;
+}
+
+function renderLooks() {
+  const current = editedLook();
+  const name = ui.active;
+  const tiles = lookTiles();
   // Reuse the tiles: each keeps showing its image until the new photo's has loaded.
   const box = $("looks");
   const existing = new Map([...box.children].map((div) => [div.dataset.variant, div]));
@@ -435,6 +444,101 @@ function renderLooks() {
       return div;
     }),
   );
+}
+
+// --- photo x look grid: compare looks across photos, then pick per photo or per column --
+
+const grid = { images: new Map() };
+// Cells render only when scrolled near: a full grid is photos x looks thumbnails.
+const gridObserver = new IntersectionObserver(
+  (entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      gridObserver.unobserve(entry.target);
+      loadThumb(entry.target, entry.target.dataset.src);
+    }
+  },
+  { root: $("grid"), rootMargin: "300px" },
+);
+
+function gridPhotos() {
+  const order = orderedPhotos();
+  return ui.selected.size > 1 ? order.filter((p) => ui.selected.has(p.name)) : order;
+}
+
+function gridImage(name, variant) {
+  const key = `${name}|${variant}`;
+  let img = grid.images.get(key);
+  if (!img) {
+    img = element("img", { alt: "" });
+    grid.images.set(key, img);
+  }
+  const src = previewUrl(name, "thumb", variant);
+  if (img.dataset.src !== src) {
+    img.dataset.src = src;
+    gridObserver.observe(img);
+  }
+  return img;
+}
+
+function renderGrid() {
+  const on = ui.grid && Boolean(ui.state.photos.length);
+  $("grid").hidden = !on;
+  $("large").hidden = on;
+  $("grid-toggle").setAttribute("aria-checked", on);
+  if (!on) return;
+  const tiles = lookTiles();
+  const photos = gridPhotos();
+  const every = photos.length === ui.state.photos.length;
+  const head = element("tr", {}, element("th", { className: "photo", textContent: `${photos.length} photo(s)` }), element("th", { textContent: "Current" }));
+  for (const tile of tiles) {
+    const label = tile.key === null ? "No look" : tile.label;
+    const title = every
+      ? `Make ${label} the project's look (photos' own looks are removed)`
+      : `Give the ${photos.length} photos in this grid ${label}`;
+    head.append(element("th", {}, button(label, title, () => (every ? projectLook(tile.key) : giveLook(photos, tile.key)))));
+  }
+  const body = photos.map((p) => {
+    const row = element("tr", {});
+    const title = element("th", { className: "photo", textContent: p.name, title: "Open this photo" });
+    title.onclick = () => { ui.grid = false; pick(p.name, null); };
+    row.append(title);
+    row.append(element("td", {}, element("div", { className: "cell current", title: "Its grade now" }, gridImage(p.name, "current"))));
+    for (const tile of tiles) {
+      const chosen = tile.key === null ? !p.look : p.look && p.look.name === tile.key;
+      const cell = element("div", { className: `cell${chosen ? " chosen" : ""}`, title: `${p.name}: ${tile.label}` }, gridImage(p.name, tile.variant));
+      cell.onclick = () => giveLook([p], tile.key);
+      row.append(element("td", {}, cell));
+    }
+    return row;
+  });
+  $("grid").replaceChildren(element("table", {}, element("thead", {}, head), element("tbody", {}, ...body)));
+}
+
+// Each photo keeps its own intensity if it already has a look.
+function giveLook(photos, key) {
+  if (key === null) return commit({ look: { name: null } }, photos.map((p) => p.name));
+  const groups = new Map();
+  for (const p of photos) {
+    if (p.look && p.look.name === key) continue;
+    const intensity = p.look ? p.look.intensity : 1;
+    groups.set(intensity, [...(groups.get(intensity) || []), p.name]);
+  }
+  return Promise.all([...groups].map(([intensity, names]) => commit({ look: { name: key, intensity, parameters: {} } }, names)));
+}
+
+// Every photo: the look becomes the project's, and photos stop overriding it.
+async function projectLook(key) {
+  const own = ui.state.photos.filter((p) => p.look_override).map((p) => p.name);
+  if (own.length) await commit({ look: null }, own);
+  const current = ui.state.look;
+  const intensity = current && key !== null ? current.intensity : 1;
+  await commit({ look: key === null ? { name: null } : { name: key, intensity, parameters: {} } }, "project");
+}
+
+function toggleGrid() {
+  ui.grid = !ui.grid;
+  render();
 }
 
 function chooseLook(key) {
@@ -685,6 +789,7 @@ $("scope-project").onclick = () => { ui.scope = "project"; renderPanel(); };
 $("select-all").onclick = () => { ui.selected = new Set(ui.state.photos.map((p) => p.name)); render(); };
 $("flagged-first").onchange = (e) => { ui.flaggedFirst = e.target.checked; renderStrip(); };
 $("next-flagged").onclick = nextFlagged;
+$("grid-toggle").onclick = toggleGrid;
 $("export-button").onclick = startExport;
 $("copy").onclick = () => {
   const p = photo(ui.active);
@@ -709,6 +814,7 @@ document.addEventListener("keydown", (event) => {
   else if (event.key === "v" && !event.ctrlKey && !event.metaKey) $("paste").click();
   else if (event.key === "a" && !event.ctrlKey && !event.metaKey) $("select-all").click();
   else if (event.key === "f" && !event.ctrlKey && !event.metaKey) nextFlagged();
+  else if (event.key === "g" && !event.ctrlKey && !event.metaKey) toggleGrid();
 });
 document.addEventListener("keyup", (event) => { if (event.key === "\\") holdBefore(false); });
 
