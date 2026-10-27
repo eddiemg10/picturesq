@@ -521,6 +521,13 @@ class AdjustmentsConfig(_Model):
     """The controls every look has, applied after the look's scene operations."""
 
     exposure: float = Field(default=0.0, ge=-3.0, le=3.0, description="Exposure change in EV.")
+    highlights: float = Field(
+        default=0.0,
+        ge=-1.0,
+        le=1.0,
+        description="Bright areas only: negative darkens them (keeping their detail), "
+        "positive brightens.",
+    )
     warmth: float = Field(
         default=0.0, ge=-50.0, le=50.0, description="Warmth in mired; positive is warmer."
     )
@@ -716,6 +723,9 @@ class AdjustmentOverrides(_Model):
     """One photo's adjustments; an unset value keeps the project's."""
 
     exposure: float | None = Field(default=None, ge=-3.0, le=3.0, description="Replaces exposure.")
+    highlights: float | None = Field(
+        default=None, ge=-1.0, le=1.0, description="Replaces highlights."
+    )
     warmth: float | None = Field(default=None, ge=-50.0, le=50.0, description="Replaces warmth.")
     tint: float | None = Field(default=None, ge=-30.0, le=30.0, description="Replaces tint.")
     contrast: float | None = Field(default=None, ge=-0.5, le=0.5, description="Replaces contrast.")
