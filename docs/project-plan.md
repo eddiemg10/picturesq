@@ -327,7 +327,7 @@ Stats JSON, WB disagreement flag, overrides, flags, outliers, `normalise` comman
 
 ### M3 — Grade: look engine, look library, previews
 Operations, look file schema + intensity, `lut` operation (oracle-tested), adjustments, 12–16 built-in looks, `preview` and `looks` commands (output sharpening landed in M1).
-**Concepts:** tone curves, Oklab/OkLCh, what a `.cube` LUT is, split toning, unsharp mask.
+**Concepts:** tone curves, Oklab/OkLCh, what a `.cube` LUT is, split toning, unsharp mask ([primer](primers/m3-grade.md)).
 **Exit:** an agent makes a described change via config and the preview reflects it.
 
 ### M4 — UI
