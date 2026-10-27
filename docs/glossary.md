@@ -92,6 +92,11 @@
 | **Duv** | The signed distance of a white from the Planckian locus in the CIE 1960 uv diagram; positive is above it (greener). Used only to define tint. |
 | **mired** | Micro reciprocal degrees, `1e6 / kelvin`. Compare white balances by their mired difference: equal mired steps look about equally different, equal kelvin steps don't. |
 | **chromatic adaptation** | Converting colours seen under one white to those that look the same under another (Bradford). |
+| **hue** | Which colour a pixel is (red, yellow, blue, …), independent of how light or colourful: the angle of its Oklab a/b, in degrees (red ~29, yellow ~110, green ~143, blue ~264). |
+| **saturation** (operation, adjustment) | Scaling every pixel's chroma by the same factor, keeping lightness and hue. (In the white balance check, "nearly neutral" uses chroma ÷ lightness.) |
+| **vibrance** | Raising chroma more for muted colours than for colourful ones, so skin and already-vivid colours change less than with saturation. |
+| **hue band** | One of eight overlapping hue ranges (`red`, `orange`, `yellow`, `green`, `aqua`, `blue`, `purple`, `magenta`) the `hsl` operation changes separately; neighbouring bands blend smoothly. |
+| **split toning** | Tinting the shadows toward one hue and the highlights toward another (`split_tone`), e.g. cool shadows and warm highlights. |
 | **gamut fit** | Bringing an out-of-gamut colour into the display gamut by reducing its chroma at constant Oklab hue and lightness. |
 | **chroma** | How colourful a pixel is, independent of its lightness: the distance from grey in Oklab a/b. |
 | **ringing** | Over- and undershoot that sharp resampling filters (Lanczos) leave beside edges; **anti-ringing** clamps each result to the range of the nearby source pixels. |
