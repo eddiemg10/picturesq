@@ -122,6 +122,7 @@
 | **as-shot white** | The colour of light the camera balanced for, from its recorded white balance (DNG `AsShotNeutral`) through the colour matrix: an xy chromaticity, given as kelvin and tint (`-1000 × Duv`, positive is magenta). |
 | **white balance estimate** | The light's colour guessed from the photo itself, to check the as-shot white against (never applied). Two estimators: `brightest` (the mean colour of the brightest unclipped pixels) and `grey` (grey world on the nearly neutral, well-exposed pixels, iterated). | auto white balance, AWB |
 | **clip level** | The scene-linear value a white the sensor clipped reaches in the decoded image: `2^BaselineExposure`, times a fraction set by `decode.highlight_mode` (not simply 1.0). |
+| **white level** | The raw value a sensor pixel reports when it is full, as the original specifies it; decoding measures every raw value against it (minus black). LibRaw can take it from the frame's brightest pixel instead (`decode.adjust_white_level`, off by default, ADR-0018). |
 | **grey-world** | A white balance estimate: assume the photo averages to grey, so its average colour is the light's. Fails when one colour fills the frame. |
 | **chroma NR / luma NR** | Noise reduction on colour / brightness detail. |
 

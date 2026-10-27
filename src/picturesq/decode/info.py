@@ -179,9 +179,10 @@ def clip_level(multipliers: NDArray[np.floating], highlight_mode: str, gain: flo
     (0.9116: its raw values run 0.8 % past the file's white level, so the brightest channel
     clips at 65535 earlier than the formula assumes).
 
-    Caveat: LibRaw lowers its white level to the brightest raw value when that is above
-    75 % of it (``adjust_maximum_thr``), so in a photo without sensor clipping the brightest
-    pixels can still reach this level.
+    This assumes the white level the original specifies. With ``decode.adjust_white_level``
+    above 0, LibRaw lowers the white level to the brightest raw value when that is above the
+    fraction, and the brightest pixels of a photo without sensor clipping reach this level too
+    (off by default, ADR-0018).
     """
     m = np.asarray(multipliers, dtype=np.float64)[:3]
     if highlight_mode == "clip" or highlight_mode == "reconstruct":
