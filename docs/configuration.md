@@ -218,7 +218,7 @@ photos:
 
 ### An agent grades a project
 
-A coding agent changes a grade the same way: edit `picturesq.yaml`, render a preview, look at it. The workflow and a table from words to edits are in the skill picturesq ships for agents ([`skills/picturesq/SKILL.md`](../skills/picturesq/SKILL.md)).
+A coding agent changes a grade the same way: edit `picturesq.yaml`, render a preview, look at it. The workflow and a table from words to edits are in the skill picturesq ships for agents ([`src/picturesq/skill/SKILL.md`](../src/picturesq/skill/SKILL.md); `picturesq skill install` installs it).
 
 The request: *"nordic at 80 % for everything, and softer highlights on the drone shot."* The agent lists the looks (`picturesq looks --json`) to find `cold/nordic`, then writes:
 

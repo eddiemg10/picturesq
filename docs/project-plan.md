@@ -245,6 +245,7 @@ operations:
 | `picturesq metadata zone PROJECT (+01:00 \| --clear)` | Set `metadata.time_zone` (the `OffsetTime*` tags) |
 | `picturesq metadata time PROJECT NAME ("2026-10-17 20:05" \| --clear)` | Set one photo's `metadata.capture_time` |
 | `picturesq metadata apply PROJECT [--output web] [--out DIR]` | Rewrite the dates in exports already written, without re-rendering: only the JPEG's EXIF block is replaced (the image data stays byte for byte) and the sidecars are updated |
+| `picturesq skill (install [--project DIR \| --dir DIR] [--force] \| show)` | Install the agent skill shipped in the package (default `~/.claude/skills/picturesq/`; `--project` for one project's `.claude/skills/`, `--dir` for another agent's skills folder; a different file is replaced only with `--force`), or print it |
 | `picturesq schema [project\|look]` | Print the JSON Schema (`look` in M3) |
 | `picturesq doctor` | Check the environment: versions (LibRaw and its features, Python libraries), CPU, the threads and block size chosen and why, memory available, the memory budget and how many photos run at once, terminal graphics (a guess); exits 1 on any error |
 
@@ -388,7 +389,7 @@ What each dependency is for: [`docs/dependencies.md`](dependencies.md).
 
 - **CLI contract:** every command supports `--json`; errors are structured; the schema is printable.
 - **Visual feedback for agents:** `picturesq preview PROJECT --png sheet.png` writes a contact sheet an agent can view.
-- **Skill:** `skills/picturesq/SKILL.md` teaches agents the workflow and how words map to config ("warmer shadows" → `split_tone.shadows`, "softer highlights" → display transform/contrast parameters).
+- **Skill:** `src/picturesq/skill/SKILL.md` (shipped in the package; `picturesq skill install` puts it where Claude Code reads skills, `picturesq skill show` prints it for other agents) teaches agents the workflow and how words map to config ("warmer shadows" → `split_tone.shadows`, "softer highlights" → display transform/contrast parameters).
 - **Connectors:** [`docs/setup-connectors.md`](setup-connectors.md).
 
 ---

@@ -37,3 +37,39 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: uv sync --locked
       - run: uv run pytest
+
+  # M5 exit: the built wheel installs into a clean environment and works, outside the repo.
+  wheel:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: false
+      - run: uv build --wheel --out-dir "$RUNNER_TEMP/dist"
+      - name: Install the wheel as a tool, away from the checkout
+        working-directory: ${{ runner.temp }}
+        run: |
+          uv tool install --python 3.13 dist/picturesq-*.whl
+          echo "$(uv tool dir --bin)" >> "$GITHUB_PATH"
+      - name: Smoke test on a CC0 sample
+        working-directory: ${{ runner.temp }}
+        run: |
+          picturesq --version
+          picturesq doctor
+          picturesq looks > /dev/null
+          picturesq skill show | head -3 | grep -q "name: picturesq"
+          picturesq skill install --dir skills && test -f skills/picturesq/SKILL.md
+          mkdir project
+          sample() { python -c "import json, sys; print(next(s[sys.argv[1]] for s in json.load(open(sys.argv[2]))['samples'] if s['name'] == 'dji-fc4382.dng'))" "$1" "$GITHUB_WORKSPACE/reference/samples.json"; }
+          curl -sSfL "$(sample url)" -o project/dji-fc4382.dng
+          python -c "import hashlib, sys; assert hashlib.sha256(open(sys.argv[1], 'rb').read()).hexdigest() == sys.argv[2], 'checksum'" project/dji-fc4382.dng "$(sample sha256)"
+          picturesq run project
+          ls project/exports/web/dji-fc4382.jpg project/exports/archive/dji-fc4382.jpg

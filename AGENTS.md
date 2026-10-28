@@ -51,10 +51,10 @@ uv run picturesq --help
 ```
 src/picturesq/
   cli/ config/ colour/ decode/ normalise/ grade/ export/ pipeline/ preview/ ui/
+  skill/SKILL.md   # the agent skill, shipped in the package (`picturesq skill install`)
 tests/unit  tests/integration  tests/golden
 reference/   # reference set shot list + CC0 samples manifest (RAWs are git-ignored)
 scripts/     # dev utilities (fetch samples, compare, update goldens)
-skills/      # Claude skill shipped for end users' agents
 ```
 
 ## Git / PR conventions
