@@ -20,6 +20,7 @@ from picturesq.metadata import (
     camera_capture_time,
     corrected_capture_time,
     format_exif_datetime,
+    parse_clock_time,
     parse_exif_datetime,
     photo_capture_time,
     shift_from_reference,
@@ -65,6 +66,33 @@ def test_photo_without_a_camera_time_is_not_shifted() -> None:
     assert corrected_capture_time(None, shift=timedelta(days=5)).corrected is None
     actual = datetime(2026, 10, 17, 20, 5)
     assert corrected_capture_time(None, override=actual).corrected == actual
+
+
+def test_how_says_where_the_corrected_time_comes_from() -> None:
+    actual = datetime(2026, 10, 17, 20, 5)
+    assert corrected_capture_time(CAMERA).how == "unchanged"
+    assert corrected_capture_time(CAMERA, shift=timedelta(hours=1)).how == "shifted"
+    assert corrected_capture_time(CAMERA, override=actual).how == "set for this photo"
+    assert corrected_capture_time(CAMERA, override=CAMERA).how == "set for this photo"
+    assert corrected_capture_time(None, shift=timedelta(hours=1)).how == "no time recorded"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("2026-10-17 20:05", datetime(2026, 10, 17, 20, 5)),
+        ("2026-10-17T20:05:09", datetime(2026, 10, 17, 20, 5, 9)),
+        (" 2026-10-17T20:05:09.5 ", datetime(2026, 10, 17, 20, 5, 9)),
+    ],
+)
+def test_parse_clock_time(text: str, expected: datetime) -> None:
+    assert parse_clock_time(text) == expected
+
+
+@pytest.mark.parametrize("text", ["yesterday", "2026-10-17T20:05+01:00", ""])
+def test_parse_clock_time_refuses_anything_else(text: str) -> None:
+    with pytest.raises(ValueError):
+        parse_clock_time(text)
 
 
 def test_shift_out_of_range_is_an_error() -> None:

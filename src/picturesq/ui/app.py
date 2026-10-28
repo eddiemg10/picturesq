@@ -12,6 +12,8 @@ Routes:
 - ``GET /api/config``: the YAML as saved.
 - ``POST /api/export`` (``{"outputs": [...]}``) and ``GET /api/export``: run
   ``picturesq export`` in a separate process and report its progress.
+- ``POST /api/metadata/apply`` (``{"outputs": [...]}``): rewrite the dates in exports already
+  written, as ``picturesq metadata apply``.
 
 Binds to localhost only: there is no authentication, and the project is the user's.
 """
@@ -207,6 +209,23 @@ def create_app(session: Session) -> Starlette:
         ).start()
         return JSONResponse(job.to_dict())
 
+    async def apply_metadata(request: Request) -> Response:
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            body = {}
+        outputs = list(body.get("outputs") or session.config.export.enabled)
+        unknown = [name for name in outputs if name not in session.config.export.outputs]
+        if unknown:
+            return JSONResponse({"error": f"unknown outputs {unknown}"}, status_code=400)
+        job = export_job.get("current")
+        if job is not None and job.running:
+            return JSONResponse(
+                {"error": "an export is running; try when it ends"}, status_code=409
+            )
+        result = await run_in_threadpool(session.rewrite_export_dates, outputs)
+        return JSONResponse(result)
+
     routes = [
         Route("/", index),
         Route("/api/state", state),
@@ -215,6 +234,7 @@ def create_app(session: Session) -> Starlette:
         Route("/api/config", config),
         Route("/api/events", events),
         Route("/api/export", export, methods=["GET", "POST"]),
+        Route("/api/metadata/apply", apply_metadata, methods=["POST"]),
         Mount("/static", StaticFiles(directory=UI_DIR / "static"), name="static"),
     ]
     return Starlette(routes=routes, lifespan=lifespan)

@@ -461,7 +461,7 @@ metadata:
 
 A photo whose original records no capture time is not shifted (there is nothing to shift); give it one with `photos.<name>.metadata.capture_time`. A shift is at the project level because a wrong clock is wrong by the same amount for every photo until someone resets it; if the camera was reset part way through, use the per-photo capture time for the other photos.
 
-`picturesq metadata` edits these settings and can rewrite exports already on disk: see the [project plan](project-plan.md#7-cli-specification).
+`picturesq metadata` edits these settings and can rewrite exports already on disk: see the [project plan](project-plan.md#7-cli-specification). The UI does the same under **Date and time**: type when the photo in view was really taken, then **Shift every photo** (sets `time_shift`, as `metadata shift --photo --actual`) or **This photo only** (sets its `capture_time`); **Update exports** rewrites the dates in exports already written.
 
 ### `photos`
 

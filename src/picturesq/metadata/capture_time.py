@@ -33,12 +33,24 @@ class CaptureTime:
 
     ``camera`` is None when the original records no usable time; then ``corrected`` is None
     too, unless a per-photo capture time supplies one. ``time_zone`` is the offset to write
-    (``+01:00``), or None to leave the camera's offset tags alone.
+    (``+01:00``), or None to leave the camera's offset tags alone. ``overridden``: the
+    corrected time is the photo's own capture time, not the camera's shifted.
     """
 
     camera: datetime | None
     corrected: datetime | None
     time_zone: str | None = None
+    overridden: bool = False
+
+    @property
+    def how(self) -> str:
+        """Where the corrected time comes from, in words: ``no time recorded``, ``set for
+        this photo``, ``shifted`` or ``unchanged``."""
+        if self.corrected is None:
+            return "no time recorded"
+        if self.overridden:
+            return "set for this photo"
+        return "shifted" if self.corrected != self.camera else "unchanged"
 
     @property
     def changes_export(self) -> bool:
@@ -54,6 +66,21 @@ def parse_exif_datetime(value: object) -> datetime | None:
         return datetime.strptime(value.strip()[:_EXIF_DATETIME_LENGTH], EXIF_DATETIME_FORMAT)
     except ValueError:
         return None  # includes 0000:00:00 00:00:00, which cameras write for "unknown"
+
+
+def parse_clock_time(text: str) -> datetime:
+    """``2026-10-17 20:05`` or ``2026-10-17T20:05:00`` -> a datetime without a zone, to the
+    second. Raises ValueError (a user-facing message) for anything else, or a time with a
+    zone: EXIF times are the local clock's reading."""
+    try:
+        value = datetime.fromisoformat(text.strip())
+    except ValueError:
+        raise ValueError(
+            f"{text!r} is not a date and time; write it like 2026-10-17 20:05"
+        ) from None
+    if value.tzinfo is not None:
+        raise ValueError("write the time as the clock showed it, without a zone")
+    return value.replace(microsecond=0)
 
 
 def format_exif_datetime(value: datetime) -> str:
@@ -87,7 +114,7 @@ def corrected_capture_time(
     A photo without a camera time is not shifted (there is nothing to shift).
     """
     if override is not None:
-        return CaptureTime(camera, override, time_zone)
+        return CaptureTime(camera, override, time_zone, overridden=True)
     if camera is None:
         return CaptureTime(None, None, time_zone)
     try:

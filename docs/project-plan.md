@@ -238,7 +238,7 @@ operations:
 | `picturesq normalise PROJECT [--strict] [--png FILE]` | On proxies: per photo the exposure, stats, white balance check and flags, one line each and a summary; writes `.picturesq/stats/<stem>.json` and `summary.json`; `--strict` exits 3 if any photo is flagged; `--png` also writes a contact sheet of the normalised photos (flagged ones in amber) |
 | `picturesq preview PROJECT [--category cold] [--look cold/nordic …] [--png FILE]` | Contact sheet from proxies: per photo the neutral render, its current grade, then each look (at the photo's own intensity and parameters if it's its look, else 100 %); writes `.picturesq/previews/sheet.png` or `--png`. Showing it in the terminal: #122 |
 | `picturesq looks [--category cold] [--json]` | List the look library with each look's parameters |
-| `picturesq ui PROJECT [--port 8765] [--no-open]` | Start the local web UI on localhost (opens the browser): photo strip, large preview, look tiles per photo, intensity / parameters / adjustments, per-photo normalise sliders, copy and paste a grade, export. Every change is saved to `picturesq.yaml` as it is made; edits to that file from elsewhere (an agent) reach the browser within a second (the server polls the file's modification time, so watchfiles isn't needed) |
+| `picturesq ui PROJECT [--port 8765] [--no-open]` | Start the local web UI on localhost (opens the browser): photo strip, large preview, look tiles per photo, intensity / parameters / adjustments, per-photo normalise sliders, capture date and time correction, copy and paste a grade, export. Every change is saved to `picturesq.yaml` as it is made; edits to that file from elsewhere (an agent) reach the browser within a second (the server polls the file's modification time, so watchfiles isn't needed) |
 | `picturesq export PROJECT [--output web]` | Render originals and write enabled outputs |
 | `picturesq metadata show PROJECT [--json]` | Each photo's camera time, the corrected capture time its exports carry, and why (shifted, set for this photo, unchanged) |
 | `picturesq metadata shift PROJECT (--photo NAME --actual "2026-10-17 20:05" \| --by -1d2h30m \| --clear)` | Set `metadata.time_shift`: from one photo whose real time you know, or directly; saves `picturesq.yaml` |
@@ -336,7 +336,7 @@ Operations, look file schema + intensity, `lut` operation (oracle-tested), adjus
 **Exit:** an agent makes a described change via config and the preview reflects it.
 
 ### M4 — UI
-Starlette app, photo × look grid, look panel (intensity / parameters / adjustments), per-photo normalisation review (flagged photos first, with exposure and white balance sliders that write the per-photo overrides `exposure_ev`, `wb_kelvin` and `tint`), YAML write-back, file watching, Playwright tests.
+Starlette app, photo × look grid, look panel (intensity / parameters / adjustments), per-photo normalisation review (flagged photos first, with exposure and white balance sliders that write the per-photo overrides `exposure_ev`, `wb_kelvin` and `tint`), YAML write-back, file watching, capture date and time correction (time shift, time zone, per-photo capture time; moved from Later at the user's request, 2026-10-27, #157), Playwright tests.
 **Exit:** the user grades a whole project without touching YAML; an agent edit live-reloads in the browser.
 
 ### M5 — v0.1 release
@@ -344,7 +344,7 @@ Performance pass (100 photos < 15 min), README/docs, Claude skill, PyPI release.
 **Exit:** `uv tool install picturesq` works on a clean Windows and Linux machine.
 
 ### Later (out of scope for v1)
-Inspiration-image → draft look; sky segmentation (SegFormer, ADE20K) + sky-only grading; skin/foliage/water regions; luma NR; user look files saved from the UI; MCP server; WebGL previews; per-camera presets; metadata editing; macOS CI.
+Inspiration-image → draft look; sky segmentation (SegFormer, ADE20K) + sky-only grading; skin/foliage/water regions; luma NR; user look files saved from the UI; MCP server; WebGL previews; per-camera presets; other metadata editing (titles, captions, keywords); macOS CI.
 
 ---
 

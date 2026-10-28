@@ -12,6 +12,8 @@ The session is the only thing the web app talks to. It owns:
   the UI shows: ``thumb`` and ``large``. Kept in memory (thumbs for every photo, larges for
   the most recent few), keyed by everything normalise reads, so an override change
   re-normalises only that photo.
+- **Capture times.** Each original's camera time, read once (EXIF only), and the
+  corrected time its exports carry under ``metadata`` (``picturesq.metadata``, as the CLI).
 - **Previews.** A base through a look and adjustments, the display transform and sRGB, as a
   JPEG; the same functions an export uses (``grade_with``, ``render_output``), so what the
   UI shows is what export writes, at a smaller size.
@@ -30,6 +32,7 @@ import threading
 from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Final, Literal
 
@@ -54,13 +57,28 @@ from picturesq.config import (
 )
 from picturesq.config import look as look_files
 from picturesq.config.look import Look
-from picturesq.decode import DecodeError, PhotoInfo, find_originals, read_photo_info
+from picturesq.config.time_shift import format_time_shift, parse_compact_shift
+from picturesq.decode import (
+    DecodeError,
+    PhotoInfo,
+    find_originals,
+    read_capture_exif,
+    read_photo_info,
+)
 from picturesq.export import resize_to_long_edge, sha256_file
 from picturesq.grade import grade_with
+from picturesq.metadata import (
+    CaptureTimeError,
+    camera_capture_time,
+    parse_clock_time,
+    photo_capture_time,
+    shift_from_reference,
+)
 from picturesq.normalise import WhiteBalanceOverrideError
 from picturesq.photo import PhotoContext, ResolvedLook
-from picturesq.pipeline.export import render_output
+from picturesq.pipeline.export import EXPORTS_DIRNAME, render_output
 from picturesq.pipeline.looks import resolve_choice
+from picturesq.pipeline.metadata import rewrite_exports
 from picturesq.pipeline.normalise import NormaliseResult, normalise_proxy
 from picturesq.pipeline.proxy import CACHE_DIRNAME, load_proxy, proxy_key, proxy_path
 
@@ -93,6 +111,8 @@ class _Original:
     """(size, modification time in ns): when it changes, the original's hash is recomputed."""
     key: str | None = None
     info: PhotoInfo | None = None
+    camera_time: datetime | None = None
+    camera_time_read: bool = False
 
 
 @dataclass
@@ -250,7 +270,13 @@ class Session:
           removes that override.
         - ``normalise``: (photos only) a partial mapping of normalise overrides
           (``exposure_ev``, ``wb_kelvin``, ``tint``, ``enabled``); None removes one.
-        - ``reset``: (photos only) true removes all of the photos' overrides first.
+        - ``reset``: (photos only) true removes all of the photos' overrides first (not
+          their capture times: those aren't a grade).
+        - ``metadata``: for the project, any of ``time_shift`` (``+1h``, ``-1d2h30m`` or
+          ``+9598d 10:05:00``; None removes it), ``time_zone`` (``+01:00``; None removes it)
+          and ``reference`` (``{"photo", "actual"}``: set the shift so that photo's camera
+          time becomes ``actual``, as ``picturesq metadata shift --photo --actual``). For
+          photos, ``capture_time`` (``2026-10-17 20:05``; None removes it).
 
         Raises EditError (nothing is saved) if the result isn't a valid config or a look
         doesn't resolve.
@@ -265,6 +291,8 @@ class Session:
                     grade["look"] = _look_value(change["look"])
                 for key, value in (change.get("adjustments") or {}).items():
                     grade["adjustments"][key] = 0.0 if value is None else value
+                if change.get("metadata"):
+                    data["metadata"].update(self._project_metadata(change["metadata"]))
             elif isinstance(target, list) and target:
                 photos = data.setdefault("photos", {})
                 for name in target:
@@ -288,6 +316,7 @@ class Session:
                             grade["look"] = value
                     _merge(grade.setdefault("adjustments", {}), change.get("adjustments"))
                     _merge(entry.setdefault("normalise", {}), change.get("normalise"))
+                    _merge(entry.setdefault("metadata", {}), _photo_metadata(change))
                     _prune(photos, name)
             else:
                 raise EditError("target must be 'project' or a list of photo names")
@@ -303,6 +332,29 @@ class Session:
                 raise EditError(str(error)) from None
             self._save(config)
             return self.config
+
+    def _project_metadata(self, change: Mapping[str, Any]) -> dict[str, Any]:
+        """A project ``metadata`` edit as config data. Raises EditError."""
+        values: dict[str, Any] = {}
+        try:
+            if "time_shift" in change:
+                shift = change["time_shift"] or "+0s"
+                values["time_shift"] = format_time_shift(parse_compact_shift(shift))
+            if "time_zone" in change:
+                values["time_zone"] = change["time_zone"] or None
+            reference = change.get("reference")
+            if reference:
+                name = reference.get("photo")
+                if name not in self._originals:
+                    raise EditError(f"no photo named {name!r} in this project")
+                camera = self._camera_time(self._originals[name])
+                if camera is None:
+                    raise EditError(f"{name} records no capture time to compare with")
+                actual = parse_clock_time(str(reference.get("actual", "")))
+                values["time_shift"] = format_time_shift(shift_from_reference(camera, actual))
+        except ValueError as error:
+            raise EditError(str(error)) from None
+        return values
 
     # --- photos -------------------------------------------------------------------------
 
@@ -348,6 +400,39 @@ class Session:
         if original.info is None:
             original.info = read_photo_info(original.path, self.config.decode)
         return original.info
+
+    def _camera_time(self, original: _Original) -> datetime | None:
+        if not original.camera_time_read:
+            original.camera_time = camera_capture_time(read_capture_exif(original.path))
+            original.camera_time_read = True
+        return original.camera_time
+
+    def _capture(self, name: str, config: ProjectConfig) -> dict[str, Any]:
+        """Photo ``name``'s camera time and the corrected time its exports carry, JSON-ready."""
+        camera = self._camera_time(self._originals[name])
+        try:
+            when = photo_capture_time(config, name, camera)
+        except CaptureTimeError as error:
+            return {"camera": _iso(camera), "corrected": None, "how": str(error), "own": False}
+        return {
+            "camera": _iso(when.camera),
+            "corrected": _iso(when.corrected),
+            "how": when.how,
+            "own": when.overridden,
+        }
+
+    def rewrite_export_dates(self, outputs: list[str]) -> dict[str, Any]:
+        """Rewrite the dates in exports already written (``picturesq metadata apply``), for
+        ``outputs`` in ``<project>/exports``. Returns counts and failures, JSON-ready."""
+        with self._lock:
+            config = self.config
+            originals = [original.path for original in self._originals.values()]
+        results = rewrite_exports(self.project / EXPORTS_DIRNAME, outputs, config, originals)
+        return {
+            "exports": len(results),
+            "rewritten": sum(result.changed for result in results),
+            "failed": [f"{r.path.name}: {r.error}" for r in results if r.error is not None],
+        }
 
     def _base_key(self, name: str, config: ProjectConfig) -> str:
         """Everything the normalised base of photo ``name`` depends on."""
@@ -542,6 +627,7 @@ class Session:
                         if result is None or result.info is None
                         else _as_shot(result.info),
                         "flags": [] if result is None else [f.to_dict() for f in result.flags],
+                        "capture": self._capture(name, config),
                         "error": photo_state.error,
                     }
                 )
@@ -552,6 +638,7 @@ class Session:
                 "look": _choice_dict(config.grade.look),
                 "adjustments": config.grade.adjustments.model_dump(),
                 "exposure_offset_ev": config.normalise.exposure.offset_ev,
+                "metadata": config.metadata.model_dump(),
                 "photos": photos,
                 "looks": [_look_dict(look) for look in self.library.values()],
                 "outputs": {
@@ -580,6 +667,22 @@ def _look_value(value: Any, *, project_look: str | None = None) -> dict[str, Any
         "intensity": value.get("intensity", 1.0),
         "parameters": dict(value.get("parameters") or {}),
     }
+
+
+def _photo_metadata(change: Mapping[str, Any]) -> dict[str, Any] | None:
+    """A photo ``metadata`` edit as config data. Raises EditError."""
+    values = change.get("metadata")
+    if not values or "capture_time" not in values:
+        return None
+    when = values["capture_time"]
+    try:
+        return {"capture_time": None if not when else parse_clock_time(str(when)).isoformat()}
+    except ValueError as error:
+        raise EditError(str(error)) from None
+
+
+def _iso(value: datetime | None) -> str | None:
+    return None if value is None else value.isoformat()
 
 
 def _photo_entry(photos: dict[str, Any], name: str) -> dict[str, Any]:
