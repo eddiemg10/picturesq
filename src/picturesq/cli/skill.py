@@ -1,5 +1,6 @@
 """`picturesq skill`: the agent skill that ships in the package, for coding agents to use."""
 
+import sys
 from importlib.resources import files
 from pathlib import Path
 from typing import Annotated
@@ -41,7 +42,10 @@ def skill_target(project: Path | None, directory: Path | None) -> Path:
 @skill_app.command()
 def show() -> None:
     """Print the skill (to paste into AGENTS.md or another agent's instructions)."""
-    typer.echo(skill_text(), nl=False)
+    # As UTF-8 bytes: piped on Windows, stdout is cp1252, without the skill's minus sign (U+2212).
+    sys.stdout.flush()
+    sys.stdout.buffer.write(skill_text().encode("utf-8"))
+    sys.stdout.buffer.flush()
 
 
 @skill_app.command()

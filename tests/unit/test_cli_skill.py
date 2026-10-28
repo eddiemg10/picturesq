@@ -1,5 +1,8 @@
 """`picturesq skill`."""
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -29,6 +32,16 @@ def test_show_prints_the_skill() -> None:
     result = runner.invoke(app, ["skill", "show"])
     assert result.exit_code == 0, result.output
     assert result.stdout == skill_text()
+
+
+def test_show_survives_a_stdout_that_is_not_utf8() -> None:
+    # Piped on Windows, stdout is cp1252, which lacks the skill's minus sign (U+2212).
+    env = os.environ | {"PYTHONIOENCODING": "cp1252"}
+    result = subprocess.run(
+        [sys.executable, "-m", "picturesq", "skill", "show"], capture_output=True, env=env
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.decode("utf-8") == skill_text()
 
 
 def test_install_for_claude_code_in_the_home_folder(home: Path) -> None:
