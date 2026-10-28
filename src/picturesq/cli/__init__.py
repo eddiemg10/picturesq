@@ -15,6 +15,7 @@ from picturesq.cli.looks import list_looks
 from picturesq.cli.metadata import metadata_app
 from picturesq.cli.normalise import normalise_project
 from picturesq.cli.preview import preview_project
+from picturesq.cli.skill import skill_app
 from picturesq.cli.ui import serve_project
 from picturesq.config import dump_schema, look_schema, project_schema
 from picturesq.pipeline.workers import parse_memory_budget
@@ -25,6 +26,7 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(metadata_app, name="metadata")
+app.add_typer(skill_app, name="skill")
 
 ProjectArg = Annotated[str, typer.Argument(help="Project folder containing RAW originals.")]
 OutOption = Annotated[

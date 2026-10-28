@@ -1,6 +1,6 @@
 [project]
 name = "picturesq"
-version = "0.0.1"
+version = "0.1.0"
 description = "Turn a folder of RAW photos into consistently graded exports, driven by looks and YAML."
 readme = "README.md"
 license = "MIT"
@@ -8,7 +8,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Eddie MG" }]
 requires-python = ">=3.11"
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: End Users/Desktop",
     "Programming Language :: Python :: 3",

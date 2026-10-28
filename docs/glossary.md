@@ -23,6 +23,7 @@
 | **look** | A named, reusable creative grade, e.g. *cold/nordic*. Defined by a **look file**. | style, preset, filter, recipe, profile |
 | **look file** | YAML defining a look: metadata, **parameters**, and a list of **operations**, which may include a `lut` operation referencing a `.cube`. | recipe |
 | **category** | A grouping of looks: `bw`, `cold`, `warm`, `cinematic`. | family, collection, group |
+| **skill** | The instructions file (`SKILL.md`) picturesq ships for coding agents: its workflow and how words map to config edits. Installed with `picturesq skill install`. | prompt, plugin, agent docs |
 | **look library** | All available looks: built-in + user-installed. | catalogue, pack |
 | **LUT** | A 3D lookup table file (`.cube`). Always used *through* a look file that declares its **input space**. | filter, profile |
 | **Hald CLUT** | A **LUT** stored as a square image (PNG/TIFF) instead of a `.cube`; used by RawTherapee's Film Simulation Collection. Only ever a source format: convert to `.cube` before use, and keep the collection's licence and attribution with it. | HaldCLUT, preset image |
