@@ -146,6 +146,19 @@ def test_api_preview_rejects_bad_requests(project: Path) -> None:
     assert client.get("/api/preview/A.DNG?variant=look:cold/missing").status_code == 400
 
 
+def test_state_says_which_photos_have_been_analysed(project: Path) -> None:
+    session = Session.open(project)
+    state = session.state()
+    revision = state["revision"]
+    assert state["analysed"] == 0
+    assert not any(photo["analysed"] for photo in state["photos"])
+    session.warm()  # these aren't real RAWs: every photo fails, which is analysed too
+    state = session.state()
+    assert state["analysed"] == len(NAMES)
+    assert all(photo["analysed"] and photo["error"] for photo in state["photos"])
+    assert state["revision"] == revision  # analysing changes no preview
+
+
 # --- date and time ------------------------------------------------------------------------
 
 CAMERA_TIMES = {"A.DNG": "2000:07:07 10:00:00", "B.DNG": "2000:07:07 11:30:00"}

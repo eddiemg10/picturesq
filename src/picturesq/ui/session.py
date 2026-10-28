@@ -184,6 +184,9 @@ class Session:
     config: ProjectConfig = field(default_factory=ProjectConfig)
     library: dict[str, Look] = field(default_factory=dict)
     revision: int = 0
+    analysed: int = 0
+    """Increases whenever a photo is normalised (or fails to be): its flags, measured
+    exposure and errors in :meth:`state` may have changed, though no preview has."""
     _mtime: int | None = None
     _originals: dict[str, _Original] = field(default_factory=dict)
     _photos: dict[str, PhotoState] = field(default_factory=dict)
@@ -492,6 +495,9 @@ class Session:
         except (DecodeError, OSError, ValueError, WhiteBalanceOverrideError) as error:
             state.error = str(error)
             raise
+        finally:
+            with self._lock:
+                self.analysed += 1
         large = large.copy() if large is proxy else large
         del proxy
         with self._lock:
@@ -626,6 +632,7 @@ class Session:
                         "as_shot": None
                         if result is None or result.info is None
                         else _as_shot(result.info),
+                        "analysed": result is not None or photo_state.error is not None,
                         "flags": [] if result is None else [f.to_dict() for f in result.flags],
                         "capture": self._capture(name, config),
                         "error": photo_state.error,
@@ -634,6 +641,7 @@ class Session:
             return {
                 "project": self.project.resolve().name,
                 "revision": self.revision,
+                "analysed": self.analysed,
                 "config_exists": self._mtime is not None,
                 "look": _choice_dict(config.grade.look),
                 "adjustments": config.grade.adjustments.model_dump(),
