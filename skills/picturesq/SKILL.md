@@ -32,8 +32,11 @@ picturesq's state is `PROJECT/picturesq.yaml`. You change photos by editing it (
 | black and white | `look: {name: bw/silver}` (or another `bw/` look) |
 | less (or more) of the look | `look.intensity`: 0.6 / 1.2 (0 to 1.5) |
 | a look's own control ("more fade", "cooler shadows") | `look.parameters.<name>` from `picturesq looks --json`, within its min and max |
-| softer highlights | no direct control yet (highlight curves live inside looks): lower `adjustments.contrast` by 0.1, or pick a look with gentle highlights (`bw/matte`, `cold/frost`, `warm/faded_summer`) and say so |
+| softer highlights, "the sky / screen is blown" | `adjustments.highlights`: −0.3 (−0.5 is a clear pull, −1 the most; only the bright areas move) |
+| brighter highlights | `adjustments.highlights`: +0.3 |
 | "like film", "moody", "cinematic" | show the category with `picturesq preview PROJECT --category <bw\|cold\|warm\|cinematic>` and let the user pick |
+
+A worked example, with the sheet it gives, is in `docs/configuration.md` (*An agent grades a project*).
 
 Example: "make the sunset photos warmer, and the rest nordic at 80 %":
 
