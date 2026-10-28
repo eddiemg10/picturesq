@@ -216,6 +216,29 @@ photos:
     metadata: {capture_time: '2026-10-17T20:05:00'}
 ```
 
+### An agent grades a project
+
+A coding agent changes a grade the same way: edit `picturesq.yaml`, render a preview, look at it. The workflow and a table from words to edits are in the skill picturesq ships for agents ([`skills/picturesq/SKILL.md`](../skills/picturesq/SKILL.md)).
+
+The request: *"nordic at 80 % for everything, and softer highlights on the drone shot."* The agent lists the looks (`picturesq looks --json`) to find `cold/nordic`, then writes:
+
+```yaml
+grade:
+  look: {name: cold/nordic, intensity: 0.8}
+photos:
+  dji-fc4382.dng:
+    grade:
+      adjustments: {highlights: -0.5}
+```
+
+and checks it:
+
+```bash
+picturesq preview agentdemo --look cold/nordic --png sheet.png
+```
+
+Each row of the sheet is a photo: its neutral render, its **current** grade (blue border: what an export gives), then `cold/nordic`. The drone shot's current column says "+ adjustments", and against the sheet from before the edit only its brightest areas changed (the sky's brightest 5 % went from 239 to 234 on the 0–255 scale; mid tones didn't move). The other photos' panels didn't change at all. An invalid edit, such as `highlights: -2`, makes `preview` exit with code 2 and name the key and its allowed range.
+
 ## Reference
 
 ### Top level
